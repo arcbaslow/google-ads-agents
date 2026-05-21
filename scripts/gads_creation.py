@@ -1,11 +1,17 @@
 """Campaign creation wizard.
 
-This script does not silently create campaigns. It collects context from the
-caller (the agent will collect it from the user), validates it, and only
-then proposes a mutate JSON. The final mutate is shown to the user before
-anything is sent.
+This script does not silently create campaigns. The flow is:
 
-Required context (any missing field aborts):
+  1. Collect context from the caller (the agent collects it from the
+     user). All required fields must be present.
+  2. Propose a mutate JSON. Show it to the user.
+  3. Optional --validate-only: send a real validate_only=True mutate so
+     the API can reject obvious mistakes (bad geo IDs, invalid bidding
+     strategy for the channel, etc.) without creating anything.
+  4. With --apply, send the actual mutate. The campaign is created
+     PAUSED regardless.
+
+Required context, any missing field aborts:
 
   - business        free-form business / vertical
   - website         URL, reachability checked
@@ -17,9 +23,6 @@ Required context (any missing field aborts):
   - geos            list of country codes or geo target IDs
   - languages       list of ISO codes
   - channel         SEARCH | DISPLAY | VIDEO | SHOPPING | PERFORMANCE_MAX | APP
-
-The agent populates these from user prompts. This script just refuses to
-proceed when something is missing or contradictory.
 """
 
 from __future__ import annotations
@@ -27,6 +30,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from typing import Any
 
 import gads_utils
 
@@ -72,10 +76,66 @@ def propose_mutate(ctx: dict) -> dict:
     }
 
 
+def send_mutate(customer_id: str, proposed: dict, validate_only: bool) -> dict:
+    """Send the proposed mutate against the live API.
+
+    With validate_only=True the API returns the same errors it would on
+    a real mutate but does not create the campaign.
+    """
+    import gads_client
+
+    client = gads_client.build_client()
+    budget_svc = client.get_service("CampaignBudgetService")
+    campaign_svc = client.get_service("CampaignService")
+
+    # Step 1: budget. The campaign references it by resource name.
+    budget_op = client.get_type("CampaignBudgetOperation")
+    budget = budget_op.create
+    budget.name = f"{proposed['campaign']['name']} budget"
+    budget.amount_micros = proposed["campaign"]["campaign_budget"]["amount_micros"]
+    budget.delivery_method = client.enums.BudgetDeliveryMethodEnum.STANDARD
+
+    budget_resp = budget_svc.mutate_campaign_budgets(
+        customer_id=customer_id,
+        operations=[budget_op],
+        validate_only=validate_only,
+    )
+    budget_resource = budget_resp.results[0].resource_name if budget_resp.results else None
+
+    # Step 2: campaign.
+    campaign_op = client.get_type("CampaignOperation")
+    c = campaign_op.create
+    c.name = proposed["campaign"]["name"]
+    c.advertising_channel_type = getattr(
+        client.enums.AdvertisingChannelTypeEnum, proposed["campaign"]["advertising_channel_type"]
+    )
+    c.status = client.enums.CampaignStatusEnum.PAUSED
+    if budget_resource:
+        c.campaign_budget = budget_resource
+
+    campaign_resp = campaign_svc.mutate_campaigns(
+        customer_id=customer_id,
+        operations=[campaign_op],
+        validate_only=validate_only,
+    )
+
+    return {
+        "validate_only": validate_only,
+        "budget_resource": budget_resource,
+        "campaign_resource": (
+            campaign_resp.results[0].resource_name if campaign_resp.results else None
+        ),
+    }
+
+
 def main() -> int:
     p = argparse.ArgumentParser()
     p.add_argument("--customer", required=True)
     p.add_argument("--context-file", required=True, help="JSON file with required fields")
+    p.add_argument("--validate-only", action="store_true",
+                   help="Dry-run the mutate against the API; nothing is created")
+    p.add_argument("--apply", action="store_true",
+                   help="Send the real mutate. Campaign is created PAUSED.")
     p.add_argument("--json", action="store_true")
     args = p.parse_args()
     cid = gads_utils.normalize_customer_id(args.customer)
@@ -89,11 +149,31 @@ def main() -> int:
         return 2
 
     proposed = propose_mutate(ctx)
+
+    if args.validate_only or args.apply:
+        try:
+            result = send_mutate(cid, proposed, validate_only=not args.apply)
+        except Exception as e:  # surface API errors as JSON, don't crash the wizard
+            gads_utils.emit({
+                "status": "api_error",
+                "customer_id": cid,
+                "proposed_mutate": proposed,
+                "error": str(e),
+            }, args.json)
+            return 3
+        gads_utils.emit({
+            "status": "validated" if not args.apply else "applied",
+            "customer_id": cid,
+            "proposed_mutate": proposed,
+            "result": result,
+        }, args.json)
+        return 0
+
     gads_utils.emit({
         "status": "ready",
         "customer_id": cid,
         "proposed_mutate": proposed,
-        "next_step": "Review the JSON. Confirm with the user. Then call the GoogleAdsService.mutate.",
+        "next_step": "Review the JSON. Re-run with --validate-only for a dry-run, then --apply to send.",
     }, args.json)
     return 0
 
