@@ -40,14 +40,23 @@ command. Run it. A browser opens, sign in, grant access.
 
 ## 4. Configure local credentials
 
-```
-python scripts/gads_auth.py --set-developer-token <TOKEN>
-```
-
-If you use an MCC (manager account):
+Add a profile per manager account. Each profile owns its developer token
+and (optional) login-customer-id.
 
 ```
-python scripts/gads_auth.py --set-login-customer-id <MCC-id>
+python scripts/gads_auth.py --add-profile acme \
+    --developer-token <TOKEN> \
+    --login-customer-id <MCC-id>
+```
+
+If you only have one MCC, one profile is enough — it becomes active
+automatically. For multiple MCCs, add a profile per account and switch
+with `--use-profile`:
+
+```
+python scripts/gads_auth.py --add-profile widgets --developer-token <TOKEN2> --login-customer-id <MCC2>
+python scripts/gads_auth.py --use-profile widgets
+python scripts/gads_auth.py --list-profiles
 ```
 
 The customer ID is the 10-digit account number, with or without dashes.

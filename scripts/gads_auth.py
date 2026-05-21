@@ -148,17 +148,62 @@ def get_credentials():
 
 # ---------- developer token + login-customer-id ----------
 
+# ---------- profiles ----------
+#
+# Credentials file layout:
+#   { "active": "<name>",
+#     "profiles": {
+#       "<name>": {"developer_token": "...", "login_customer_id": "..."}
+#     }
+#   }
+#
+# Old flat layout ({"developer_token": "...", "login_customer_id": "..."}) is
+# auto-migrated into a "default" profile on first read.
+
+def _migrate_if_flat(data: dict[str, Any]) -> dict[str, Any]:
+    if "profiles" in data:
+        return data
+    if not data:
+        return {"active": None, "profiles": {}}
+    migrated = {
+        "active": "default",
+        "profiles": {
+            "default": {
+                "developer_token": data.get("developer_token"),
+                "login_customer_id": data.get("login_customer_id"),
+            }
+        },
+    }
+    save_credentials(migrated)
+    return migrated
+
+
+def _profiles() -> dict[str, Any]:
+    return _migrate_if_flat(load_credentials())
+
+
+def active_profile_name() -> str | None:
+    return _profiles().get("active")
+
+
+def active_profile() -> dict[str, Any]:
+    data = _profiles()
+    name = data.get("active")
+    if not name:
+        return {}
+    return data.get("profiles", {}).get(name, {})
+
+
 def get_developer_token() -> str:
     env = os.environ.get("GOOGLE_ADS_DEVELOPER_TOKEN")
     if env:
         return env
-    creds = load_credentials()
-    token = creds.get("developer_token")
+    token = active_profile().get("developer_token")
     if not token:
         raise AuthRequiredError(
-            "No developer token configured. Get one from "
-            "https://ads.google.com/aw/apicenter and run:\n"
-            "  python scripts/gads_auth.py --set-developer-token <TOKEN>"
+            "No developer token configured for the active profile. Run:\n"
+            "  python scripts/gads_auth.py --add-profile <NAME> --developer-token <TOKEN> [--login-customer-id <MCC>]\n"
+            "  python scripts/gads_auth.py --use-profile <NAME>"
         )
     return token
 
@@ -167,18 +212,70 @@ def get_login_customer_id() -> str | None:
     env = os.environ.get("GOOGLE_ADS_LOGIN_CUSTOMER_ID")
     if env:
         return env.replace("-", "")
-    return load_credentials().get("login_customer_id")
+    return active_profile().get("login_customer_id")
 
 
+def add_profile(name: str, developer_token: str, login_customer_id: str | None = None) -> None:
+    data = _profiles()
+    data.setdefault("profiles", {})[name] = {
+        "developer_token": developer_token.strip(),
+        "login_customer_id": (login_customer_id or "").replace("-", "").strip() or None,
+    }
+    if not data.get("active"):
+        data["active"] = name
+    save_credentials(data)
+
+
+def use_profile(name: str) -> None:
+    data = _profiles()
+    if name not in data.get("profiles", {}):
+        raise AuthRequiredError(
+            f"Profile '{name}' not found. Add it first:\n"
+            f"  python scripts/gads_auth.py --add-profile {name} --developer-token <TOKEN>"
+        )
+    data["active"] = name
+    save_credentials(data)
+
+
+def remove_profile(name: str) -> None:
+    data = _profiles()
+    data.get("profiles", {}).pop(name, None)
+    if data.get("active") == name:
+        remaining = list(data.get("profiles", {}).keys())
+        data["active"] = remaining[0] if remaining else None
+    save_credentials(data)
+
+
+def list_profiles() -> dict[str, Any]:
+    data = _profiles()
+    return {
+        "active": data.get("active"),
+        "profiles": {
+            name: {
+                "developer_token": "set" if p.get("developer_token") else "missing",
+                "login_customer_id": p.get("login_customer_id"),
+            }
+            for name, p in data.get("profiles", {}).items()
+        },
+    }
+
+
+# kept for back-compat: writes to the active profile (or 'default' if none)
 def set_developer_token(token: str) -> None:
-    data = load_credentials()
-    data["developer_token"] = token.strip()
+    data = _profiles()
+    name = data.get("active") or "default"
+    data.setdefault("profiles", {}).setdefault(name, {})["developer_token"] = token.strip()
+    data["active"] = name
     save_credentials(data)
 
 
 def set_login_customer_id(customer_id: str) -> None:
-    data = load_credentials()
-    data["login_customer_id"] = customer_id.replace("-", "").strip()
+    data = _profiles()
+    name = data.get("active") or "default"
+    data.setdefault("profiles", {}).setdefault(name, {})["login_customer_id"] = (
+        customer_id.replace("-", "").strip()
+    )
+    data["active"] = name
     save_credentials(data)
 
 
@@ -202,7 +299,8 @@ def cmd_check(_args) -> int:
         return 1
 
     out["session"] = session_status()
-    out["developer_token"] = "set" if load_credentials().get("developer_token") else "missing"
+    out["active_profile"] = active_profile_name()
+    out["developer_token"] = "set" if active_profile().get("developer_token") else "missing"
     out["login_customer_id"] = get_login_customer_id() or None
     print(json.dumps(out, indent=2))
     return 0
@@ -246,12 +344,46 @@ def cmd_logout(_args) -> int:
     return 0
 
 
+def cmd_add_profile(args) -> int:
+    if not args.developer_token:
+        print(json.dumps({"error": "--developer-token is required with --add-profile"}, indent=2))
+        return 2
+    add_profile(args.add_profile, args.developer_token, args.login_customer_id)
+    session_start()
+    print(json.dumps({"added": args.add_profile, "profiles": list_profiles()}, indent=2))
+    return 0
+
+
+def cmd_use_profile(args) -> int:
+    use_profile(args.use_profile)
+    session_start()
+    print(json.dumps({"active": active_profile_name(), "profiles": list_profiles()}, indent=2))
+    return 0
+
+
+def cmd_remove_profile(args) -> int:
+    remove_profile(args.remove_profile)
+    print(json.dumps(list_profiles(), indent=2))
+    return 0
+
+
+def cmd_list_profiles(_args) -> int:
+    print(json.dumps(list_profiles(), indent=2))
+    return 0
+
+
 def main() -> int:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--check", action="store_true")
     p.add_argument("--adc", action="store_true")
-    p.add_argument("--set-developer-token", metavar="TOKEN")
-    p.add_argument("--set-login-customer-id", metavar="ID")
+    p.add_argument("--add-profile", metavar="NAME")
+    p.add_argument("--use-profile", metavar="NAME")
+    p.add_argument("--remove-profile", metavar="NAME")
+    p.add_argument("--list-profiles", action="store_true")
+    p.add_argument("--developer-token", metavar="TOKEN", help="paired with --add-profile")
+    p.add_argument("--login-customer-id", metavar="ID", help="paired with --add-profile (optional)")
+    p.add_argument("--set-developer-token", metavar="TOKEN", help="set on the active profile")
+    p.add_argument("--set-login-customer-id", metavar="ID", help="set on the active profile")
     p.add_argument("--customers", action="store_true")
     p.add_argument("--logout", action="store_true")
     args = p.parse_args()
@@ -260,6 +392,14 @@ def main() -> int:
         return cmd_check(args)
     if args.adc:
         return cmd_adc(args)
+    if args.add_profile:
+        return cmd_add_profile(args)
+    if args.use_profile:
+        return cmd_use_profile(args)
+    if args.remove_profile:
+        return cmd_remove_profile(args)
+    if args.list_profiles:
+        return cmd_list_profiles(args)
     if args.set_developer_token:
         return cmd_set_dev_token(args)
     if args.set_login_customer_id:
