@@ -85,6 +85,19 @@ The session is good for 24 hours. After that the scripts refuse to run
 until you sign in again. This is enforced locally regardless of token
 TTL.
 
+## Run the tests
+
+The non-API logic is covered by pytest. No credentials needed.
+
+```
+cd scripts
+python -m pytest -q
+```
+
+53 tests covering: auth profile lifecycle, session expiry, GAQL builder
+shapes, placement classification, campaign-context validation, report
+rendering, and the session-gate hook.
+
 ## Use it
 
 In Claude Code, slash commands map to skills:
@@ -110,8 +123,37 @@ Outside Claude Code, the same things run as plain Python:
 ```
 python scripts/gads_search.py --customer <id> --days 28 --json
 python scripts/gads_placements.py --customer <id> --days 28 --json
-python scripts/gads_creation.py --customer <id> --context-file ctx.json --json
+python scripts/gads_audit.py --customer <id> --days 28 --site https://example.com --output audit.json
+python scripts/gads_report.py --input audit.json --format md --output audit.md
+python scripts/gads_report.py --input audit.json --format html --output audit.html
+python scripts/gads_creation.py --customer <id> --context-file ctx.json --validate-only --json
+python scripts/gads_creation.py --customer <id> --context-file ctx.json --apply --json
 ```
+
+## Session-gate hook
+
+`hooks/session_gate.py` is a PreToolUse hook that blocks any
+`gads_*` invocation in Claude Code once the 24h session is expired.
+Wire it in `~/.claude/settings.json` (or the project's `.claude/settings.json`):
+
+```json
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [{
+          "type": "command",
+          "command": "python ${CLAUDE_PROJECT_DIR}/hooks/session_gate.py"
+        }]
+      }
+    ]
+  }
+}
+```
+
+When the session expires, the next gads_* tool call is blocked with the
+exact gcloud command to re-authenticate.
 
 ## Placement safety
 
