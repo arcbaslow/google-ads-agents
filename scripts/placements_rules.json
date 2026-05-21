@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "updated": "2026-05-21",
+  "notes": "Conservative starter rules. Edit freely. Each rule has a pattern (regex on placement URL or display name) and a category. Use --rules to point at a custom file.",
+  "rules": [
+    {"category": "scam", "pattern": "(?i)(make.?money|click.?here|get.?rich|miracle.?cure|weight.?loss.?pill|free.?(?:gift|iphone|trial)|government.?grant)"},
+    {"category": "scam", "pattern": "(?i)\\.(?:tk|ml|ga|cf|gq|top|click|country|stream|review)(?:/|$)"},
+    {"category": "scam", "pattern": "(?i)(?:ultimate|amazing|shocking).*(?:secret|trick|hack)"},
+
+    {"category": "bot", "pattern": "(?i)(?:traffic.?bot|click.?bot|autovisit|hitleap|otohits|10khits)"},
+    {"category": "bot", "pattern": "(?i)\\b(?:ptc|paid.?to.?click)\\b"},
+
+    {"category": "politics", "pattern": "(?i)\\b(?:breitbart|infowars|theblaze|dailycaller|huffpost|mediamatters|jacobin|townhall|gop|dnc|democrat|republican|trump|biden|harris|maga|antifa)\\b"},
+    {"category": "politics", "pattern": "(?i)(?:campaign|election|vote|ballot|primary).?(?:202[5-9]|203\\d)"},
+
+    {"category": "religion", "pattern": "(?i)\\b(?:bible|gospel|christ|jesus|allah|quran|torah|buddha|hindu|catholic|baptist|evangelical|mosque|synagogue|church.?of)\\b"},
+    {"category": "religion", "pattern": "(?i)(?:godtube|christian.?radio|salem.?communications)"},
+
+    {"category": "games", "pattern": "(?i)\\b(?:mobile.?game|play.?free|game.?download|gamehub|gamejolt|kongregate|crazygames|miniclip|poki)\\b"},
+    {"category": "games", "pattern": "(?i)mobileapp://com\\.(?:king|supercell|playrix|mojang|gameloft|miniclip|gungho)\\."},
+
+    {"category": "gambling", "pattern": "(?i)\\b(?:casino|poker|bet|sportsbook|wager|slots|roulette|blackjack|baccarat|bookmaker|odds|sweepstakes)\\b"},
+
+    {"category": "adult", "pattern": "(?i)\\b(?:porn|xxx|nsfw|adult|escort|cam.?girl|onlyfans|chaturbate|stripchat|pornhub|xvideos|xhamster|redtube|youporn)\\b"},
+
+    {"category": "mfa", "pattern": "(?i)(?:made.?for.?ads|content.?farm|article.?spinner|listicle.?generator)"},
+    {"category": "mfa", "pattern": "(?i)(?:trendscatchers|news.?breakers|today24|world.?stories.?today)"}
+  ]
+}
