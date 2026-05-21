@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.2.0
+
+- Audit driver runs every agent in parallel (`concurrent.futures`,
+  six workers by default). Adds `--save-history` to persist the merged
+  audit under `~/.claude/gads-audit-history/<customer>/`.
+- Recommendations API integration: `scripts/gads_recommendations.py`,
+  the `gads-recommendations` agent and skill. Pulls Google's own
+  account recommendations, groups by type, and surfaces base→potential
+  impact.
+- Change-event log + audit history: `scripts/gads_history.py` with
+  `--changes`, `--list`, and `--diff`. The diff classifies findings as
+  resolved, new, or unchanged across runs.
+- Day-level anomaly detector: `scripts/gads_anomalies.py`. Trailing
+  14-day baseline, z-score threshold (default 2.0), flags spend /
+  conv / clicks / impressions swings per campaign per day.
+- Write paths in `scripts/gads_apply.py`: negative keywords on a
+  campaign and account-wide placement exclusions. Both behind
+  `--validate-only` and `--apply`.
+- Search-term mining: `gads_search.py --negative-candidates` filters
+  raw search-term rows into a costed candidate list with severity-
+  scaled findings.
+- Tests grew from 53 to 68.
+
 ## 0.1.0
 
 Initial release.
