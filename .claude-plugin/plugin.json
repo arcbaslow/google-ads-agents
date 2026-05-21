@@ -1,0 +1,24 @@
+{
+  "name": "google-ads-agents",
+  "version": "0.1.0",
+  "description": "Multi-agent toolkit for Google Ads. End-user gcloud SSO, 24h session cap, profiles per MCC. Search, Performance Max, App, Display, Shopping, YouTube analysis; conversion + Google tag audits; keyword research; auction insights; placement safety with built-in exclusions for scams, bots, politics, religion, games, gambling, adult; gated campaign creation.",
+  "author": {
+    "name": "Dilshat Rakhimov",
+    "url": "https://goodlabs.kz"
+  },
+  "license": "MIT",
+  "keywords": [
+    "google-ads",
+    "adwords",
+    "performance-max",
+    "search-campaign",
+    "shopping-campaign",
+    "youtube-ads",
+    "app-campaign",
+    "conversion-tracking",
+    "auction-insights",
+    "keyword-research",
+    "placement-safety",
+    "campaign-creation"
+  ]
+}
