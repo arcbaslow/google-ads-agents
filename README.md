@@ -55,18 +55,24 @@ python scripts/gads_auth.py --adc
 ```
 
 That prints the exact `gcloud auth application-default login` command
-to run. Run it. A browser opens, sign in, grant scope. Then set your
-developer token:
+to run. Run it. A browser opens, sign in, grant scope. Then register a
+profile for each manager account you work with:
 
 ```
-python scripts/gads_auth.py --set-developer-token <TOKEN>
+python scripts/gads_auth.py --add-profile acme --developer-token <TOKEN> --login-customer-id <MCC-id>
+python scripts/gads_auth.py --add-profile widgets --developer-token <TOKEN2> --login-customer-id <MCC2>
 ```
 
-If you operate through a manager account, set the login customer ID:
+Switch the active profile any time:
 
 ```
-python scripts/gads_auth.py --set-login-customer-id <MCC-id>
+python scripts/gads_auth.py --use-profile widgets
+python scripts/gads_auth.py --list-profiles
 ```
+
+A single-MCC setup just adds one profile and stays on it. The old flat
+credentials file (one token, no profiles) is migrated to a "default"
+profile automatically the first time the script runs.
 
 Verify:
 
