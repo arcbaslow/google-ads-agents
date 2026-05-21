@@ -19,9 +19,11 @@
     {"category": "games", "pattern": "(?i)\\b(?:mobile.?game|play.?free|game.?download|gamehub|gamejolt|kongregate|crazygames|miniclip|poki)\\b"},
     {"category": "games", "pattern": "(?i)mobileapp://com\\.(?:king|supercell|playrix|mojang|gameloft|miniclip|gungho)\\."},
 
-    {"category": "gambling", "pattern": "(?i)\\b(?:casino|poker|bet|sportsbook|wager|slots|roulette|blackjack|baccarat|bookmaker|odds|sweepstakes)\\b"},
+    {"category": "gambling", "pattern": "(?i)(?:casino|poker|sportsbook|wager|slots|roulette|blackjack|baccarat|bookmaker|sweepstakes)"},
+    {"category": "gambling", "pattern": "(?i)\\b(?:bet|odds)\\b"},
 
-    {"category": "adult", "pattern": "(?i)\\b(?:porn|xxx|nsfw|adult|escort|cam.?girl|onlyfans|chaturbate|stripchat|pornhub|xvideos|xhamster|redtube|youporn)\\b"},
+    {"category": "adult", "pattern": "(?i)(?:porn|xxx|nsfw|escort|cam.?girl|onlyfans|chaturbate|stripchat|pornhub|xvideos|xhamster|redtube|youporn)"},
+    {"category": "adult", "pattern": "(?i)\\badult\\b"},
 
     {"category": "mfa", "pattern": "(?i)(?:made.?for.?ads|content.?farm|article.?spinner|listicle.?generator)"},
     {"category": "mfa", "pattern": "(?i)(?:trendscatchers|news.?breakers|today24|world.?stories.?today)"}
