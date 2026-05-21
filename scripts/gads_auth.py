@@ -1,0 +1,276 @@
+"""
+Google Ads auth.
+
+End-user Google sign-in via the gcloud CLI. No service account, no per-user
+OAuth client registration. The gcloud CLI is itself a registered Google
+application; this is a real SSO browser flow.
+
+A developer token is still required by the Google Ads API. It is one-time
+account setup, not OAuth, so users paste it once. login-customer-id (MCC)
+is optional.
+
+A 24-hour session cap is enforced locally on top of whatever token expiry
+Google issues. After 24h the scripts refuse to run until the user signs in
+again. This is intentional and not configurable.
+
+Usage:
+  python scripts/gads_auth.py --check
+  python scripts/gads_auth.py --adc                 # print gcloud command
+  python scripts/gads_auth.py --set-developer-token TOKEN
+  python scripts/gads_auth.py --set-login-customer-id 1234567890
+  python scripts/gads_auth.py --customers           # list accessible customers
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import stat
+import sys
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+from typing import Any
+
+ADWORDS = "https://www.googleapis.com/auth/adwords"
+CLOUD_PLATFORM = "https://www.googleapis.com/auth/cloud-platform"
+OPENID = "openid"
+EMAIL = "email"
+
+CREDENTIALS_PATH = Path.home() / ".claude" / "gads-credentials.json"
+SESSION_PATH = Path.home() / ".claude" / "gads-session.json"
+SESSION_MAX_HOURS = 24
+
+
+class AuthRequiredError(RuntimeError):
+    def __init__(self, hint: str):
+        super().__init__(hint)
+        self.hint = hint
+
+
+class SessionExpiredError(RuntimeError):
+    pass
+
+
+def adc_command() -> str:
+    return (
+        "gcloud auth application-default login --scopes="
+        + ",".join([ADWORDS, CLOUD_PLATFORM, OPENID, EMAIL])
+    )
+
+
+def _ensure_dir(p: Path) -> None:
+    p.parent.mkdir(parents=True, exist_ok=True)
+
+
+def _save(path: Path, data: dict[str, Any]) -> None:
+    _ensure_dir(path)
+    with open(path, "w") as f:
+        json.dump(data, f, indent=2)
+    try:
+        os.chmod(path, stat.S_IRUSR | stat.S_IWUSR)
+    except (PermissionError, OSError):
+        pass
+
+
+def _load(path: Path) -> dict[str, Any] | None:
+    if not path.exists():
+        return None
+    with open(path) as f:
+        return json.load(f)
+
+
+def load_credentials() -> dict[str, Any]:
+    return _load(CREDENTIALS_PATH) or {}
+
+
+def save_credentials(data: dict[str, Any]) -> None:
+    _save(CREDENTIALS_PATH, data)
+
+
+# ---------- 24h session marker ----------
+
+def session_start() -> None:
+    _save(SESSION_PATH, {"started_at": datetime.now(timezone.utc).isoformat()})
+
+
+def session_status() -> dict[str, Any]:
+    s = _load(SESSION_PATH)
+    if not s:
+        return {"valid": False, "remaining_seconds": 0, "reason": "no session"}
+    started = datetime.fromisoformat(s["started_at"])
+    if started.tzinfo is None:
+        started = started.replace(tzinfo=timezone.utc)
+    elapsed = datetime.now(timezone.utc) - started
+    remaining = timedelta(hours=SESSION_MAX_HOURS) - elapsed
+    if remaining.total_seconds() <= 0:
+        return {"valid": False, "remaining_seconds": 0, "reason": "expired"}
+    return {
+        "valid": True,
+        "remaining_seconds": int(remaining.total_seconds()),
+        "started_at": s["started_at"],
+    }
+
+
+def enforce_session() -> None:
+    s = session_status()
+    if not s["valid"]:
+        raise SessionExpiredError(
+            "Session expired (24h cap reached). Re-authenticate:\n  "
+            + adc_command()
+        )
+
+
+# ---------- google.auth resolution ----------
+
+def get_credentials():
+    """Resolve credentials via google.auth.default(), then enforce the 24h cap.
+
+    google.auth picks up gcloud user ADC from the well-known path.
+    """
+    enforce_session()
+    try:
+        import google.auth
+    except ImportError as e:
+        raise AuthRequiredError(
+            "google-auth is not installed. Run: pip install -r scripts/requirements.txt"
+        ) from e
+
+    try:
+        creds, _project = google.auth.default(scopes=[ADWORDS])
+    except Exception as e:
+        raise AuthRequiredError(
+            f"No application default credentials found ({e}).\n"
+            f"Run:\n  {adc_command()}"
+        ) from e
+    return creds
+
+
+# ---------- developer token + login-customer-id ----------
+
+def get_developer_token() -> str:
+    env = os.environ.get("GOOGLE_ADS_DEVELOPER_TOKEN")
+    if env:
+        return env
+    creds = load_credentials()
+    token = creds.get("developer_token")
+    if not token:
+        raise AuthRequiredError(
+            "No developer token configured. Get one from "
+            "https://ads.google.com/aw/apicenter and run:\n"
+            "  python scripts/gads_auth.py --set-developer-token <TOKEN>"
+        )
+    return token
+
+
+def get_login_customer_id() -> str | None:
+    env = os.environ.get("GOOGLE_ADS_LOGIN_CUSTOMER_ID")
+    if env:
+        return env.replace("-", "")
+    return load_credentials().get("login_customer_id")
+
+
+def set_developer_token(token: str) -> None:
+    data = load_credentials()
+    data["developer_token"] = token.strip()
+    save_credentials(data)
+
+
+def set_login_customer_id(customer_id: str) -> None:
+    data = load_credentials()
+    data["login_customer_id"] = customer_id.replace("-", "").strip()
+    save_credentials(data)
+
+
+# ---------- CLI ----------
+
+def cmd_check(_args) -> int:
+    out: dict[str, Any] = {}
+    try:
+        creds = get_credentials()
+        out["adc"] = "ok"
+        out["principal"] = getattr(creds, "service_account_email", None) or "user"
+    except SessionExpiredError as e:
+        out["session"] = "expired"
+        out["hint"] = str(e)
+        print(json.dumps(out, indent=2))
+        return 1
+    except AuthRequiredError as e:
+        out["adc"] = "missing"
+        out["hint"] = e.hint
+        print(json.dumps(out, indent=2))
+        return 1
+
+    out["session"] = session_status()
+    out["developer_token"] = "set" if load_credentials().get("developer_token") else "missing"
+    out["login_customer_id"] = get_login_customer_id() or None
+    print(json.dumps(out, indent=2))
+    return 0
+
+
+def cmd_adc(_args) -> int:
+    print(adc_command())
+    return 0
+
+
+def cmd_set_dev_token(args) -> int:
+    set_developer_token(args.set_developer_token)
+    session_start()
+    print(json.dumps({"developer_token": "set", "session": session_status()}, indent=2))
+    return 0
+
+
+def cmd_set_login_customer_id(args) -> int:
+    set_login_customer_id(args.set_login_customer_id)
+    print(json.dumps({"login_customer_id": get_login_customer_id()}, indent=2))
+    return 0
+
+
+def cmd_customers(_args) -> int:
+    from gads_client import build_client
+
+    client = build_client()
+    service = client.get_service("CustomerService")
+    resource_names = service.list_accessible_customers().resource_names
+    print(json.dumps({"customers": [r.split("/")[-1] for r in resource_names]}, indent=2))
+    return 0
+
+
+def cmd_logout(_args) -> int:
+    for p in (CREDENTIALS_PATH, SESSION_PATH):
+        try:
+            p.unlink()
+        except FileNotFoundError:
+            pass
+    print(json.dumps({"status": "cleared"}, indent=2))
+    return 0
+
+
+def main() -> int:
+    p = argparse.ArgumentParser(description=__doc__)
+    p.add_argument("--check", action="store_true")
+    p.add_argument("--adc", action="store_true")
+    p.add_argument("--set-developer-token", metavar="TOKEN")
+    p.add_argument("--set-login-customer-id", metavar="ID")
+    p.add_argument("--customers", action="store_true")
+    p.add_argument("--logout", action="store_true")
+    args = p.parse_args()
+
+    if args.check:
+        return cmd_check(args)
+    if args.adc:
+        return cmd_adc(args)
+    if args.set_developer_token:
+        return cmd_set_dev_token(args)
+    if args.set_login_customer_id:
+        return cmd_set_login_customer_id(args)
+    if args.customers:
+        return cmd_customers(args)
+    if args.logout:
+        return cmd_logout(args)
+    p.print_help()
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
