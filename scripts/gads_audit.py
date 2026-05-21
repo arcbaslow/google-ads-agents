@@ -1,9 +1,10 @@
 """Concrete entry point for /gads audit.
 
-Runs the per-domain scripts that don't need a subagent layer (anything
-that's just a GAQL pull and basic checks), merges results into one JSON
-document with the standard `summary / findings / metrics` shape, then
-hands the merged document to gads_report.py for rendering.
+Runs every read-path agent in parallel against the same customer, merges
+results into one document with the standard `summary / findings /
+metrics` shape per agent, and (optionally) persists the merged document
+under ~/.claude/gads-audit-history/<customer>/<timestamp>.json so later
+runs can be diffed against it.
 
 Subagent layers in Claude Code still wrap this for narrative analysis;
 outside Claude Code this is the one-command driver.
@@ -12,6 +13,7 @@ outside Claude Code this is the one-command driver.
 from __future__ import annotations
 
 import argparse
+import concurrent.futures
 import json
 import sys
 import traceback
@@ -21,42 +23,52 @@ import gads_competitors
 import gads_conversions
 import gads_display
 import gads_gtag
+import gads_history
+import gads_placements
 import gads_pmax
+import gads_recommendations
 import gads_search
 import gads_shopping
 import gads_uac
 import gads_utils
 import gads_youtube
-import gads_placements
 
-# (agent_name, callable, kwargs builder)
+# (agent_name, callable). Each callable takes (customer_id, days).
 DEFAULT_AGENTS: list[tuple[str, Callable[..., Any]]] = [
-    ("gads-conversions", lambda cid, days: gads_conversions.health(cid)),
-    ("gads-search",      lambda cid, days: gads_search.list_campaigns(cid, days)),
-    ("gads-pmax",        lambda cid, days: gads_pmax.asset_groups(cid, days)),
-    ("gads-uac",         lambda cid, days: gads_uac.app_campaigns(cid, days)),
-    ("gads-display",     lambda cid, days: gads_display.display_campaigns(cid, days)),
-    ("gads-shopping",    lambda cid, days: gads_shopping.shopping_campaigns(cid, days)),
-    ("gads-youtube",     lambda cid, days: gads_youtube.youtube_campaigns(cid, days)),
-    ("gads-competitors", lambda cid, days: gads_competitors.auction_insights(cid, days)),
-    ("gads-placements",  lambda cid, days: gads_placements.scan(cid, days)),
+    ("gads-conversions",    lambda cid, days: gads_conversions.health(cid)),
+    ("gads-search",         lambda cid, days: gads_search.list_campaigns(cid, days)),
+    ("gads-search-terms",   lambda cid, days: gads_search.negative_candidates(cid, days)),
+    ("gads-pmax",           lambda cid, days: gads_pmax.asset_groups(cid, days)),
+    ("gads-uac",            lambda cid, days: gads_uac.app_campaigns(cid, days)),
+    ("gads-display",        lambda cid, days: gads_display.display_campaigns(cid, days)),
+    ("gads-shopping",       lambda cid, days: gads_shopping.shopping_campaigns(cid, days)),
+    ("gads-youtube",        lambda cid, days: gads_youtube.youtube_campaigns(cid, days)),
+    ("gads-competitors",    lambda cid, days: gads_competitors.auction_insights(cid, days)),
+    ("gads-placements",     lambda cid, days: gads_placements.scan(cid, days)),
+    ("gads-recommendations", lambda cid, days: gads_recommendations.fetch(cid)),
 ]
 
 
-def run(customer_id: str, days: int = 28, site: str | None = None) -> dict:
+def run(customer_id: str, days: int = 28, site: str | None = None,
+        max_workers: int = 6) -> dict:
     customer_id = gads_utils.normalize_customer_id(customer_id)
     start, end = gads_utils.date_range(days)
-    agents: dict[str, Any] = {}
 
+    work: list[tuple[str, Callable[[], Any]]] = []
     if site:
-        agents["gads-gtag"] = _safe(lambda: {
-            **{"customer_id": customer_id},
+        work.append(("gads-gtag", lambda: {
+            "customer_id": customer_id,
             "site_scan": gads_gtag.scan_site(site),
             "linked": gads_gtag.linked_accounts(customer_id),
-        })
-
+        }))
     for name, fn in DEFAULT_AGENTS:
-        agents[name] = _safe(lambda fn=fn: fn(customer_id, days))
+        work.append((name, lambda fn=fn: fn(customer_id, days)))
+
+    agents: dict[str, Any] = {}
+    with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as pool:
+        future_to_name = {pool.submit(_safe, fn): name for name, fn in work}
+        for fut in concurrent.futures.as_completed(future_to_name):
+            agents[future_to_name[fut]] = fut.result()
 
     return {
         "customer_id": customer_id,
@@ -87,15 +99,24 @@ def main() -> int:
     p.add_argument("--days", type=int, default=28)
     p.add_argument("--site", help="Site URL for the gtag scan")
     p.add_argument("--output", help="Path to write merged JSON (default: stdout)")
+    p.add_argument("--save-history", action="store_true",
+                   help="Persist under ~/.claude/gads-audit-history/<customer>/")
+    p.add_argument("--workers", type=int, default=6,
+                   help="Concurrent agent workers (default 6)")
     args = p.parse_args()
 
-    data = run(args.customer, args.days, args.site)
+    data = run(args.customer, args.days, args.site, args.workers)
+
     blob = json.dumps(data, indent=2, default=str)
     if args.output:
         with open(args.output, "w") as f:
             f.write(blob)
     else:
         print(blob)
+
+    if args.save_history:
+        saved = gads_history.save_audit(data)
+        print(f"history: {saved}", file=sys.stderr)
     return 0
 
 
