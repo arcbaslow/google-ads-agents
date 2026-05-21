@@ -1,0 +1,154 @@
+# google-ads-agents
+
+Multi-agent toolkit for Google Ads. Read, analyze, and gate-managed
+mutate paths across Search, Performance Max, App, Display, Shopping,
+and Video. Conversion-tracking and Google tag audits. Keyword research
+via Keyword Plan. Auction Insights. Placement safety with built-in
+exclusions for scams, bots, politics, religion, games, gambling, and
+adult content. Campaign creation behind explicit context gates.
+
+End-user Google sign-in via the gcloud CLI. No service account, no
+per-user OAuth client to register. Hard 24-hour session cap on top of
+token expiry.
+
+## What is it?
+
+Three layers:
+
+1. Python adapters under `scripts/` that call the Google Ads API and
+   return JSON.
+2. Subagent definitions under `agents/`, one per analysis domain.
+3. Skills under `skills/` that route `/gads <command>` to the right
+   agent.
+
+The audit orchestrator (`skills/gads-audit/`) gates on auth, runs
+conversions + Google tag checks first, then fans out the rest in
+parallel and renders a markdown report.
+
+## Requirements
+
+- Python 3.10 or newer
+- Google Cloud SDK (`gcloud`)
+- A Google Ads developer token registered against a manager account
+  (one-time setup at https://ads.google.com/aw/apicenter)
+
+## Install
+
+```
+python -m venv .venv
+
+# macOS / Linux
+source .venv/bin/activate
+
+# Windows PowerShell
+.venv\Scripts\Activate.ps1
+
+pip install -r scripts/requirements.txt
+```
+
+## Authenticate
+
+End-user sign-in through `gcloud`:
+
+```
+python scripts/gads_auth.py --adc
+```
+
+That prints the exact `gcloud auth application-default login` command
+to run. Run it. A browser opens, sign in, grant scope. Then set your
+developer token:
+
+```
+python scripts/gads_auth.py --set-developer-token <TOKEN>
+```
+
+If you operate through a manager account, set the login customer ID:
+
+```
+python scripts/gads_auth.py --set-login-customer-id <MCC-id>
+```
+
+Verify:
+
+```
+python scripts/gads_auth.py --check
+python scripts/gads_auth.py --customers
+```
+
+The session is good for 24 hours. After that the scripts refuse to run
+until you sign in again. This is enforced locally regardless of token
+TTL.
+
+## Use it
+
+In Claude Code, slash commands map to skills:
+
+```
+/gads audit <customer-id>
+/gads search <customer-id>
+/gads pmax <customer-id>
+/gads uac <customer-id>
+/gads display <customer-id>
+/gads shopping <customer-id>
+/gads youtube <customer-id>
+/gads conversions <customer-id>
+/gads gtag <customer-id> --site <url>
+/gads keywords <customer-id> --seeds w1 w2 ...
+/gads competitors <customer-id>
+/gads placements <customer-id>
+/gads create <customer-id>
+```
+
+Outside Claude Code, the same things run as plain Python:
+
+```
+python scripts/gads_search.py --customer <id> --days 28 --json
+python scripts/gads_placements.py --customer <id> --days 28 --json
+python scripts/gads_creation.py --customer <id> --context-file ctx.json --json
+```
+
+## Placement safety
+
+`gads_placements.py` enumerates every placement that served impressions
+in the window and classifies each against
+`scripts/placements_rules.json`. Default categories: `scam`, `bot`,
+`politics`, `religion`, `games`, `gambling`, `adult`, `mfa`. The agent
+shows the proposed exclusion list per category and waits for `y/N`
+before writing the negative criteria.
+
+The rules file is plain JSON. Edit it, point at a custom file via
+`--rules`, or override per-run.
+
+## Campaign creation
+
+`gads-creation` refuses to propose a mutate until you've supplied:
+
+1. business / vertical
+2. website (reachability is checked)
+3. primary goal (sales, leads, traffic, awareness, app installs)
+4. analytics installed (verified via `gads-gtag`)
+5. conversion actions correct (verified via `gads-conversions`)
+6. daily budget
+7. bidding strategy
+8. geo and language
+9. channel type
+
+The script returns either `blocked` (with a list of missing or
+contradictory fields) or `ready` (with a proposed mutate JSON). Nothing
+is sent until the user approves the JSON. New campaigns are created
+`PAUSED`.
+
+## Project structure
+
+```
+google-ads-agents/
+  agents/        subagent definitions, one per domain
+  scripts/       Python adapters and tests
+  skills/        /gads command routing
+  hooks/         placeholder for pre/post-tool guards
+  docs/          setup guide
+```
+
+## Licensing
+
+MIT. See [LICENSE](LICENSE).
