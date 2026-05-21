@@ -1,0 +1,17 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "google-ads-agents",
+  "owner": {
+    "name": "Dilshat Rakhimov"
+  },
+  "metadata": {
+    "description": "Google Ads toolkit: campaign-type analysis (Search, PMax, UAC, Display, Shopping, YouTube), conversion + Google tag health, keyword research, auction insights, placement safety scanner with default exclusions for scams/bots/politics/religion/games/gambling/adult, and a gated campaign-creation wizard. End-user gcloud SSO, no service account, 24h session cap."
+  },
+  "plugins": [
+    {
+      "name": "google-ads-agents",
+      "source": "./",
+      "description": "Specialist agents and skills for Google Ads read paths, placement safety, and gated campaign creation. Per-MCC profile support."
+    }
+  ]
+}
