@@ -94,9 +94,11 @@ cd scripts
 python -m pytest -q
 ```
 
-53 tests covering: auth profile lifecycle, session expiry, GAQL builder
-shapes, placement classification, campaign-context validation, report
-rendering, and the session-gate hook.
+68 tests covering: auth profile lifecycle, session expiry, GAQL
+builder shapes, placement classification, campaign-context validation,
+report rendering, the session-gate hook, search-term mining, anomaly
+detection, audit history persistence and diff, and recommendation
+triage.
 
 ## Use it
 
@@ -115,19 +117,30 @@ In Claude Code, slash commands map to skills:
 /gads keywords <customer-id> --seeds w1 w2 ...
 /gads competitors <customer-id>
 /gads placements <customer-id>
+/gads recommendations <customer-id>     # Google's own actionable list
+/gads anomalies <customer-id>           # day-level metric anomalies
+/gads history <customer-id> --changes   # change_event log
+/gads history <customer-id> --diff a b  # compare two saved audits
 /gads create <customer-id>
 ```
 
 Outside Claude Code, the same things run as plain Python:
 
 ```
-python scripts/gads_search.py --customer <id> --days 28 --json
+python scripts/gads_search.py --customer <id> --days 28 --negative-candidates --json
 python scripts/gads_placements.py --customer <id> --days 28 --json
-python scripts/gads_audit.py --customer <id> --days 28 --site https://example.com --output audit.json
+python scripts/gads_recommendations.py --customer <id> --json
+python scripts/gads_anomalies.py --customer <id> --days 30 --baseline-days 14 --z 2.0 --json
+python scripts/gads_history.py --customer <id> --changes --days 7 --json
+python scripts/gads_audit.py --customer <id> --days 28 --site https://example.com --save-history --output audit.json
+python scripts/gads_history.py --customer <id> --list --json
+python scripts/gads_history.py --customer <id> --diff <ts-a> <ts-b> --json
 python scripts/gads_report.py --input audit.json --format md --output audit.md
 python scripts/gads_report.py --input audit.json --format html --output audit.html
 python scripts/gads_creation.py --customer <id> --context-file ctx.json --validate-only --json
 python scripts/gads_creation.py --customer <id> --context-file ctx.json --apply --json
+python scripts/gads_apply.py --customer <id> negatives  --input negs.json --validate-only --json
+python scripts/gads_apply.py --customer <id> placements --input excl.json --apply --json
 ```
 
 ## Session-gate hook

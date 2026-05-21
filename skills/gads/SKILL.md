@@ -31,6 +31,10 @@ Top-level entry point. `/gads <command> <args>`.
 | `/gads keywords <customer-id> --seeds w1 w2` | Keyword ideas |
 | `/gads competitors <customer-id>` | Auction Insights |
 | `/gads placements <customer-id>` | Display + YouTube placement audit with safety exclusions |
+| `/gads recommendations <customer-id>` | Google's account recommendations, triaged |
+| `/gads anomalies <customer-id>` | Day-level metric anomaly detector |
+| `/gads history <customer-id>` | Change-event log; list and diff saved audits |
+| `/gads apply <customer-id>` | Write paths: negative keywords and placement exclusions |
 | `/gads create <customer-id>` | Campaign creation wizard, with gates |
 
 ## Routing
@@ -49,6 +53,10 @@ Top-level entry point. `/gads <command> <args>`.
 | `keywords <id>` | gads-keywords |
 | `competitors <id>` | gads-competitors |
 | `placements <id>` | gads-placements |
+| `recommendations <id>` | gads-recommendations |
+| `anomalies <id>` | gads-anomalies |
+| `history <id>` | scripts/gads_history.py |
+| `apply <id>` | scripts/gads_apply.py |
 | `create <id>` | gads-creation |
 | `auth` | Run `python scripts/gads_auth.py --adc` and friends |
 | `customers` | Run `python scripts/gads_auth.py --customers` |
