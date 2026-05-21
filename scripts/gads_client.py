@@ -1,10 +1,10 @@
-"""Build a GoogleAdsClient backed by gcloud user ADC.
+"""GoogleAdsClient backed by gcloud user ADC.
 
 The google-ads-python library normally expects either a refresh token in a
-config file or a service-account JSON. We bypass that by constructing the
-client from in-memory credentials returned by google.auth.default(). Same
-shape google.auth uses for ADC, but the developer token and optional
-login-customer-id are picked up from our own credentials file.
+config file or a service-account JSON. We bypass both by constructing the
+client from in-memory credentials returned by google.auth.default(). The
+developer token and optional login-customer-id come from the active local
+profile written by gads_auth.
 """
 
 from __future__ import annotations
@@ -14,40 +14,27 @@ from typing import Any
 import gads_auth
 
 
-def _config() -> dict[str, Any]:
-    creds = gads_auth.get_credentials()
+def build_client():
+    """Return a configured GoogleAdsClient for the active profile."""
+    from google.ads.googleads.client import GoogleAdsClient
+
     cfg: dict[str, Any] = {
         "developer_token": gads_auth.get_developer_token(),
         "use_proto_plus": True,
-        "credentials": creds,
+        "credentials": gads_auth.get_credentials(),
     }
     login = gads_auth.get_login_customer_id()
     if login:
         cfg["login_customer_id"] = login
-    return cfg
-
-
-def build_client():
-    """Return a configured GoogleAdsClient."""
-    from google.ads.googleads.client import GoogleAdsClient
-
-    return GoogleAdsClient.load_from_dict({
-        "developer_token": _config()["developer_token"],
-        "use_proto_plus": True,
-        **({"login_customer_id": _config()["login_customer_id"]} if _config().get("login_customer_id") else {}),
-    } | {"credentials": _config()["credentials"]})
+    return GoogleAdsClient.load_from_dict(cfg)
 
 
 def search_stream(customer_id: str, query: str) -> list[dict[str, Any]]:
     """Run a GAQL query and return a flat list of row dicts."""
-    from google.ads.googleads.client import GoogleAdsClient  # noqa: F401
-
     client = build_client()
     svc = client.get_service("GoogleAdsService")
-    customer_id = customer_id.replace("-", "")
-    stream = svc.search_stream(customer_id=customer_id, query=query)
     rows: list[dict[str, Any]] = []
-    for batch in stream:
+    for batch in svc.search_stream(customer_id=customer_id.replace("-", ""), query=query):
         for row in batch.results:
             rows.append(_row_to_dict(row))
     return rows
@@ -55,10 +42,7 @@ def search_stream(customer_id: str, query: str) -> list[dict[str, Any]]:
 
 def _row_to_dict(row) -> dict[str, Any]:
     """Shallow flatten of a GoogleAdsRow. Only walks fields populated on the row."""
-    out: dict[str, Any] = {}
-    for field, value in row._pb.ListFields():
-        out[field.name] = _msg_to_dict(value)
-    return out
+    return {field.name: _msg_to_dict(value) for field, value in row._pb.ListFields()}
 
 
 def _msg_to_dict(value) -> Any:
