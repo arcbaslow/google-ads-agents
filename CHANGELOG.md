@@ -1,5 +1,33 @@
 # Changelog
 
+## 0.3.0
+
+- Pretty-print fallback: `gads_utils.emit()` now renders a compact
+  human-readable summary when `--json` isn't passed. Includes a small
+  ASCII table renderer for list-valued payloads (search terms,
+  anomalies, change events, keyword ideas, etc.).
+- Brand exclusions for Performance Max: `scripts/gads_brands.py` plus
+  the `gads-brands` agent and skill. `suggest` searches Google's brand
+  catalogue; `exclude` attaches negative brand criteria to specified
+  PMax campaigns behind `--validate-only` / `--apply`.
+- Geo lookup helper: `scripts/gads_geos.py`. Resolves location names
+  to GeoTargetConstant IDs via GeoTargetConstantService.
+- Bid strategy fit recommender: `scripts/gads_bidstrategy.py` plus
+  the `gads-bidstrategy` agent and skill. Applies the standard
+  volume-vs-strategy rules and flags Smart Bidding running below the
+  learning floor.
+- Budget pacing analyzer: `scripts/gads_pacing.py` plus the
+  `gads-pacing` agent and skill. MTD spend vs daily budget,
+  month-end projection, over/under-pacing flags with severity tied
+  to deviation magnitude.
+- Multi-account audit: `gads_audit.py --all-customers` fans out
+  across every accessible customer in parallel (capped by
+  `--account-workers`, default 3).
+- Ad-strength + PMax asset audit: `scripts/gads_assets.py` plus the
+  `gads-assets` agent and skill. RSA strength flags and PMax
+  asset-coverage gap / LOW-label findings.
+- Tests grew from 68 to 95.
+
 ## 0.2.0
 
 - Audit driver runs every agent in parallel (`concurrent.futures`,

@@ -94,11 +94,13 @@ cd scripts
 python -m pytest -q
 ```
 
-68 tests covering: auth profile lifecycle, session expiry, GAQL
+95 tests covering: auth profile lifecycle, session expiry, GAQL
 builder shapes, placement classification, campaign-context validation,
-report rendering, the session-gate hook, search-term mining, anomaly
-detection, audit history persistence and diff, and recommendation
-triage.
+report rendering (markdown + HTML), the session-gate hook, search-term
+mining, anomaly detection, audit history persistence and diff,
+recommendation triage, pretty-print fallback and table renderer, bid
+strategy recommendation rules, budget pacing thresholds, and ad-asset
+audits (RSA strength + PMax coverage).
 
 ## Use it
 
@@ -119,10 +121,20 @@ In Claude Code, slash commands map to skills:
 /gads placements <customer-id>
 /gads recommendations <customer-id>     # Google's own actionable list
 /gads anomalies <customer-id>           # day-level metric anomalies
+/gads bidstrategy <customer-id>         # per-campaign bid strategy fit
+/gads pacing <customer-id>              # MTD vs budget projection
+/gads assets <customer-id> rsa          # responsive search ad strength
+/gads assets <customer-id> pmax-assets  # PMax asset coverage
+/gads brands <customer-id> suggest --query "Acme"
+/gads geos <customer-id> --query "California"
 /gads history <customer-id> --changes   # change_event log
 /gads history <customer-id> --diff a b  # compare two saved audits
 /gads create <customer-id>
+/gads audit --all-customers             # multi-account fan-out
 ```
+
+Scripts pretty-print a compact summary by default. Pass `--json` for
+machine output.
 
 Outside Claude Code, the same things run as plain Python:
 

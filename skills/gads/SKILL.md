@@ -33,9 +33,15 @@ Top-level entry point. `/gads <command> <args>`.
 | `/gads placements <customer-id>` | Display + YouTube placement audit with safety exclusions |
 | `/gads recommendations <customer-id>` | Google's account recommendations, triaged |
 | `/gads anomalies <customer-id>` | Day-level metric anomaly detector |
+| `/gads bidstrategy <customer-id>` | Per-campaign bid strategy fit |
+| `/gads pacing <customer-id>` | Budget pacing, MTD vs target |
+| `/gads assets <customer-id> rsa\|pmax-assets` | Ad-strength and PMax asset coverage |
+| `/gads brands <customer-id> suggest\|exclude` | PMax brand exclusion management |
+| `/gads geos <customer-id> --query NAME [...]` | Resolve names to GeoTargetConstant IDs |
 | `/gads history <customer-id>` | Change-event log; list and diff saved audits |
 | `/gads apply <customer-id>` | Write paths: negative keywords and placement exclusions |
 | `/gads create <customer-id>` | Campaign creation wizard, with gates |
+| `/gads audit --all-customers` | Audit every accessible customer in parallel |
 
 ## Routing
 
@@ -55,6 +61,11 @@ Top-level entry point. `/gads <command> <args>`.
 | `placements <id>` | gads-placements |
 | `recommendations <id>` | gads-recommendations |
 | `anomalies <id>` | gads-anomalies |
+| `bidstrategy <id>` | gads-bidstrategy |
+| `pacing <id>` | gads-pacing |
+| `assets <id> ...` | gads-assets |
+| `brands <id> ...` | gads-brands |
+| `geos <id> ...` | scripts/gads_geos.py |
 | `history <id>` | scripts/gads_history.py |
 | `apply <id>` | scripts/gads_apply.py |
 | `create <id>` | gads-creation |
