@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.5.0
+
+- Image-asset wizard: `scripts/gads_creative.py` plus the
+  `gads-creative` agent and skill. Five-step flow with confirmation
+  gates between each step:
+  1. `brief` — fetch the advertiser's site, parse title / meta /
+     headings / og:image / hex colors into a structured creative
+     brief.
+  2. `prompts` — emit prompt-template scaffolding for every PMax
+     image format (MARKETING_IMAGE 1.91:1, SQUARE 1:1, PORTRAIT 4:5,
+     LOGO 1:1, LANDSCAPE_LOGO 4:1) with brief snippets and a default
+     negative prompt. The agent fills in copy.
+  3. `generate` — call an image-gen provider. Default: Vertex Imagen
+     via gcloud ADC (no extra credentials). Fallback: OpenAI DALL-E
+     when `OPENAI_API_KEY` is set.
+  4. `upload` — push a PNG to Google Ads as an `ImageAsset`. Behind
+     `--validate-only` / `--apply`.
+  5. `attach` — link an uploaded asset to a PMax asset group (any of
+     5 image field types) or a Search campaign (image extension).
+- Tests grew from 123 to 136.
+
 ## 0.4.0
 
 - Quality Score audit: `scripts/gads_quality.py` plus the

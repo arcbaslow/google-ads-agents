@@ -94,14 +94,16 @@ cd scripts
 python -m pytest -q
 ```
 
-123 tests covering: auth profile lifecycle, session expiry, GAQL
+136 tests covering: auth profile lifecycle, session expiry, GAQL
 builder shapes, placement classification, campaign-context validation,
 report rendering (markdown + HTML), the session-gate hook, search-term
 mining, anomaly detection, audit history persistence and diff,
 recommendation triage, pretty-print fallback and table renderer, bid
 strategy recommendation rules, budget pacing thresholds, ad-asset
 audits (RSA strength + PMax coverage), Quality Score component
-weakness ranking, demographic/location outlier rules, Telegram
+weakness ranking, demographic/location outlier rules, creative brief
+parsing, prompt scaffold shape, Imagen aspect-ratio mapping, attach
+field-type validation, Telegram
 formatter and credential storage, and the PostToolUse notification
 hook.
 
@@ -130,6 +132,7 @@ In Claude Code, slash commands map to skills:
 /gads assets <customer-id> pmax-assets  # PMax asset coverage
 /gads brands <customer-id> suggest --query "Acme"
 /gads geos <customer-id> --query "California"
+/gads creative <customer-id> <site-url>  # site -> brief -> images -> attach
 /gads quality <customer-id>             # per-keyword QS + weakest component
 /gads demographics <customer-id> all    # age + gender + device + location
 /gads notify --setup --token T --chat-id C   # Telegram notifications

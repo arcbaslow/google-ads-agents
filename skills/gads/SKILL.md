@@ -40,6 +40,7 @@ Top-level entry point. `/gads <command> <args>`.
 | `/gads geos <customer-id> --query NAME [...]` | Resolve names to GeoTargetConstant IDs |
 | `/gads quality <customer-id>` | Per-keyword Quality Score with deficient-component grouping |
 | `/gads demographics <customer-id> age\|gender\|device\|location\|all` | Demographic and geographic outliers |
+| `/gads creative <customer-id> <site-url>` | Generate image assets from the brand's site and attach to PMax or Search |
 | `/gads notify --setup\|--test\|--send TEXT` | Telegram bot setup and manual sends |
 | `/gads history <customer-id>` | Change-event log; list and diff saved audits |
 | `/gads apply <customer-id>` | Write paths: negative keywords and placement exclusions |
@@ -71,6 +72,7 @@ Top-level entry point. `/gads <command> <args>`.
 | `geos <id> ...` | scripts/gads_geos.py |
 | `quality <id>` | gads-quality |
 | `demographics <id> ...` | gads-demographics |
+| `creative <id> ...` | gads-creative |
 | `notify ...` | scripts/gads_notify.py |
 | `history <id>` | scripts/gads_history.py |
 | `apply <id>` | scripts/gads_apply.py |
