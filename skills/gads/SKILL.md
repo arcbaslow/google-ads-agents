@@ -38,6 +38,9 @@ Top-level entry point. `/gads <command> <args>`.
 | `/gads assets <customer-id> rsa\|pmax-assets` | Ad-strength and PMax asset coverage |
 | `/gads brands <customer-id> suggest\|exclude` | PMax brand exclusion management |
 | `/gads geos <customer-id> --query NAME [...]` | Resolve names to GeoTargetConstant IDs |
+| `/gads quality <customer-id>` | Per-keyword Quality Score with deficient-component grouping |
+| `/gads demographics <customer-id> age\|gender\|device\|location\|all` | Demographic and geographic outliers |
+| `/gads notify --setup\|--test\|--send TEXT` | Telegram bot setup and manual sends |
 | `/gads history <customer-id>` | Change-event log; list and diff saved audits |
 | `/gads apply <customer-id>` | Write paths: negative keywords and placement exclusions |
 | `/gads create <customer-id>` | Campaign creation wizard, with gates |
@@ -66,6 +69,9 @@ Top-level entry point. `/gads <command> <args>`.
 | `assets <id> ...` | gads-assets |
 | `brands <id> ...` | gads-brands |
 | `geos <id> ...` | scripts/gads_geos.py |
+| `quality <id>` | gads-quality |
+| `demographics <id> ...` | gads-demographics |
+| `notify ...` | scripts/gads_notify.py |
 | `history <id>` | scripts/gads_history.py |
 | `apply <id>` | scripts/gads_apply.py |
 | `create <id>` | gads-creation |
