@@ -1,13 +1,10 @@
-"""Creative wizard — brief parsing, prompt scaffolding, ratio mapping.
+"""Creative wizard — brief parsing, prompt scaffolding, attach validation.
 
-API-touching paths (Vertex/OpenAI generate, upload, attach) are not
-covered here — they're integration concerns. We do cover the
-provider-dispatch error path and the field-type validation.
+API-touching paths (upload, attach mutate) are not covered here —
+they're integration concerns.
 """
 
 from __future__ import annotations
-
-from pathlib import Path
 
 import pytest
 
@@ -114,34 +111,6 @@ def test_prompt_scaffold_empty_prompts_for_agent_to_fill():
     for f in scaffold["formats"]:
         assert f["prompt"] == ""
         assert "no text in image" in f["negative_prompt"]
-
-
-# ---------- ratio mapping ----------
-
-def test_ratio_for_imagen_known_sizes():
-    assert gads_creative._ratio_for_imagen("1200x1200") == "1:1"
-    assert gads_creative._ratio_for_imagen("1920x1080") == "16:9"
-    assert gads_creative._ratio_for_imagen("1080x1920") == "9:16"
-    assert gads_creative._ratio_for_imagen("1200x900") == "4:3"
-    assert gads_creative._ratio_for_imagen("960x1280") == "3:4"
-
-
-def test_ratio_for_imagen_unknown_falls_back_to_1_1():
-    assert gads_creative._ratio_for_imagen("1200x300") == "1:1"
-
-
-# ---------- provider dispatch ----------
-
-def test_generate_image_unknown_provider_raises(tmp_path):
-    with pytest.raises(gads_creative.GenerationError):
-        gads_creative.generate_image("test", "1200x1200", "nonesuch",
-                                     tmp_path / "out.png")
-
-
-def test_openai_without_key_raises(monkeypatch, tmp_path):
-    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
-    with pytest.raises(gads_creative.GenerationError):
-        gads_creative._generate_openai("test", "1200x1200", tmp_path / "out.png")
 
 
 # ---------- attach validation ----------
