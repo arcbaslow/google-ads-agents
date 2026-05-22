@@ -19,11 +19,14 @@ import sys
 import traceback
 from typing import Any, Callable
 
+import gads_bidstrategy
+import gads_client
 import gads_competitors
 import gads_conversions
 import gads_display
 import gads_gtag
 import gads_history
+import gads_pacing
 import gads_placements
 import gads_pmax
 import gads_recommendations
@@ -46,6 +49,8 @@ DEFAULT_AGENTS: list[tuple[str, Callable[..., Any]]] = [
     ("gads-competitors",    lambda cid, days: gads_competitors.auction_insights(cid, days)),
     ("gads-placements",     lambda cid, days: gads_placements.scan(cid, days)),
     ("gads-recommendations", lambda cid, days: gads_recommendations.fetch(cid)),
+    ("gads-bidstrategy",    lambda cid, days: gads_bidstrategy.analyze(cid, days)),
+    ("gads-pacing",         lambda cid, days: gads_pacing.analyze(cid)),
 ]
 
 
@@ -93,19 +98,49 @@ def _safe(thunk: Callable[[], Any]) -> dict:
         }
 
 
+def list_all_customers() -> list[str]:
+    client = gads_client.build_client()
+    svc = client.get_service("CustomerService")
+    return [r.split("/")[-1] for r in svc.list_accessible_customers().resource_names]
+
+
+def run_many(customer_ids: list[str], days: int, site: str | None,
+             account_workers: int = 3, agent_workers: int = 6) -> dict:
+    """Run audits across multiple customers, capping concurrent accounts."""
+    results: dict[str, Any] = {}
+    with concurrent.futures.ThreadPoolExecutor(max_workers=account_workers) as pool:
+        futures = {
+            pool.submit(run, cid, days, site, agent_workers): cid
+            for cid in customer_ids
+        }
+        for fut in concurrent.futures.as_completed(futures):
+            results[futures[fut]] = fut.result()
+    return {"accounts": results, "summary": f"audited {len(results)} accounts"}
+
+
 def main() -> int:
     p = argparse.ArgumentParser()
-    p.add_argument("--customer", required=True)
+    g = p.add_mutually_exclusive_group(required=True)
+    g.add_argument("--customer", help="Single customer ID")
+    g.add_argument("--all-customers", action="store_true",
+                   help="Fan out across every accessible customer in parallel")
     p.add_argument("--days", type=int, default=28)
     p.add_argument("--site", help="Site URL for the gtag scan")
     p.add_argument("--output", help="Path to write merged JSON (default: stdout)")
     p.add_argument("--save-history", action="store_true",
                    help="Persist under ~/.claude/gads-audit-history/<customer>/")
     p.add_argument("--workers", type=int, default=6,
-                   help="Concurrent agent workers (default 6)")
+                   help="Concurrent agent workers per account (default 6)")
+    p.add_argument("--account-workers", type=int, default=3,
+                   help="Concurrent accounts when --all-customers (default 3)")
     args = p.parse_args()
 
-    data = run(args.customer, args.days, args.site, args.workers)
+    if args.all_customers:
+        customer_ids = list_all_customers()
+        data = run_many(customer_ids, args.days, args.site,
+                        args.account_workers, args.workers)
+    else:
+        data = run(args.customer, args.days, args.site, args.workers)
 
     blob = json.dumps(data, indent=2, default=str)
     if args.output:
@@ -115,8 +150,13 @@ def main() -> int:
         print(blob)
 
     if args.save_history:
-        saved = gads_history.save_audit(data)
-        print(f"history: {saved}", file=sys.stderr)
+        if args.all_customers:
+            for _, audit in data.get("accounts", {}).items():
+                saved = gads_history.save_audit(audit)
+                print(f"history: {saved}", file=sys.stderr)
+        else:
+            saved = gads_history.save_audit(data)
+            print(f"history: {saved}", file=sys.stderr)
     return 0
 
 
