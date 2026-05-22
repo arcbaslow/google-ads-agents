@@ -161,51 +161,19 @@ python scripts/gads_apply.py --customer <id> negatives  --input negs.json --vali
 python scripts/gads_apply.py --customer <id> placements --input excl.json --apply --json
 ```
 
-## Session-gate hook
+## Hooks
 
-`hooks/session_gate.py` is a PreToolUse hook that blocks any
-`gads_*` invocation in Claude Code once the 24h session is expired.
+Two optional hooks ship with the project:
 
-## Telegram notifications
+- `hooks/session_gate.py` — PreToolUse. Blocks `gads_*` Bash calls
+  once the 24h local session is expired and prints the gcloud command
+  to re-authenticate.
+- `hooks/notify_telegram.py` — PostToolUse. Sends critical audit
+  findings to Telegram. Silent until configured.
 
-`hooks/notify_telegram.py` is a PostToolUse hook that posts critical
-audit findings to Telegram. Both hooks share the same settings.json:
-
-```json
-{
-  "hooks": {
-    "PreToolUse": [
-      {
-        "matcher": "Bash",
-        "hooks": [{
-          "type": "command",
-          "command": "python ${CLAUDE_PROJECT_DIR}/hooks/session_gate.py"
-        }]
-      }
-    ],
-    "PostToolUse": [
-      {
-        "matcher": "Bash",
-        "hooks": [{
-          "type": "command",
-          "command": "python ${CLAUDE_PROJECT_DIR}/hooks/notify_telegram.py"
-        }]
-      }
-    ]
-  }
-}
-```
-
-Telegram setup (run once):
-
-```
-python scripts/gads_notify.py --discover-chat-id --token <BOT_TOKEN>
-python scripts/gads_notify.py --setup --token <BOT_TOKEN> --chat-id <CHAT_ID>
-python scripts/gads_notify.py --test
-```
-
-The hook is a no-op when Telegram isn't configured, so wiring it in
-ahead of time is safe.
+See [docs/HOOKS.md](docs/HOOKS.md) for the settings.json wiring, the
+event flow, the four gates the Telegram hook applies, multi-account
+behaviour, and one-time setup.
 
 ## Placement safety
 
