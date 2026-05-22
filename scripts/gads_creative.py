@@ -1,44 +1,40 @@
-"""Creative wizard: site brief -> prompt scaffolding -> image generation
--> upload to Google Ads -> attach to PMax asset groups or Search campaigns.
+"""Creative wizard: site brief -> prompt scaffolding -> bring-your-own
+image bytes -> upload to Google Ads -> attach to PMax asset groups or
+Search campaigns.
 
-Five subcommands, each callable on its own. The `gads-creative` agent
-chains them with confirmation between every step:
+Google Ads' built-in PMax image generator isn't exposed through the
+Ads API, and we don't want to ship a paid provider as a default. So
+this script stops short of image generation. The agent produces the
+brief and the prompts; the user generates images however they like
+(Google Ads UI, Midjourney, Imagen on Vertex, a stock library, a
+designer); then this script handles upload and attach.
+
+Subcommands:
 
   brief     scrape a URL and produce a structured creative brief
-  prompts   emit prompt templates per ad-format size (the agent fills
-            in copy specifics from the brief)
-  generate  call an image-gen provider, save PNG locally
-  upload    upload a local PNG to Google Ads as an ImageAsset
+  prompts   emit prompt-template scaffolding per ad-format size (the
+            agent fills in copy specifics from the brief)
+  upload    upload a local PNG/JPG to Google Ads as an ImageAsset
   attach    link an uploaded asset to a PMax asset group or a Search
-            campaign (image asset extension)
+            campaign
 
-Providers for `generate`:
-  - vertex  (default) Google Imagen via Vertex AI. Uses gcloud ADC,
-            no extra credentials. Needs a Cloud project with the
-            Vertex AI API enabled and billing on.
-  - openai  OpenAI DALL-E. Reads OPENAI_API_KEY from env.
-
-All write paths use --validate-only / --apply.
+upload and attach both gate behind --validate-only / --apply.
 """
 
 from __future__ import annotations
 
 import argparse
-import base64
 import html
 import json
-import os
 import re
 import sys
 import urllib.error
-import urllib.parse
 import urllib.request
 from pathlib import Path
-from typing import Any
 
 import gads_utils
 
-USER_AGENT = "gads-agents/0.4"
+USER_AGENT = "gads-agents/0.5"
 SITE_FETCH_TIMEOUT = 10
 SITE_FETCH_LIMIT_BYTES = 750_000
 
@@ -174,7 +170,10 @@ PROMPT_FORMATS = [
 def prompt_scaffold(brief: dict) -> dict:
     """A blank scaffold with brief snippets pre-filled.
 
-    The agent fills in the actual prompt strings before generation.
+    The agent fills in the actual prompt strings before handing them to
+    whatever image generator the user picked (Google Ads' built-in PMax
+    generator in the UI, Midjourney, Imagen on Vertex, a stock library,
+    a designer).
     """
     hints = {
         "brand": brief.get("title") or "",
@@ -191,156 +190,6 @@ def prompt_scaffold(brief: dict) -> dict:
             "negative_prompt": "no text in image, no watermark, no logos other than brand, no human faces in close-up unless a person is the subject",
         })
     return {"hints": hints, "formats": formats}
-
-
-# ---------- image generation ----------
-
-class GenerationError(RuntimeError):
-    pass
-
-
-def generate_image(prompt: str, size_px: str, provider: str,
-                   output_path: Path, project_id: str | None = None,
-                   negative_prompt: str | None = None) -> dict:
-    if provider == "vertex":
-        return _generate_vertex_imagen(prompt, size_px, output_path, project_id, negative_prompt)
-    if provider == "openai":
-        return _generate_openai(prompt, size_px, output_path)
-    raise GenerationError(f"unknown provider: {provider}")
-
-
-def _ratio_for_imagen(size_px: str) -> str:
-    """Imagen takes aspect_ratio strings, not pixel dimensions."""
-    w, h = size_px.lower().split("x")
-    w, h = int(w), int(h)
-    if w == h:
-        return "1:1"
-    if abs(w / h - 16 / 9) < 0.05:
-        return "16:9"
-    if abs(w / h - 9 / 16) < 0.05:
-        return "9:16"
-    if abs(w / h - 4 / 3) < 0.05:
-        return "4:3"
-    if abs(w / h - 3 / 4) < 0.05:
-        return "3:4"
-    return "1:1"
-
-
-def _vertex_project() -> str:
-    """Best-effort project: VERTEX_PROJECT env, then ADC quota project."""
-    if os.environ.get("VERTEX_PROJECT"):
-        return os.environ["VERTEX_PROJECT"]
-    try:
-        import google.auth
-        _creds, project = google.auth.default()
-        if project:
-            return project
-    except Exception:
-        pass
-    raise GenerationError(
-        "No Vertex project. Set VERTEX_PROJECT env var or run "
-        "`gcloud auth application-default set-quota-project <PROJECT>`."
-    )
-
-
-def _vertex_access_token() -> str:
-    import google.auth
-    import google.auth.transport.requests
-
-    creds, _ = google.auth.default(scopes=["https://www.googleapis.com/auth/cloud-platform"])
-    creds.refresh(google.auth.transport.requests.Request())
-    return creds.token
-
-
-def _generate_vertex_imagen(prompt: str, size_px: str, output_path: Path,
-                            project_id: str | None, negative_prompt: str | None) -> dict:
-    project = project_id or _vertex_project()
-    token = _vertex_access_token()
-
-    endpoint = (
-        f"https://us-central1-aiplatform.googleapis.com/v1/projects/{project}/"
-        f"locations/us-central1/publishers/google/models/imagen-3.0-generate-002:predict"
-    )
-    aspect = _ratio_for_imagen(size_px)
-    payload = {
-        "instances": [{"prompt": prompt}],
-        "parameters": {
-            "sampleCount": 1,
-            "aspectRatio": aspect,
-            "personGeneration": "allow_adult",
-            "safetySetting": "block_only_high",
-        },
-    }
-    if negative_prompt:
-        payload["parameters"]["negativePrompt"] = negative_prompt
-
-    body = json.dumps(payload).encode()
-    req = urllib.request.Request(
-        endpoint,
-        data=body,
-        headers={
-            "Authorization": f"Bearer {token}",
-            "Content-Type": "application/json",
-        },
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=60) as r:
-            data = json.loads(r.read().decode("utf-8"))
-    except urllib.error.HTTPError as e:
-        raise GenerationError(f"Vertex Imagen HTTP {e.code}: {e.read().decode('utf-8', 'ignore')}") from e
-    except urllib.error.URLError as e:
-        raise GenerationError(f"Vertex Imagen: {e}") from e
-
-    predictions = data.get("predictions") or []
-    if not predictions:
-        raise GenerationError(f"Vertex Imagen returned no predictions: {data}")
-    b64 = predictions[0].get("bytesBase64Encoded")
-    if not b64:
-        raise GenerationError(f"Vertex Imagen prediction missing bytesBase64Encoded: {predictions[0]}")
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    output_path.write_bytes(base64.b64decode(b64))
-    return {"provider": "vertex", "aspect_ratio": aspect, "path": str(output_path)}
-
-
-def _generate_openai(prompt: str, size_px: str, output_path: Path) -> dict:
-    api_key = os.environ.get("OPENAI_API_KEY")
-    if not api_key:
-        raise GenerationError("OPENAI_API_KEY not set")
-
-    # DALL-E 3 sizes
-    size = {
-        "1200x628": "1792x1024",
-        "1200x1200": "1024x1024",
-        "960x1200": "1024x1792",
-        "1200x300": "1792x1024",
-    }.get(size_px, "1024x1024")
-
-    payload = {
-        "model": "dall-e-3",
-        "prompt": prompt,
-        "n": 1,
-        "size": size,
-        "response_format": "b64_json",
-    }
-    body = json.dumps(payload).encode()
-    req = urllib.request.Request(
-        "https://api.openai.com/v1/images/generations",
-        data=body,
-        headers={
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json",
-        },
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=60) as r:
-            data = json.loads(r.read().decode("utf-8"))
-    except urllib.error.HTTPError as e:
-        raise GenerationError(f"OpenAI HTTP {e.code}: {e.read().decode('utf-8', 'ignore')}") from e
-
-    b64 = data["data"][0]["b64_json"]
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    output_path.write_bytes(base64.b64decode(b64))
-    return {"provider": "openai", "size": size, "path": str(output_path)}
 
 
 # ---------- upload ----------
@@ -466,15 +315,7 @@ def main() -> int:
     pr.add_argument("--brief", required=True, help="Path to brief.json")
     pr.add_argument("--output", help="Write scaffold JSON to this path")
 
-    g = sub.add_parser("generate", help="Run an image-gen provider")
-    g.add_argument("--prompt", required=True)
-    g.add_argument("--size", default="1200x1200", help="Pixel dims (provider may snap to nearest)")
-    g.add_argument("--provider", choices=("vertex", "openai"), default="vertex")
-    g.add_argument("--project", help="Override Vertex project (default: ADC quota project)")
-    g.add_argument("--negative-prompt")
-    g.add_argument("--output", required=True, help="Output PNG path")
-
-    u = sub.add_parser("upload", help="Upload a PNG to Google Ads as an ImageAsset")
+    u = sub.add_parser("upload", help="Upload an image to Google Ads as an ImageAsset")
     u.add_argument("--customer", required=True)
     u.add_argument("--image", required=True)
     u.add_argument("--name", help="Asset display name (default: filename stem)")
@@ -493,7 +334,7 @@ def main() -> int:
     a.add_argument("--validate-only", action="store_true")
     a.add_argument("--apply", action="store_true")
 
-    for s in (b, pr, g, u, a):
+    for s in (b, pr, u, a):
         s.add_argument("--json", action="store_true")
 
     args = p.parse_args()
@@ -508,18 +349,6 @@ def main() -> int:
         brief = json.loads(Path(args.brief).read_text())
         scaffold = prompt_scaffold(brief)
         _write_or_emit(scaffold, args.output, json_mode)
-        return 0
-
-    if args.action == "generate":
-        try:
-            result = generate_image(
-                args.prompt, args.size, args.provider,
-                Path(args.output), args.project, args.negative_prompt,
-            )
-        except GenerationError as e:
-            gads_utils.emit({"status": "error", "error": str(e)}, json_mode)
-            return 3
-        gads_utils.emit({"status": "generated", **result}, json_mode)
         return 0
 
     if args.action == "upload":
