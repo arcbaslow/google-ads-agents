@@ -23,12 +23,14 @@ import gads_bidstrategy
 import gads_client
 import gads_competitors
 import gads_conversions
+import gads_demographics
 import gads_display
 import gads_gtag
 import gads_history
 import gads_pacing
 import gads_placements
 import gads_pmax
+import gads_quality
 import gads_recommendations
 import gads_search
 import gads_shopping
@@ -51,6 +53,8 @@ DEFAULT_AGENTS: list[tuple[str, Callable[..., Any]]] = [
     ("gads-recommendations", lambda cid, days: gads_recommendations.fetch(cid)),
     ("gads-bidstrategy",    lambda cid, days: gads_bidstrategy.analyze(cid, days)),
     ("gads-pacing",         lambda cid, days: gads_pacing.analyze(cid)),
+    ("gads-quality",        lambda cid, days: gads_quality.audit(cid, days)),
+    ("gads-demographics",   lambda cid, days: gads_demographics.all_breakdowns(cid, days)),
 ]
 
 
