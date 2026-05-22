@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.4.0
+
+- Quality Score audit: `scripts/gads_quality.py` plus the
+  `gads-quality` agent and skill. Per-keyword QS with its three
+  components (expected CTR, ad relevance, landing page), weakest-
+  component ranking (canonical-order tiebreak, not alphabetical),
+  severity by QS, and a `weakest_component_counts` aggregate that
+  tells you which lever to pull first.
+- Demographic and location breakdowns: `scripts/gads_demographics.py`
+  plus the `gads-demographics` agent and skill. Sub-commands `age`,
+  `gender`, `device`, `location`, `all`. Outlier rule: bucket CPA
+  ≥ 2x campaign mean AND ≥ 5% of spend → flagged; ≥ 3x → high
+  severity. Zero-conversion buckets and tiny-share buckets are
+  ignored.
+- Telegram notifications: `scripts/gads_notify.py` and a new
+  PostToolUse hook at `hooks/notify_telegram.py`. The hook fires only
+  on audit JSON with critical findings, walks `--all-customers`
+  results, and is a no-op until the user runs `--setup`. Dependency-
+  free (stdlib urllib only).
+- Audit fan-out now includes `gads-quality` and `gads-demographics`.
+- Tests grew from 95 to 123.
+
 ## 0.3.0
 
 - Pretty-print fallback: `gads_utils.emit()` now renders a compact

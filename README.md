@@ -94,13 +94,16 @@ cd scripts
 python -m pytest -q
 ```
 
-95 tests covering: auth profile lifecycle, session expiry, GAQL
+123 tests covering: auth profile lifecycle, session expiry, GAQL
 builder shapes, placement classification, campaign-context validation,
 report rendering (markdown + HTML), the session-gate hook, search-term
 mining, anomaly detection, audit history persistence and diff,
 recommendation triage, pretty-print fallback and table renderer, bid
-strategy recommendation rules, budget pacing thresholds, and ad-asset
-audits (RSA strength + PMax coverage).
+strategy recommendation rules, budget pacing thresholds, ad-asset
+audits (RSA strength + PMax coverage), Quality Score component
+weakness ranking, demographic/location outlier rules, Telegram
+formatter and credential storage, and the PostToolUse notification
+hook.
 
 ## Use it
 
@@ -127,6 +130,9 @@ In Claude Code, slash commands map to skills:
 /gads assets <customer-id> pmax-assets  # PMax asset coverage
 /gads brands <customer-id> suggest --query "Acme"
 /gads geos <customer-id> --query "California"
+/gads quality <customer-id>             # per-keyword QS + weakest component
+/gads demographics <customer-id> all    # age + gender + device + location
+/gads notify --setup --token T --chat-id C   # Telegram notifications
 /gads history <customer-id> --changes   # change_event log
 /gads history <customer-id> --diff a b  # compare two saved audits
 /gads create <customer-id>
@@ -159,7 +165,11 @@ python scripts/gads_apply.py --customer <id> placements --input excl.json --appl
 
 `hooks/session_gate.py` is a PreToolUse hook that blocks any
 `gads_*` invocation in Claude Code once the 24h session is expired.
-Wire it in `~/.claude/settings.json` (or the project's `.claude/settings.json`):
+
+## Telegram notifications
+
+`hooks/notify_telegram.py` is a PostToolUse hook that posts critical
+audit findings to Telegram. Both hooks share the same settings.json:
 
 ```json
 {
@@ -172,13 +182,30 @@ Wire it in `~/.claude/settings.json` (or the project's `.claude/settings.json`):
           "command": "python ${CLAUDE_PROJECT_DIR}/hooks/session_gate.py"
         }]
       }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [{
+          "type": "command",
+          "command": "python ${CLAUDE_PROJECT_DIR}/hooks/notify_telegram.py"
+        }]
+      }
     ]
   }
 }
 ```
 
-When the session expires, the next gads_* tool call is blocked with the
-exact gcloud command to re-authenticate.
+Telegram setup (run once):
+
+```
+python scripts/gads_notify.py --discover-chat-id --token <BOT_TOKEN>
+python scripts/gads_notify.py --setup --token <BOT_TOKEN> --chat-id <CHAT_ID>
+python scripts/gads_notify.py --test
+```
+
+The hook is a no-op when Telegram isn't configured, so wiring it in
+ahead of time is safe.
 
 ## Placement safety
 
