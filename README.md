@@ -100,7 +100,7 @@ cd scripts
 python -m pytest -q
 ```
 
-132 tests covering: auth profile lifecycle, session expiry, GAQL
+153 tests covering: auth profile lifecycle, session expiry, GAQL
 builder shapes, placement classification, campaign-context validation,
 report rendering (markdown + HTML), the session-gate hook, search-term
 mining, anomaly detection, audit history persistence and diff,
@@ -109,8 +109,9 @@ strategy recommendation rules, budget pacing thresholds, ad-asset
 audits (RSA strength + PMax coverage), Quality Score component
 weakness ranking, demographic/location outlier rules, creative brief
 parsing, prompt scaffold shape, attach field-type validation,
-Telegram formatter and credential storage, and the PostToolUse
-notification hook.
+Telegram formatter and credential storage, the PostToolUse
+notification hook, and pluggable auth backends (gcloud ADC vs. your own
+OAuth client, the token store, and backend selection).
 
 ## Use it
 
