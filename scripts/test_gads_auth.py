@@ -9,6 +9,11 @@ import pytest
 import gads_auth
 
 
+def _ns(**kwargs):
+    import argparse
+    return argparse.Namespace(**kwargs)
+
+
 def test_add_first_profile_becomes_active():
     gads_auth.add_profile("acme", "DEV_TOKEN_1", "1234567890")
     assert gads_auth.active_profile_name() == "acme"
@@ -173,3 +178,67 @@ def test_get_credentials_backend_failure_wraps_as_auth_required(monkeypatch):
     monkeypatch.setattr(gads_authflow, "select_backend", lambda name, prof, **kw: FailingBackend())
     with pytest.raises(gads_auth.AuthRequiredError):
         gads_auth.get_credentials()
+
+
+def test_oauth_login_persists_token_and_starts_session(monkeypatch):
+    """--oauth-login runs the (mocked) flow and stores the refresh token."""
+    import google_auth_oauthlib.flow as flow_mod
+
+    class FakeCreds:
+        client_id = "cid"
+        client_secret = "sec"
+        refresh_token = "rtok"
+
+    class FakeFlow:
+        def run_local_server(self, **kwargs):
+            return FakeCreds()
+
+    monkeypatch.setattr(
+        flow_mod.InstalledAppFlow,
+        "from_client_secrets_file",
+        classmethod(lambda cls, path, scopes: FakeFlow()),
+    )
+
+    args = _ns(
+        oauth_login=True,
+        client_secrets="client_secret.json",
+        add_profile="acme",
+        developer_token="DEV",
+        login_customer_id="1234567890",
+        no_browser=False,
+    )
+    assert gads_auth.cmd_oauth_login(args) == 0
+
+    prof = gads_auth.active_profile()
+    assert gads_auth.active_profile_name() == "acme"
+    assert prof["auth_method"] == "oauth_client"
+    assert prof["refresh_token"] == "rtok"
+    assert gads_auth.get_developer_token() == "DEV"
+    assert gads_auth.session_status()["valid"] is True
+
+
+def test_oauth_login_requires_existing_or_new_profile(monkeypatch):
+    args = _ns(
+        oauth_login=True,
+        client_secrets="client_secret.json",
+        add_profile=None,
+        developer_token=None,
+        login_customer_id=None,
+        no_browser=False,
+    )
+    # No active profile and no --add-profile: refuse before touching the flow.
+    assert gads_auth.cmd_oauth_login(args) == 2
+
+
+def test_set_oauth_manual_fallback(monkeypatch):
+    gads_auth.add_profile("acme", "DEV", "1")
+    args = _ns(
+        set_oauth="acme",
+        client_id="cid",
+        client_secret="sec",
+        refresh_token="rtok",
+    )
+    assert gads_auth.cmd_set_oauth(args) == 0
+    prof = gads_auth.active_profile()
+    assert prof["auth_method"] == "oauth_client"
+    assert prof["refresh_token"] == "rtok"

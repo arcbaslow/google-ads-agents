@@ -400,6 +400,54 @@ def cmd_list_profiles(_args) -> int:
     return 0
 
 
+def cmd_oauth_login(args) -> int:
+    name = args.add_profile or active_profile_name()
+    if not name:
+        print(json.dumps({
+            "error": "no profile. Pass --add-profile NAME --developer-token TOKEN, "
+                     "or select an existing profile with --use-profile first."
+        }, indent=2))
+        return 2
+    if args.add_profile:
+        if not args.developer_token:
+            print(json.dumps(
+                {"error": "--developer-token is required with --add-profile"}, indent=2
+            ))
+            return 2
+        add_profile(args.add_profile, args.developer_token, args.login_customer_id)
+
+    from google_auth_oauthlib.flow import InstalledAppFlow
+
+    flow = InstalledAppFlow.from_client_secrets_file(args.client_secrets, scopes=[ADWORDS])
+    creds = flow.run_local_server(port=0, open_browser=not args.no_browser)
+    set_oauth_credentials(name, creds.client_id, creds.client_secret, creds.refresh_token)
+    session_start()
+    print(json.dumps({
+        "profile": name,
+        "auth_method": "oauth_client",
+        "refresh_token": "set",
+        "session": session_status(),
+    }, indent=2))
+    return 0
+
+
+def cmd_set_oauth(args) -> int:
+    """Manual fallback: store a pre-obtained client id/secret/refresh token."""
+    if not (args.client_id and args.client_secret and args.refresh_token):
+        print(json.dumps({
+            "error": "--set-oauth needs --client-id, --client-secret, --refresh-token"
+        }, indent=2))
+        return 2
+    set_oauth_credentials(args.set_oauth, args.client_id, args.client_secret, args.refresh_token)
+    session_start()
+    print(json.dumps({
+        "profile": args.set_oauth,
+        "auth_method": "oauth_client",
+        "refresh_token": "set",
+    }, indent=2))
+    return 0
+
+
 def main() -> int:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--check", action="store_true")
@@ -412,6 +460,17 @@ def main() -> int:
     p.add_argument("--login-customer-id", metavar="ID", help="paired with --add-profile (optional)")
     p.add_argument("--set-developer-token", metavar="TOKEN", help="set on the active profile")
     p.add_argument("--set-login-customer-id", metavar="ID", help="set on the active profile")
+    p.add_argument("--oauth-login", action="store_true",
+                   help="run the OAuth loopback flow with your own client")
+    p.add_argument("--client-secrets", metavar="PATH",
+                   help="client_secret.json from your Desktop OAuth client")
+    p.add_argument("--no-browser", action="store_true",
+                   help="print the URL instead of opening a browser")
+    p.add_argument("--set-oauth", metavar="NAME",
+                   help="manual fallback: set OAuth material on a profile")
+    p.add_argument("--client-id", metavar="ID", help="paired with --set-oauth")
+    p.add_argument("--client-secret", metavar="SECRET", help="paired with --set-oauth")
+    p.add_argument("--refresh-token", metavar="TOKEN", help="paired with --set-oauth")
     p.add_argument("--customers", action="store_true")
     p.add_argument("--logout", action="store_true")
     args = p.parse_args()
@@ -432,6 +491,10 @@ def main() -> int:
         return cmd_set_dev_token(args)
     if args.set_login_customer_id:
         return cmd_set_login_customer_id(args)
+    if args.oauth_login:
+        return cmd_oauth_login(args)
+    if args.set_oauth:
+        return cmd_set_oauth(args)
     if args.customers:
         return cmd_customers(args)
     if args.logout:
