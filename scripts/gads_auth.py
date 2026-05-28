@@ -479,6 +479,10 @@ def main() -> int:
         return cmd_check(args)
     if args.adc:
         return cmd_adc(args)
+    if args.oauth_login:
+        return cmd_oauth_login(args)
+    if args.set_oauth:
+        return cmd_set_oauth(args)
     if args.add_profile:
         return cmd_add_profile(args)
     if args.use_profile:
@@ -491,10 +495,6 @@ def main() -> int:
         return cmd_set_dev_token(args)
     if args.set_login_customer_id:
         return cmd_set_login_customer_id(args)
-    if args.oauth_login:
-        return cmd_oauth_login(args)
-    if args.set_oauth:
-        return cmd_set_oauth(args)
     if args.customers:
         return cmd_customers(args)
     if args.logout:
