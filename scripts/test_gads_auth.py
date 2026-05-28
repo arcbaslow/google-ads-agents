@@ -131,3 +131,45 @@ def test_set_oauth_credentials_creates_and_activates_profile():
     gads_auth.set_oauth_credentials("fresh", "cid", "sec", "rtok")
     assert gads_auth.active_profile_name() == "fresh"
     assert gads_auth.active_profile()["refresh_token"] == "rtok"
+
+
+def test_get_credentials_uses_selected_backend(monkeypatch):
+    """get_credentials dispatches to the backend chosen for the active profile."""
+    import gads_authflow
+
+    gads_auth.add_profile("acme", "DEV", "1")
+    gads_auth.session_start()
+
+    sentinel = object()
+
+    class FakeBackend:
+        def credentials(self):
+            return sentinel
+
+    monkeypatch.setattr(gads_authflow, "select_backend", lambda name, prof, **kw: FakeBackend())
+    assert gads_auth.get_credentials() is sentinel
+
+
+def test_get_credentials_expired_session_raises(monkeypatch):
+    from datetime import datetime, timedelta, timezone
+
+    gads_auth.add_profile("acme", "DEV", "1")
+    expired = (datetime.now(timezone.utc) - timedelta(hours=25)).isoformat()
+    gads_auth.SESSION_PATH.write_text('{"started_at": "%s"}' % expired)
+    with pytest.raises(gads_auth.SessionExpiredError):
+        gads_auth.get_credentials()
+
+
+def test_get_credentials_backend_failure_wraps_as_auth_required(monkeypatch):
+    import gads_authflow
+
+    gads_auth.add_profile("acme", "DEV", "1")
+    gads_auth.session_start()
+
+    class FailingBackend:
+        def credentials(self):
+            raise RuntimeError("boom")
+
+    monkeypatch.setattr(gads_authflow, "select_backend", lambda name, prof, **kw: FailingBackend())
+    with pytest.raises(gads_auth.AuthRequiredError):
+        gads_auth.get_credentials()

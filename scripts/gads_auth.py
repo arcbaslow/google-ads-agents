@@ -124,26 +124,32 @@ def enforce_session() -> None:
 # ---------- google.auth resolution ----------
 
 def get_credentials():
-    """Resolve credentials via google.auth.default(), then enforce the 24h cap.
+    """Resolve credentials for the active profile's backend, after the 24h cap.
 
-    google.auth picks up gcloud user ADC from the well-known path.
+    gcloud_adc profiles use google.auth.default(); oauth_client profiles build
+    Credentials from a stored refresh token. Selection lives in gads_authflow.
     """
     enforce_session()
-    try:
-        import google.auth
-    except ImportError as e:
-        raise AuthRequiredError(
-            "google-auth is not installed. Run: pip install -r scripts/requirements.txt"
-        ) from e
+    import gads_authflow
 
+    name = active_profile_name()
+    profile = active_profile()
+    backend = gads_authflow.select_backend(name, profile)
     try:
-        creds, _project = google.auth.default(scopes=[ADWORDS])
+        return backend.credentials()
+    except AuthRequiredError:
+        raise
     except Exception as e:
-        raise AuthRequiredError(
-            f"No application default credentials found ({e}).\n"
-            f"Run:\n  {adc_command()}"
-        ) from e
-    return creds
+        method = (profile or {}).get("auth_method", "gcloud_adc")
+        if method == "oauth_client":
+            hint = (
+                f"OAuth client credentials for profile '{name}' failed to refresh "
+                f"({e}). Re-run:\n  python scripts/gads_auth.py --oauth-login "
+                f"--client-secrets client_secret.json"
+            )
+        else:
+            hint = f"No application default credentials found ({e}).\nRun:\n  {adc_command()}"
+        raise AuthRequiredError(hint) from e
 
 
 # ---------- developer token + login-customer-id ----------
