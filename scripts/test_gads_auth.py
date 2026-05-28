@@ -242,3 +242,35 @@ def test_set_oauth_manual_fallback(monkeypatch):
     prof = gads_auth.active_profile()
     assert prof["auth_method"] == "oauth_client"
     assert prof["refresh_token"] == "rtok"
+
+
+def test_main_oauth_login_with_add_profile_runs_flow(monkeypatch):
+    """main() must route --oauth-login even when --add-profile is also passed."""
+    import sys
+    import google_auth_oauthlib.flow as flow_mod
+
+    class FakeCreds:
+        client_id = "cid"
+        client_secret = "sec"
+        refresh_token = "rtok"
+
+    class FakeFlow:
+        def run_local_server(self, **kwargs):
+            return FakeCreds()
+
+    monkeypatch.setattr(
+        flow_mod.InstalledAppFlow,
+        "from_client_secrets_file",
+        classmethod(lambda cls, path, scopes: FakeFlow()),
+    )
+    monkeypatch.setattr(sys, "argv", [
+        "gads_auth.py", "--oauth-login",
+        "--client-secrets", "client_secret.json",
+        "--add-profile", "acme", "--developer-token", "DEV",
+    ])
+
+    assert gads_auth.main() == 0
+
+    prof = gads_auth.active_profile()
+    assert prof["auth_method"] == "oauth_client"
+    assert prof["refresh_token"] == "rtok"
