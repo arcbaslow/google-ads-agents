@@ -104,3 +104,30 @@ def test_list_profiles_shape():
 def test_login_customer_id_strips_dashes():
     gads_auth.add_profile("acme", "T", "123-456-7890")
     assert gads_auth.get_login_customer_id() == "1234567890"
+
+
+def test_migrated_profile_defaults_to_gcloud_method():
+    gads_auth.add_profile("acme", "DEV", "1")
+    assert gads_auth.active_profile().get("auth_method", "gcloud_adc") == "gcloud_adc"
+
+
+def test_set_auth_method_persists():
+    gads_auth.add_profile("acme", "DEV", "1")
+    gads_auth.set_auth_method("acme", "oauth_client")
+    assert gads_auth.active_profile()["auth_method"] == "oauth_client"
+
+
+def test_set_oauth_credentials_sets_method_and_fields():
+    gads_auth.add_profile("acme", "DEV", "1")
+    gads_auth.set_oauth_credentials("acme", "cid", "sec", "rtok")
+    prof = gads_auth.active_profile()
+    assert prof["auth_method"] == "oauth_client"
+    assert prof["client_id"] == "cid"
+    assert prof["client_secret"] == "sec"
+    assert prof["refresh_token"] == "rtok"
+
+
+def test_set_oauth_credentials_creates_and_activates_profile():
+    gads_auth.set_oauth_credentials("fresh", "cid", "sec", "rtok")
+    assert gads_auth.active_profile_name() == "fresh"
+    assert gads_auth.active_profile()["refresh_token"] == "rtok"

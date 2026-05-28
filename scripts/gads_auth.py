@@ -279,6 +279,28 @@ def set_login_customer_id(customer_id: str) -> None:
     save_credentials(data)
 
 
+def set_auth_method(name: str, method: str) -> None:
+    data = _profiles()
+    data.setdefault("profiles", {}).setdefault(name, {})["auth_method"] = method
+    if not data.get("active"):
+        data["active"] = name
+    save_credentials(data)
+
+
+def set_oauth_credentials(
+    name: str, client_id: str, client_secret: str, refresh_token: str
+) -> None:
+    """Persist OAuth client material and flip the profile to oauth_client."""
+    from gads_tokenstore import LocalFileTokenStore
+
+    LocalFileTokenStore().set(name, {
+        "client_id": client_id,
+        "client_secret": client_secret,
+        "refresh_token": refresh_token,
+    })
+    set_auth_method(name, "oauth_client")
+
+
 # ---------- CLI ----------
 
 def cmd_check(_args) -> int:
