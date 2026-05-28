@@ -9,6 +9,11 @@ import pytest
 import gads_auth
 
 
+def _ns(**kwargs):
+    import argparse
+    return argparse.Namespace(**kwargs)
+
+
 def test_add_first_profile_becomes_active():
     gads_auth.add_profile("acme", "DEV_TOKEN_1", "1234567890")
     assert gads_auth.active_profile_name() == "acme"
@@ -104,3 +109,183 @@ def test_list_profiles_shape():
 def test_login_customer_id_strips_dashes():
     gads_auth.add_profile("acme", "T", "123-456-7890")
     assert gads_auth.get_login_customer_id() == "1234567890"
+
+
+def test_migrated_profile_defaults_to_gcloud_method():
+    gads_auth.add_profile("acme", "DEV", "1")
+    assert gads_auth.active_profile().get("auth_method", "gcloud_adc") == "gcloud_adc"
+
+
+def test_set_auth_method_persists():
+    gads_auth.add_profile("acme", "DEV", "1")
+    gads_auth.set_auth_method("acme", "oauth_client")
+    assert gads_auth.active_profile()["auth_method"] == "oauth_client"
+
+
+def test_set_oauth_credentials_sets_method_and_fields():
+    gads_auth.add_profile("acme", "DEV", "1")
+    gads_auth.set_oauth_credentials("acme", "cid", "sec", "rtok")
+    prof = gads_auth.active_profile()
+    assert prof["auth_method"] == "oauth_client"
+    assert prof["client_id"] == "cid"
+    assert prof["client_secret"] == "sec"
+    assert prof["refresh_token"] == "rtok"
+
+
+def test_set_oauth_credentials_creates_and_activates_profile():
+    gads_auth.set_oauth_credentials("fresh", "cid", "sec", "rtok")
+    assert gads_auth.active_profile_name() == "fresh"
+    assert gads_auth.active_profile()["refresh_token"] == "rtok"
+
+
+def test_get_credentials_uses_selected_backend(monkeypatch):
+    """get_credentials dispatches to the backend chosen for the active profile."""
+    import gads_authflow
+
+    gads_auth.add_profile("acme", "DEV", "1")
+    gads_auth.session_start()
+
+    sentinel = object()
+
+    class FakeBackend:
+        def credentials(self):
+            return sentinel
+
+    monkeypatch.setattr(gads_authflow, "select_backend", lambda name, prof, **kw: FakeBackend())
+    assert gads_auth.get_credentials() is sentinel
+
+
+def test_get_credentials_expired_session_raises(monkeypatch):
+    from datetime import datetime, timedelta, timezone
+
+    gads_auth.add_profile("acme", "DEV", "1")
+    expired = (datetime.now(timezone.utc) - timedelta(hours=25)).isoformat()
+    gads_auth.SESSION_PATH.write_text('{"started_at": "%s"}' % expired)
+    with pytest.raises(gads_auth.SessionExpiredError):
+        gads_auth.get_credentials()
+
+
+def test_get_credentials_backend_failure_wraps_as_auth_required(monkeypatch):
+    import gads_authflow
+
+    gads_auth.add_profile("acme", "DEV", "1")
+    gads_auth.session_start()
+
+    class FailingBackend:
+        def credentials(self):
+            raise RuntimeError("boom")
+
+    monkeypatch.setattr(gads_authflow, "select_backend", lambda name, prof, **kw: FailingBackend())
+    with pytest.raises(gads_auth.AuthRequiredError):
+        gads_auth.get_credentials()
+
+
+def test_oauth_login_persists_token_and_starts_session(monkeypatch):
+    """--oauth-login runs the (mocked) flow and stores the refresh token."""
+    import google_auth_oauthlib.flow as flow_mod
+
+    class FakeCreds:
+        client_id = "cid"
+        client_secret = "sec"
+        refresh_token = "rtok"
+
+    class FakeFlow:
+        def run_local_server(self, **kwargs):
+            return FakeCreds()
+
+    monkeypatch.setattr(
+        flow_mod.InstalledAppFlow,
+        "from_client_secrets_file",
+        classmethod(lambda cls, path, scopes: FakeFlow()),
+    )
+
+    args = _ns(
+        oauth_login=True,
+        client_secrets="client_secret.json",
+        add_profile="acme",
+        developer_token="DEV",
+        login_customer_id="1234567890",
+        no_browser=False,
+    )
+    assert gads_auth.cmd_oauth_login(args) == 0
+
+    prof = gads_auth.active_profile()
+    assert gads_auth.active_profile_name() == "acme"
+    assert prof["auth_method"] == "oauth_client"
+    assert prof["refresh_token"] == "rtok"
+    assert gads_auth.get_developer_token() == "DEV"
+    assert gads_auth.session_status()["valid"] is True
+
+
+def test_oauth_login_requires_existing_or_new_profile(monkeypatch):
+    args = _ns(
+        oauth_login=True,
+        client_secrets="client_secret.json",
+        add_profile=None,
+        developer_token=None,
+        login_customer_id=None,
+        no_browser=False,
+    )
+    # No active profile and no --add-profile: refuse before touching the flow.
+    assert gads_auth.cmd_oauth_login(args) == 2
+
+
+def test_set_oauth_manual_fallback(monkeypatch):
+    gads_auth.add_profile("acme", "DEV", "1")
+    args = _ns(
+        set_oauth="acme",
+        client_id="cid",
+        client_secret="sec",
+        refresh_token="rtok",
+    )
+    assert gads_auth.cmd_set_oauth(args) == 0
+    prof = gads_auth.active_profile()
+    assert prof["auth_method"] == "oauth_client"
+    assert prof["refresh_token"] == "rtok"
+
+
+def test_main_oauth_login_with_add_profile_runs_flow(monkeypatch):
+    """main() must route --oauth-login even when --add-profile is also passed."""
+    import sys
+    import google_auth_oauthlib.flow as flow_mod
+
+    class FakeCreds:
+        client_id = "cid"
+        client_secret = "sec"
+        refresh_token = "rtok"
+
+    class FakeFlow:
+        def run_local_server(self, **kwargs):
+            return FakeCreds()
+
+    monkeypatch.setattr(
+        flow_mod.InstalledAppFlow,
+        "from_client_secrets_file",
+        classmethod(lambda cls, path, scopes: FakeFlow()),
+    )
+    monkeypatch.setattr(sys, "argv", [
+        "gads_auth.py", "--oauth-login",
+        "--client-secrets", "client_secret.json",
+        "--add-profile", "acme", "--developer-token", "DEV",
+    ])
+
+    assert gads_auth.main() == 0
+
+    prof = gads_auth.active_profile()
+    assert prof["auth_method"] == "oauth_client"
+    assert prof["refresh_token"] == "rtok"
+
+
+def test_expired_session_hint_is_method_aware():
+    """An expired oauth_client profile points at --oauth-login, not gcloud."""
+    from datetime import datetime, timedelta, timezone
+
+    gads_auth.add_profile("acme", "DEV", "1")
+    gads_auth.set_auth_method("acme", "oauth_client")
+    expired = (datetime.now(timezone.utc) - timedelta(hours=25)).isoformat()
+    gads_auth.SESSION_PATH.write_text(json.dumps({"started_at": expired}))
+
+    with pytest.raises(gads_auth.SessionExpiredError) as exc:
+        gads_auth.enforce_session()
+    assert "--oauth-login" in str(exc.value)
+    assert "application-default" not in str(exc.value)

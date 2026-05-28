@@ -1,9 +1,10 @@
 """
 Google Ads auth.
 
-End-user Google sign-in via the gcloud CLI. No service account, no per-user
-OAuth client registration. The gcloud CLI is itself a registered Google
-application; this is a real SSO browser flow.
+End-user Google sign-in. The default path uses the gcloud CLI (no service
+account, no per-user OAuth client registration): the gcloud CLI is itself a
+registered Google application, so this is a real SSO browser flow. Restricted
+Workspaces can instead use their own OAuth client via --oauth-login.
 
 A developer token is still required by the Google Ads API. It is one-time
 account setup, not OAuth, so users paste it once. login-customer-id (MCC)
@@ -115,35 +116,45 @@ def session_status() -> dict[str, Any]:
 def enforce_session() -> None:
     s = session_status()
     if not s["valid"]:
+        method = (active_profile() or {}).get("auth_method", "gcloud_adc")
+        if method == "oauth_client":
+            reauth = "python scripts/gads_auth.py --oauth-login --client-secrets client_secret.json"
+        else:
+            reauth = adc_command()
         raise SessionExpiredError(
-            "Session expired (24h cap reached). Re-authenticate:\n  "
-            + adc_command()
+            "Session expired (24h cap reached). Re-authenticate:\n  " + reauth
         )
 
 
 # ---------- google.auth resolution ----------
 
 def get_credentials():
-    """Resolve credentials via google.auth.default(), then enforce the 24h cap.
+    """Resolve credentials for the active profile's backend, after the 24h cap.
 
-    google.auth picks up gcloud user ADC from the well-known path.
+    gcloud_adc profiles use google.auth.default(); oauth_client profiles build
+    Credentials from a stored refresh token. Selection lives in gads_authflow.
     """
     enforce_session()
-    try:
-        import google.auth
-    except ImportError as e:
-        raise AuthRequiredError(
-            "google-auth is not installed. Run: pip install -r scripts/requirements.txt"
-        ) from e
+    import gads_authflow
 
+    name = active_profile_name()
+    profile = active_profile()
+    backend = gads_authflow.select_backend(name, profile)
     try:
-        creds, _project = google.auth.default(scopes=[ADWORDS])
+        return backend.credentials()
+    except AuthRequiredError:
+        raise
     except Exception as e:
-        raise AuthRequiredError(
-            f"No application default credentials found ({e}).\n"
-            f"Run:\n  {adc_command()}"
-        ) from e
-    return creds
+        method = (profile or {}).get("auth_method", "gcloud_adc")
+        if method == "oauth_client":
+            hint = (
+                f"OAuth client credentials for profile '{name}' failed to refresh "
+                f"({e}). Re-run:\n  python scripts/gads_auth.py --oauth-login "
+                f"--client-secrets client_secret.json"
+            )
+        else:
+            hint = f"No application default credentials found ({e}).\nRun:\n  {adc_command()}"
+        raise AuthRequiredError(hint) from e
 
 
 # ---------- developer token + login-customer-id ----------
@@ -279,6 +290,28 @@ def set_login_customer_id(customer_id: str) -> None:
     save_credentials(data)
 
 
+def set_auth_method(name: str, method: str) -> None:
+    data = _profiles()
+    data.setdefault("profiles", {}).setdefault(name, {})["auth_method"] = method
+    if not data.get("active"):
+        data["active"] = name
+    save_credentials(data)
+
+
+def set_oauth_credentials(
+    name: str, client_id: str, client_secret: str, refresh_token: str
+) -> None:
+    """Persist OAuth client material and flip the profile to oauth_client."""
+    from gads_tokenstore import LocalFileTokenStore
+
+    LocalFileTokenStore().set(name, {
+        "client_id": client_id,
+        "client_secret": client_secret,
+        "refresh_token": refresh_token,
+    })
+    set_auth_method(name, "oauth_client")
+
+
 # ---------- CLI ----------
 
 def cmd_check(_args) -> int:
@@ -372,6 +405,54 @@ def cmd_list_profiles(_args) -> int:
     return 0
 
 
+def cmd_oauth_login(args) -> int:
+    name = args.add_profile or active_profile_name()
+    if not name:
+        print(json.dumps({
+            "error": "no profile. Pass --add-profile NAME --developer-token TOKEN, "
+                     "or select an existing profile with --use-profile first."
+        }, indent=2))
+        return 2
+    if args.add_profile:
+        if not args.developer_token:
+            print(json.dumps(
+                {"error": "--developer-token is required with --add-profile"}, indent=2
+            ))
+            return 2
+        add_profile(args.add_profile, args.developer_token, args.login_customer_id)
+
+    from google_auth_oauthlib.flow import InstalledAppFlow
+
+    flow = InstalledAppFlow.from_client_secrets_file(args.client_secrets, scopes=[ADWORDS])
+    creds = flow.run_local_server(port=0, open_browser=not args.no_browser)
+    set_oauth_credentials(name, creds.client_id, creds.client_secret, creds.refresh_token)
+    session_start()
+    print(json.dumps({
+        "profile": name,
+        "auth_method": "oauth_client",
+        "refresh_token": "set",
+        "session": session_status(),
+    }, indent=2))
+    return 0
+
+
+def cmd_set_oauth(args) -> int:
+    """Manual fallback: store a pre-obtained client id/secret/refresh token."""
+    if not (args.client_id and args.client_secret and args.refresh_token):
+        print(json.dumps({
+            "error": "--set-oauth needs --client-id, --client-secret, --refresh-token"
+        }, indent=2))
+        return 2
+    set_oauth_credentials(args.set_oauth, args.client_id, args.client_secret, args.refresh_token)
+    session_start()
+    print(json.dumps({
+        "profile": args.set_oauth,
+        "auth_method": "oauth_client",
+        "refresh_token": "set",
+    }, indent=2))
+    return 0
+
+
 def main() -> int:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--check", action="store_true")
@@ -384,6 +465,17 @@ def main() -> int:
     p.add_argument("--login-customer-id", metavar="ID", help="paired with --add-profile (optional)")
     p.add_argument("--set-developer-token", metavar="TOKEN", help="set on the active profile")
     p.add_argument("--set-login-customer-id", metavar="ID", help="set on the active profile")
+    p.add_argument("--oauth-login", action="store_true",
+                   help="run the OAuth loopback flow with your own client")
+    p.add_argument("--client-secrets", metavar="PATH",
+                   help="client_secret.json from your Desktop OAuth client")
+    p.add_argument("--no-browser", action="store_true",
+                   help="print the URL instead of opening a browser")
+    p.add_argument("--set-oauth", metavar="NAME",
+                   help="manual fallback: set OAuth material on a profile")
+    p.add_argument("--client-id", metavar="ID", help="paired with --set-oauth")
+    p.add_argument("--client-secret", metavar="SECRET", help="paired with --set-oauth")
+    p.add_argument("--refresh-token", metavar="TOKEN", help="paired with --set-oauth")
     p.add_argument("--customers", action="store_true")
     p.add_argument("--logout", action="store_true")
     args = p.parse_args()
@@ -392,6 +484,10 @@ def main() -> int:
         return cmd_check(args)
     if args.adc:
         return cmd_adc(args)
+    if args.oauth_login:
+        return cmd_oauth_login(args)
+    if args.set_oauth:
+        return cmd_set_oauth(args)
     if args.add_profile:
         return cmd_add_profile(args)
     if args.use_profile:
