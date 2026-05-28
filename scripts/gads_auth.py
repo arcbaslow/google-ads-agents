@@ -116,9 +116,13 @@ def session_status() -> dict[str, Any]:
 def enforce_session() -> None:
     s = session_status()
     if not s["valid"]:
+        method = (active_profile() or {}).get("auth_method", "gcloud_adc")
+        if method == "oauth_client":
+            reauth = "python scripts/gads_auth.py --oauth-login --client-secrets client_secret.json"
+        else:
+            reauth = adc_command()
         raise SessionExpiredError(
-            "Session expired (24h cap reached). Re-authenticate:\n  "
-            + adc_command()
+            "Session expired (24h cap reached). Re-authenticate:\n  " + reauth
         )
 
 

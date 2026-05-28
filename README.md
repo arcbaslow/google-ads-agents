@@ -100,7 +100,7 @@ cd scripts
 python -m pytest -q
 ```
 
-153 tests covering: auth profile lifecycle, session expiry, GAQL
+154 tests covering: auth profile lifecycle, session expiry, GAQL
 builder shapes, placement classification, campaign-context validation,
 report rendering (markdown + HTML), the session-gate hook, search-term
 mining, anomaly detection, audit history persistence and diff,
