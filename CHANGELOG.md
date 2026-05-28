@@ -1,5 +1,33 @@
 # Changelog
 
+## 0.6.0
+
+- Pluggable auth backends: `scripts/gads_authflow.py` defines an
+  `AuthBackend` protocol with two implementations. `GcloudAdcBackend`
+  (default) wraps `google.auth.default()`; `OAuthClientBackend` builds
+  credentials from a stored refresh token and refreshes them without any
+  gcloud dependency. `gads_auth.get_credentials()` dispatches on the
+  profile's `auth_method` and still enforces the 24h session cap for
+  both paths.
+- Bring-your-own OAuth client for restricted Google Workspaces. A new
+  `--oauth-login` runs an `InstalledAppFlow` loopback browser flow
+  (`--no-browser` for headless) using a Desktop OAuth client you create
+  in your own org; it stores the refresh token on the target profile.
+  `--set-oauth` is a manual fallback for pasting a pre-obtained refresh
+  token. Internal Workspace OAuth apps skip Google verification for the
+  restricted `adwords` scope, sidestepping org third-party-app blocks.
+- Token-store seam: `scripts/gads_tokenstore.py` isolates OAuth material
+  behind a `TokenStore` interface (`LocalFileTokenStore` keeps it in the
+  existing 0600 credentials file). A future web app can drop in a
+  `DbTokenStore` keyed by user id without touching the backends or
+  `gads_client`.
+- Profiles gain `auth_method` (`gcloud_adc` default or `oauth_client`).
+  Migrated and existing profiles default to `gcloud_adc`, so current
+  setups are unaffected.
+- New dependency: `google-auth-oauthlib`.
+- Tests grew from 132 to 154. Design and plan under
+  `docs/superpowers/`.
+
 ## 0.5.0
 
 - Image-asset wizard: `scripts/gads_creative.py` plus the

@@ -29,6 +29,10 @@ Keep the token. You'll paste it once.
 
 ## 3. Sign in
 
+Two ways to authenticate. Pick one per profile.
+
+### Option A — gcloud (default)
+
 From the project directory:
 
 ```
@@ -38,7 +42,49 @@ python scripts/gads_auth.py --adc
 It prints the exact `gcloud auth application-default login --scopes=...`
 command. Run it. A browser opens, sign in, grant access.
 
+### Option B — your own OAuth client (restricted Google Workspace)
+
+If your Workspace admin blocks the gcloud sign-in ("Access blocked: this app
+is blocked"), use your own OAuth client. It does not depend on the gcloud app
+and needs no admin help.
+
+1. Create a Google Cloud project in your Workspace org
+   (https://console.cloud.google.com/projectcreate).
+2. APIs & Services -> OAuth consent screen -> User type **Internal**.
+   Internal apps skip Google verification for the restricted `adwords`
+   scope and are not subject to the org's third-party-app block.
+3. APIs & Services -> Credentials -> Create credentials -> OAuth client ID ->
+   Application type **Desktop app**. Download the JSON as
+   `client_secret.json`.
+4. Run the loopback flow:
+
+```
+python scripts/gads_auth.py --oauth-login \
+    --client-secrets client_secret.json \
+    --add-profile acme --developer-token <TOKEN> --login-customer-id <MCC>
+```
+
+A browser opens on a localhost port; sign in and grant access. The refresh
+token is stored in the profile (file mode 0600) and the 24h session starts.
+On a headless machine add `--no-browser` to print the URL instead.
+
+If even creating a Cloud project is blocked, obtain a refresh token with your
+client elsewhere and paste it:
+
+```
+python scripts/gads_auth.py --set-oauth acme \
+    --client-id <ID> --client-secret <SECRET> --refresh-token <TOKEN>
+```
+
+> Web-app trajectory: the same flow becomes a **Web** OAuth client with a
+> redirect URI, the refresh/exchange code is reused, and a database token
+> store replaces the local file. See
+> `docs/superpowers/specs/2026-05-29-auth-backends-design.md`.
+
 ## 4. Configure local credentials
+
+Option B users who passed `--add-profile` to `--oauth-login` already have a
+profile and can skip to Verify.
 
 Add a profile per manager account. Each profile owns its developer token
 and (optional) login-customer-id.
