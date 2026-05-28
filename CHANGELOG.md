@@ -25,7 +25,7 @@
   Migrated and existing profiles default to `gcloud_adc`, so current
   setups are unaffected.
 - New dependency: `google-auth-oauthlib`.
-- Tests grew from 132 to 153. Design and plan under
+- Tests grew from 132 to 154. Design and plan under
   `docs/superpowers/`.
 
 ## 0.5.0

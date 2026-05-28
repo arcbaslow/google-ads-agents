@@ -274,3 +274,18 @@ def test_main_oauth_login_with_add_profile_runs_flow(monkeypatch):
     prof = gads_auth.active_profile()
     assert prof["auth_method"] == "oauth_client"
     assert prof["refresh_token"] == "rtok"
+
+
+def test_expired_session_hint_is_method_aware():
+    """An expired oauth_client profile points at --oauth-login, not gcloud."""
+    from datetime import datetime, timedelta, timezone
+
+    gads_auth.add_profile("acme", "DEV", "1")
+    gads_auth.set_auth_method("acme", "oauth_client")
+    expired = (datetime.now(timezone.utc) - timedelta(hours=25)).isoformat()
+    gads_auth.SESSION_PATH.write_text(json.dumps({"started_at": expired}))
+
+    with pytest.raises(gads_auth.SessionExpiredError) as exc:
+        gads_auth.enforce_session()
+    assert "--oauth-login" in str(exc.value)
+    assert "application-default" not in str(exc.value)
