@@ -1,9 +1,10 @@
 """
 Google Ads auth.
 
-End-user Google sign-in via the gcloud CLI. No service account, no per-user
-OAuth client registration. The gcloud CLI is itself a registered Google
-application; this is a real SSO browser flow.
+End-user Google sign-in. The default path uses the gcloud CLI (no service
+account, no per-user OAuth client registration): the gcloud CLI is itself a
+registered Google application, so this is a real SSO browser flow. Restricted
+Workspaces can instead use their own OAuth client via --oauth-login.
 
 A developer token is still required by the Google Ads API. It is one-time
 account setup, not OAuth, so users paste it once. login-customer-id (MCC)
