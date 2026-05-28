@@ -7,8 +7,10 @@ via Keyword Plan. Auction Insights. Placement safety with built-in
 exclusions for scams, bots, politics, religion, games, gambling, and
 adult content. Campaign creation behind explicit context gates.
 
-End-user Google sign-in via the gcloud CLI. No service account, no
-per-user OAuth client to register. Hard 24-hour session cap on top of
+End-user Google sign-in. The default path uses the gcloud CLI — no
+service account, no per-user OAuth client to register. Restricted
+Workspaces can sign in with their own OAuth client instead (see Option B
+in [docs/SETUP.md](docs/SETUP.md)). Hard 24-hour session cap on top of
 token expiry.
 
 ## What is it?
@@ -73,6 +75,10 @@ python scripts/gads_auth.py --list-profiles
 A single-MCC setup just adds one profile and stays on it. The old flat
 credentials file (one token, no profiles) is migrated to a "default"
 profile automatically the first time the script runs.
+
+If your Google Workspace blocks the gcloud sign-in, authenticate with your
+own OAuth client instead — no admin needed. See "Option B" in
+[docs/SETUP.md](docs/SETUP.md).
 
 Verify:
 
