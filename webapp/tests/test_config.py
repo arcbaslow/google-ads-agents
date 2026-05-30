@@ -1,0 +1,35 @@
+import pytest
+from cryptography.fernet import Fernet
+
+from app.config import Settings
+
+
+def _env(**over):
+    base = dict(
+        DATABASE_URL="sqlite://",
+        FERNET_KEYS=f'["{Fernet.generate_key().decode()}"]',
+        GOOGLE_OAUTH_CLIENT_ID="cid",
+        GOOGLE_OAUTH_CLIENT_SECRET="secret",
+        GOOGLE_DEVELOPER_TOKEN="dev",
+        OAUTH_REDIRECT_URI="http://localhost:8000/oauth/google/callback",
+    )
+    base.update(over)
+    return base
+
+
+def test_settings_load_from_env(monkeypatch):
+    for k, v in _env().items():
+        monkeypatch.setenv(k, v)
+    s = Settings()
+    assert s.google_developer_token == "dev"
+    assert s.dev_user_id == "dev"  # default
+    assert len(s.fernet_keys) == 1
+
+
+def test_missing_required_raises(monkeypatch):
+    for k in ("DATABASE_URL", "FERNET_KEYS", "GOOGLE_OAUTH_CLIENT_ID",
+              "GOOGLE_OAUTH_CLIENT_SECRET", "GOOGLE_DEVELOPER_TOKEN",
+              "OAUTH_REDIRECT_URI"):
+        monkeypatch.delenv(k, raising=False)
+    with pytest.raises(Exception):
+        Settings()
