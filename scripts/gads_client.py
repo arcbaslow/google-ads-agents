@@ -11,19 +11,19 @@ from __future__ import annotations
 
 from typing import Any
 
-import gads_auth
-
 
 def build_client():
-    """Return a configured GoogleAdsClient for the active profile."""
+    """Return a configured GoogleAdsClient for the active credential provider."""
     from google.ads.googleads.client import GoogleAdsClient
+    import gads_provider
 
+    provider = gads_provider.get_active_provider()
     cfg: dict[str, Any] = {
-        "developer_token": gads_auth.get_developer_token(),
+        "developer_token": provider.get_developer_token(),
         "use_proto_plus": True,
-        "credentials": gads_auth.get_credentials(),
+        "credentials": provider.get_credentials(),
     }
-    login = gads_auth.get_login_customer_id()
+    login = provider.get_login_customer_id()
     if login:
         cfg["login_customer_id"] = login
     return GoogleAdsClient.load_from_dict(cfg)
