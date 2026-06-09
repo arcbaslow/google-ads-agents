@@ -92,7 +92,7 @@ def test_table_columns_and_widths():
     assert lines[0].startswith("name")
     assert "spend" in lines[0]
     # alignment: each row should be exactly as wide as the header line
-    assert all(len(l) == len(lines[0]) for l in lines)
+    assert all(len(line) == len(lines[0]) for line in lines)
 
 
 def test_table_truncates_long_cells():

@@ -7,7 +7,6 @@ import json
 import sys
 from pathlib import Path
 
-import pytest
 
 HOOK_PATH = Path(__file__).resolve().parent.parent / "hooks" / "notify_telegram.py"
 
