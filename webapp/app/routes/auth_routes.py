@@ -65,8 +65,9 @@ def oauth_start(
 
 @router.get("/oauth/google/callback")
 def oauth_callback(
-    code: str = Query(...),
     state: str = Query(...),
+    code: str | None = Query(None),
+    error: str | None = Query(None),
     user: User = Depends(get_current_user),
     settings: Settings = Depends(get_settings),
     session: Session = Depends(get_session),
@@ -85,6 +86,11 @@ def oauth_callback(
     session.delete(row)          # single-use
     session.commit()
 
+    if error:
+        raise HTTPException(status_code=400, detail=f"authorization failed: {error}")
+    if not code:
+        raise HTTPException(status_code=400, detail="missing code")
+
     try:
         token = oauth.exchange_code(settings, code=code, code_verifier=verifier)
     except Exception:
@@ -93,18 +99,25 @@ def oauth_callback(
     if not refresh_token:
         raise HTTPException(status_code=502, detail="no refresh token returned")
 
-    customers = list_accessible_customers(settings, refresh_token)
-
-    conn = Connection(
-        user_id=user.id,
-        scopes=oauth.ADWORDS_SCOPE,
-        customer_id=customers[0] if customers else None,
-        accessible_customers=customers,
-    )
+    # Persist the granted token before the customer listing so a listing
+    # failure does not force the user back through consent.
+    conn = Connection(user_id=user.id, scopes=oauth.ADWORDS_SCOPE)
     session.add(conn)
     session.commit()
-
     store = DbTokenStore(session, Crypto(settings.fernet_keys), settings)
     store.set(conn.id, {"refresh_token": refresh_token})
 
-    return JSONResponse({"connection_id": conn.id, "accessible_customers": customers})
+    warning = None
+    try:
+        customers = list_accessible_customers(settings, refresh_token)
+    except Exception:
+        customers = []
+        warning = "failed to list accessible customers"
+    conn.customer_id = customers[0] if customers else None
+    conn.accessible_customers = customers
+    session.commit()
+
+    body: dict = {"connection_id": conn.id, "accessible_customers": customers}
+    if warning:
+        body["warning"] = warning
+    return JSONResponse(body)

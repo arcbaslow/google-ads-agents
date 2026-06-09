@@ -92,6 +92,77 @@ def test_oauth_callback_persists_token_and_consumes_state(monkeypatch):
     assert r2.status_code == 400
 
 
+def test_select_rejects_customer_when_accessible_list_unknown():
+    client, Session, settings = _client()
+
+    with Session() as s:
+        u = User(id="ua")
+        s.add(u)
+        s.flush()
+        conn = Connection(user_id="ua", accessible_customers=None)
+        s.add(conn)
+        s.commit()
+        conn_id = conn.id
+
+    r = client.post(
+        f"/accounts/{conn_id}/select",
+        json={"customer_id": "9999999999"},
+        headers={"X-Dev-User": "ua"},
+    )
+    assert r.status_code == 400
+
+    with Session() as s:
+        assert s.get(Connection, conn_id).customer_id is None
+
+
+def test_oauth_callback_denied_returns_400_and_consumes_state():
+    client, Session, _ = _client()
+
+    client.get("/oauth/google/start", follow_redirects=False)
+    from app.models import OAuthState
+    with Session() as s:
+        state = s.query(OAuthState).one().state
+
+    r = client.get(
+        f"/oauth/google/callback?error=access_denied&state={state}",
+        follow_redirects=False,
+    )
+    assert r.status_code == 400
+    assert "access_denied" in r.json()["detail"]
+
+    with Session() as s:
+        assert s.query(OAuthState).count() == 0  # consumed
+
+
+def test_oauth_callback_persists_token_when_listing_fails(monkeypatch):
+    client, Session, settings = _client()
+
+    client.get("/oauth/google/start", follow_redirects=False)
+    from app.models import OAuthState
+    with Session() as s:
+        state = s.query(OAuthState).one().state
+
+    monkeypatch.setattr(oauth_mod, "exchange_code",
+                        lambda settings, code, code_verifier: {"refresh_token": "rtok"})
+    import app.routes.auth_routes as ar
+
+    def boom(settings, refresh_token):
+        raise RuntimeError("ads api unavailable")
+
+    monkeypatch.setattr(ar, "list_accessible_customers", boom)
+
+    r = client.get(f"/oauth/google/callback?code=abc&state={state}", follow_redirects=False)
+    assert r.status_code == 200
+    body = r.json()
+    assert body["accessible_customers"] == []
+    assert "warning" in body
+
+    # The granted refresh token survives the listing failure.
+    with Session() as s:
+        conn = s.query(Connection).one()
+        assert conn.refresh_token is not None
+
+
 def test_summary_resolves_per_user_and_blocks_cross_tenant(monkeypatch):
     client, Session, settings = _client()
 
