@@ -12,3 +12,5 @@ build/
 gads-credentials.json
 gads-session.json
 .claude/gads-*
+.env
+client_secret.json
