@@ -64,7 +64,7 @@ def select_customer(
 ):
     conn = _owned_connection(session, user, connection_id)
     allowed = conn.accessible_customers or []
-    if allowed and customer_id not in allowed:
+    if customer_id not in allowed:
         raise HTTPException(status_code=400, detail="customer not accessible")
     conn.customer_id = customer_id
     session.commit()
