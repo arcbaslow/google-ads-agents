@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import argparse
 import sys
-from typing import Any
 
 import gads_client
 import gads_utils
