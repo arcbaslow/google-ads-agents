@@ -27,6 +27,7 @@ def _settings():
         google_oauth_client_secret="secret",
         google_developer_token="DEV-TOKEN",
         oauth_redirect_uri="http://localhost:8000/oauth/google/callback",
+        signin_redirect_uri="http://localhost:8000/auth/google/callback",
     )
 
 

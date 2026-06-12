@@ -12,6 +12,7 @@ def _env(**over):
         GOOGLE_OAUTH_CLIENT_SECRET="secret",
         GOOGLE_DEVELOPER_TOKEN="dev",
         OAUTH_REDIRECT_URI="http://localhost:8000/oauth/google/callback",
+        SIGNIN_REDIRECT_URI="http://localhost:8000/auth/google/callback",
     )
     base.update(over)
     return base
@@ -24,12 +25,16 @@ def test_settings_load_from_env(monkeypatch):
     assert s.google_developer_token == "dev"
     assert s.dev_user_id == "dev"  # default
     assert len(s.fernet_keys) == 1
+    assert s.signin_redirect_uri == "http://localhost:8000/auth/google/callback"
+    assert s.allowed_signins == []
+    assert s.session_max_hours == 24
+    assert s.cookie_secure is True
 
 
 def test_missing_required_raises(monkeypatch):
     for k in ("DATABASE_URL", "FERNET_KEYS", "GOOGLE_OAUTH_CLIENT_ID",
               "GOOGLE_OAUTH_CLIENT_SECRET", "GOOGLE_DEVELOPER_TOKEN",
-              "OAUTH_REDIRECT_URI"):
+              "OAUTH_REDIRECT_URI", "SIGNIN_REDIRECT_URI"):
         monkeypatch.delenv(k, raising=False)
     with pytest.raises(Exception):
         Settings()
