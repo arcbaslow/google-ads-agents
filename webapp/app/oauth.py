@@ -48,6 +48,18 @@ def build_authorization_url(settings: Settings, state: str, code_challenge: str)
     return f"{AUTH_ENDPOINT}?{urlencode(params)}"
 
 
+def verify_id_token(settings: Settings, raw_id_token: str) -> dict:
+    """Validate the ID token (signature, audience, expiry) against Google's
+    certs and return its claims. Raises ValueError on failure. Network call
+    (cert fetch); mocked in tests."""
+    from google.auth.transport.requests import Request
+    from google.oauth2 import id_token as google_id_token
+
+    return google_id_token.verify_oauth2_token(
+        raw_id_token, Request(), audience=settings.google_oauth_client_id
+    )
+
+
 def exchange_code(settings: Settings, code: str, code_verifier: str) -> dict:
     """Exchange an authorization code for tokens. Returns the token response dict
     with at least `refresh_token`. Network call; mocked in tests."""

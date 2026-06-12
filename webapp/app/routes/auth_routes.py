@@ -98,10 +98,18 @@ def oauth_callback(
     refresh_token = token.get("refresh_token")
     if not refresh_token:
         raise HTTPException(status_code=502, detail="no refresh token returned")
+    raw_id_token = token.get("id_token")
+    if not raw_id_token:
+        raise HTTPException(status_code=502, detail="no id token returned")
+    try:
+        claims = oauth.verify_id_token(settings, raw_id_token)
+    except ValueError:
+        raise HTTPException(status_code=502, detail="id token verification failed")
 
     # Persist the granted token before the customer listing so a listing
     # failure does not force the user back through consent.
-    conn = Connection(user_id=user.id, scopes=oauth.ADWORDS_SCOPE)
+    conn = Connection(user_id=user.id, scopes=oauth.ADWORDS_SCOPE,
+                      google_email=claims.get("email"))
     session.add(conn)
     session.commit()
     store = DbTokenStore(session, Crypto(settings.fernet_keys), settings)

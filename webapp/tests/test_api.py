@@ -72,7 +72,10 @@ def test_oauth_callback_persists_token_and_consumes_state(monkeypatch):
         state = state_row.state
 
     monkeypatch.setattr(oauth_mod, "exchange_code",
-                        lambda settings, code, code_verifier: {"refresh_token": "rtok"})
+                        lambda settings, code, code_verifier: {"refresh_token": "rtok",
+                                                               "id_token": "idtok"})
+    monkeypatch.setattr(oauth_mod, "verify_id_token",
+                        lambda settings, raw: {"email": "user@goodlabs.kz"})
     # Avoid a real Ads API call when listing accessible customers.
     import app.routes.auth_routes as ar
     monkeypatch.setattr(ar, "list_accessible_customers", lambda settings, refresh_token: ["1234567890"])
@@ -85,6 +88,7 @@ def test_oauth_callback_persists_token_and_consumes_state(monkeypatch):
     with Session() as s:
         conn = s.query(Connection).one()
         assert conn.refresh_token is not None and conn.refresh_token != b"rtok"
+        assert conn.google_email == "user@goodlabs.kz"
         assert s.query(OAuthState).count() == 0  # consumed
 
     # Replay the same state -> rejected.
@@ -143,7 +147,10 @@ def test_oauth_callback_persists_token_when_listing_fails(monkeypatch):
         state = s.query(OAuthState).one().state
 
     monkeypatch.setattr(oauth_mod, "exchange_code",
-                        lambda settings, code, code_verifier: {"refresh_token": "rtok"})
+                        lambda settings, code, code_verifier: {"refresh_token": "rtok",
+                                                               "id_token": "idtok"})
+    monkeypatch.setattr(oauth_mod, "verify_id_token",
+                        lambda settings, raw: {"email": "user@goodlabs.kz"})
     import app.routes.auth_routes as ar
 
     def boom(settings, refresh_token):
@@ -161,6 +168,40 @@ def test_oauth_callback_persists_token_when_listing_fails(monkeypatch):
     with Session() as s:
         conn = s.query(Connection).one()
         assert conn.refresh_token is not None
+
+
+def test_oauth_callback_rejects_missing_or_invalid_id_token(monkeypatch):
+    client, Session, _ = _client()
+    from app.models import OAuthState
+
+    def start():
+        client.get("/oauth/google/start", follow_redirects=False)
+        with Session() as s:
+            return s.query(OAuthState).one().state
+
+    # No id_token in the exchange response.
+    state = start()
+    monkeypatch.setattr(oauth_mod, "exchange_code",
+                        lambda settings, code, code_verifier: {"refresh_token": "rtok"})
+    r = client.get(f"/oauth/google/callback?code=abc&state={state}", follow_redirects=False)
+    assert r.status_code == 502
+
+    # id_token present but verification fails.
+    state = start()
+    monkeypatch.setattr(oauth_mod, "exchange_code",
+                        lambda settings, code, code_verifier: {"refresh_token": "rtok",
+                                                               "id_token": "bad"})
+
+    def reject(settings, raw):
+        raise ValueError("bad signature")
+
+    monkeypatch.setattr(oauth_mod, "verify_id_token", reject)
+    r2 = client.get(f"/oauth/google/callback?code=abc&state={state}", follow_redirects=False)
+    assert r2.status_code == 502
+
+    # No connection row was created for an unverified identity.
+    with Session() as s:
+        assert s.query(Connection).count() == 0
 
 
 def test_summary_resolves_per_user_and_blocks_cross_tenant(monkeypatch):
