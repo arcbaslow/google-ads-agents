@@ -17,6 +17,7 @@ ADWORDS_SCOPE = "https://www.googleapis.com/auth/adwords"
 OPENID_SCOPES = ["openid", "email"]
 AUTH_ENDPOINT = "https://accounts.google.com/o/oauth2/v2/auth"
 TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token"
+REVOKE_ENDPOINT = "https://oauth2.googleapis.com/revoke"
 
 
 def _b64url(raw: bytes) -> str:
@@ -46,6 +47,15 @@ def build_authorization_url(settings: Settings, state: str, code_challenge: str)
         "code_challenge_method": "S256",
     }
     return f"{AUTH_ENDPOINT}?{urlencode(params)}"
+
+
+def revoke_token(token: str) -> bool:
+    """Revoke a refresh token at Google. Returns True when Google confirmed.
+    Network call; mocked in tests."""
+    import requests
+
+    resp = requests.post(REVOKE_ENDPOINT, data={"token": token}, timeout=30)
+    return resp.status_code == 200
 
 
 def verify_id_token(settings: Settings, raw_id_token: str) -> dict:
