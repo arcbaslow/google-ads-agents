@@ -1,4 +1,9 @@
-from app.models import User, Connection
+from datetime import datetime, timezone
+
+import pytest
+from sqlalchemy.exc import IntegrityError
+
+from app.models import Connection, OAuthState, User, UserSession
 
 
 def test_user_and_connection_roundtrip(session):
@@ -22,3 +27,32 @@ def test_user_and_connection_roundtrip(session):
     assert got.user_id == u.id
     assert got.accessible_customers == ["1234567890", "2222222222"]
     assert got.refresh_token == b"\x01\x02"
+
+
+def test_user_session_roundtrip(session):
+    u = User(email="s@example.com")
+    session.add(u)
+    session.flush()
+    row = UserSession(user_id=u.id, token_hash="ab" * 32,
+                      expires_at=datetime.now(timezone.utc))
+    session.add(row)
+    session.flush()
+    got = session.get(UserSession, row.id)
+    assert got.user_id == u.id
+    assert got.created_at is not None
+
+
+def test_user_google_sub_unique(session):
+    session.add(User(google_sub="sub-1"))
+    session.commit()
+    session.add(User(google_sub="sub-1"))
+    with pytest.raises(IntegrityError):
+        session.commit()
+
+
+def test_oauth_state_allows_null_user_and_defaults_purpose(session):
+    row = OAuthState(state="s1", user_id=None, code_verifier="v",
+                     expires_at=datetime.now(timezone.utc))
+    session.add(row)
+    session.commit()
+    assert row.purpose == "connect"
