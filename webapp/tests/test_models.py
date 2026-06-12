@@ -56,3 +56,16 @@ def test_oauth_state_allows_null_user_and_defaults_purpose(session):
     session.add(row)
     session.commit()
     assert row.purpose == "connect"
+
+
+def test_session_token_hash_unique(session):
+    u = User(email="t@example.com")
+    session.add(u)
+    session.flush()
+    session.add(UserSession(user_id=u.id, token_hash="cd" * 32,
+                            expires_at=datetime.now(timezone.utc)))
+    session.commit()
+    session.add(UserSession(user_id=u.id, token_hash="cd" * 32,
+                            expires_at=datetime.now(timezone.utc)))
+    with pytest.raises(IntegrityError):
+        session.commit()
