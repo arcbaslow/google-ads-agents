@@ -70,7 +70,9 @@ def verify_id_token(settings: Settings, raw_id_token: str) -> dict:
     )
 
 
-def exchange_code(settings: Settings, code: str, code_verifier: str) -> dict:
+def exchange_code(
+    settings: Settings, code: str, code_verifier: str, redirect_uri: str | None = None
+) -> dict:
     """Exchange an authorization code for tokens. Returns the token response dict
     with at least `refresh_token`. Network call; mocked in tests."""
     import requests
@@ -83,7 +85,7 @@ def exchange_code(settings: Settings, code: str, code_verifier: str) -> dict:
             "code": code,
             "code_verifier": code_verifier,
             "grant_type": "authorization_code",
-            "redirect_uri": settings.oauth_redirect_uri,
+            "redirect_uri": redirect_uri or settings.oauth_redirect_uri,
         },
         timeout=30,
     )

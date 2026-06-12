@@ -1,6 +1,6 @@
 from urllib.parse import urlparse, parse_qs
 
-from app.oauth import build_authorization_url, make_pkce, new_state
+from app.oauth import build_authorization_url, exchange_code, make_pkce, new_state
 
 
 def test_make_pkce_pair():
@@ -29,3 +29,27 @@ def test_authorization_url_has_required_params(settings):
     assert q["code_challenge"] == ["CHAL"]
     assert q["code_challenge_method"] == ["S256"]
     assert "https://www.googleapis.com/auth/adwords" in q["scope"][0]
+
+
+def test_exchange_code_redirect_uri_default_and_override(monkeypatch, settings):
+    posted = []
+
+    class FakeResp:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {}
+
+    def fake_post(url, data, timeout):
+        posted.append(data)
+        return FakeResp()
+
+    monkeypatch.setattr("requests.post", fake_post)
+
+    exchange_code(settings, code="c", code_verifier="v")
+    assert posted[-1]["redirect_uri"] == settings.oauth_redirect_uri
+
+    exchange_code(settings, code="c", code_verifier="v",
+                  redirect_uri=settings.signin_redirect_uri)
+    assert posted[-1]["redirect_uri"] == settings.signin_redirect_uri
