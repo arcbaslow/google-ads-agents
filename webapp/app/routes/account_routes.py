@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 from fastapi import APIRouter, Body, Depends, HTTPException
 from sqlalchemy.orm import Session
 
+from app import oauth
 from app.config import Settings, get_settings
 from app.crypto import Crypto
 from app.db import get_session
@@ -69,6 +72,31 @@ def select_customer(
     conn.customer_id = customer_id
     session.commit()
     return {"connection_id": conn.id, "customer_id": conn.customer_id}
+
+
+@router.post("/accounts/{connection_id}/disconnect")
+def disconnect(
+    connection_id: str,
+    user: User = Depends(get_current_user),
+    settings: Settings = Depends(get_settings),
+    session: Session = Depends(get_session),
+):
+    conn = _owned_connection(session, user, connection_id)
+    store = DbTokenStore(session, Crypto(settings.fernet_keys), settings)
+    record = store.get(conn.id)
+    # Best effort at Google; always clear locally so the connection is dead
+    # on our side even when the revoke call fails.
+    revoked = False
+    if record:
+        try:
+            revoked = oauth.revoke_token(record["refresh_token"])
+        except Exception:
+            revoked = False
+    conn.refresh_token = None
+    conn.token_version = None
+    conn.revoked_at = datetime.now(timezone.utc)
+    session.commit()
+    return {"connection_id": conn.id, "revoked": revoked}
 
 
 @router.get("/accounts/{connection_id}/summary")

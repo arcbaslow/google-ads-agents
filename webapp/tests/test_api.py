@@ -204,6 +204,70 @@ def test_oauth_callback_rejects_missing_or_invalid_id_token(monkeypatch):
         assert s.query(Connection).count() == 0
 
 
+def _seed_connection(Session, settings, user_id="ua", token="tok-a"):
+    from app.crypto import Crypto
+    crypto = Crypto(settings.fernet_keys)
+    with Session() as s:
+        if s.get(User, user_id) is None:
+            s.add(User(id=user_id))
+            s.flush()
+        ct, ver = crypto.encrypt(token)
+        conn = Connection(user_id=user_id, customer_id="1111111111",
+                          refresh_token=ct, token_version=ver)
+        s.add(conn)
+        s.commit()
+        return conn.id
+
+
+def test_disconnect_revokes_and_clears_token(monkeypatch):
+    client, Session, settings = _client()
+    conn_id = _seed_connection(Session, settings)
+
+    revoked_with = []
+    monkeypatch.setattr(oauth_mod, "revoke_token",
+                        lambda token: revoked_with.append(token) or True)
+
+    r = client.post(f"/accounts/{conn_id}/disconnect", headers={"X-Dev-User": "ua"})
+    assert r.status_code == 200
+    assert r.json()["revoked"] is True
+    assert revoked_with == ["tok-a"]
+
+    with Session() as s:
+        conn = s.get(Connection, conn_id)
+        assert conn.refresh_token is None
+        assert conn.token_version is None
+        assert conn.revoked_at is not None
+
+
+def test_disconnect_blocks_cross_tenant():
+    client, Session, settings = _client()
+    conn_id = _seed_connection(Session, settings, user_id="ua")
+
+    r = client.post(f"/accounts/{conn_id}/disconnect", headers={"X-Dev-User": "ub"})
+    assert r.status_code == 404
+    assert r.json()["detail"] == "connection not found"
+
+    with Session() as s:
+        assert s.get(Connection, conn_id).refresh_token is not None
+
+
+def test_disconnect_clears_locally_when_revocation_fails(monkeypatch):
+    client, Session, settings = _client()
+    conn_id = _seed_connection(Session, settings)
+
+    def boom(token):
+        raise OSError("network down")
+
+    monkeypatch.setattr(oauth_mod, "revoke_token", boom)
+
+    r = client.post(f"/accounts/{conn_id}/disconnect", headers={"X-Dev-User": "ua"})
+    assert r.status_code == 200
+    assert r.json()["revoked"] is False
+
+    with Session() as s:
+        assert s.get(Connection, conn_id).refresh_token is None
+
+
 def test_summary_resolves_per_user_and_blocks_cross_tenant(monkeypatch):
     client, Session, settings = _client()
 

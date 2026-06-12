@@ -41,6 +41,7 @@ EMAIL = "email"
 CREDENTIALS_PATH = Path.home() / ".claude" / "gads-credentials.json"
 SESSION_PATH = Path.home() / ".claude" / "gads-session.json"
 SESSION_MAX_HOURS = 24
+REVOKE_URI = "https://oauth2.googleapis.com/revoke"
 
 
 class AuthRequiredError(RuntimeError):
@@ -367,13 +368,32 @@ def cmd_customers(_args) -> int:
     return 0
 
 
+def revoke_refresh_token(token: str) -> bool:
+    """Revoke a refresh token at Google. True when Google confirmed."""
+    import urllib.parse
+    import urllib.request
+
+    data = urllib.parse.urlencode({"token": token}).encode()
+    with urllib.request.urlopen(REVOKE_URI, data=data, timeout=10) as resp:
+        return resp.status == 200
+
+
 def cmd_logout(_args) -> int:
+    revoked: dict[str, bool] = {}
+    for name, prof in _profiles().get("profiles", {}).items():
+        token = prof.get("refresh_token")
+        if not token:
+            continue
+        try:
+            revoked[name] = revoke_refresh_token(token)
+        except Exception:
+            revoked[name] = False
     for p in (CREDENTIALS_PATH, SESSION_PATH):
         try:
             p.unlink()
         except FileNotFoundError:
             pass
-    print(json.dumps({"status": "cleared"}, indent=2))
+    print(json.dumps({"status": "cleared", "revoked": revoked}, indent=2))
     return 0
 
 
