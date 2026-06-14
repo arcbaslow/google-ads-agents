@@ -111,6 +111,8 @@ def signin_callback(
 
     email = claims.get("email")
     sub = claims.get("sub")
+    if not sub:
+        raise HTTPException(status_code=502, detail="id token missing subject")
 
     user = db.query(User).filter(User.google_sub == sub).one_or_none()
     if user is None:
