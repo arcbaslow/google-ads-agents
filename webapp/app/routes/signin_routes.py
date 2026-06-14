@@ -114,6 +114,11 @@ def signin_callback(
     if not sub:
         raise HTTPException(status_code=502, detail="id token missing subject")
 
+    if not email or not claims.get("email_verified", False):
+        raise HTTPException(status_code=403, detail="email not verified")
+    if not email_allowed(settings.allowed_signins, email):
+        raise HTTPException(status_code=403, detail="email not allowed")
+
     user = db.query(User).filter(User.google_sub == sub).one_or_none()
     if user is None:
         user = User(google_sub=sub, email=email)
