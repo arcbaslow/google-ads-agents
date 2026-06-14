@@ -1,5 +1,6 @@
 from urllib.parse import parse_qs, urlparse
 
+from app.models import OAuthState
 from app.routes.signin_routes import build_signin_url, email_allowed
 
 
@@ -30,3 +31,15 @@ def test_signin_url_uses_identity_scopes_only(settings):
     assert "access_type" not in q          # no offline refresh token for sign-in
     assert q["code_challenge_method"] == ["S256"]
     assert q["state"] == ["S"]
+    assert "prompt" not in q
+
+
+def test_signin_start_redirects_with_signin_state(api):
+    client, Session, settings = api
+    r = client.get("/auth/google/start", follow_redirects=False)
+    assert r.status_code == 302
+    assert "accounts.google.com" in r.headers["location"]
+    with Session() as s:
+        row = s.query(OAuthState).one()
+        assert row.purpose == "signin"
+        assert row.user_id is None
