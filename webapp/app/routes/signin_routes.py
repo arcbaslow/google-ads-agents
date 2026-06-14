@@ -5,14 +5,14 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 from urllib.parse import urlencode
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Cookie, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
 from app import oauth, sessions
 from app.config import Settings, get_settings
 from app.db import get_session
-from app.identity import SESSION_COOKIE
+from app.identity import SESSION_COOKIE, get_current_user
 from app.models import OAuthState, User
 
 router = APIRouter()
@@ -140,3 +140,20 @@ def signin_callback(
         httponly=True, secure=settings.cookie_secure, samesite="lax", path="/",
     )
     return resp
+
+
+@router.post("/auth/logout")
+def logout(
+    gads_session: str | None = Cookie(default=None),
+    db: Session = Depends(get_session),
+):
+    if gads_session:
+        sessions.delete_session(db, gads_session)
+    resp = JSONResponse({"status": "signed out"})
+    resp.delete_cookie(SESSION_COOKIE, path="/")
+    return resp
+
+
+@router.get("/me")
+def me(user: User = Depends(get_current_user)):
+    return {"id": user.id, "email": user.email}
