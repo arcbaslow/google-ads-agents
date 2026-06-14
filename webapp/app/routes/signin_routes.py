@@ -12,13 +12,13 @@ from sqlalchemy.orm import Session
 from app import oauth, sessions
 from app.config import Settings, get_settings
 from app.db import get_session
+from app.identity import SESSION_COOKIE
 from app.models import OAuthState, User
 
 router = APIRouter()
 
 STATE_TTL_SECONDS = 600
 SIGNIN_SCOPES = ["openid", "email"]
-SESSION_COOKIE = "gads_session"
 
 
 def email_allowed(allowed: list[str], email: str) -> bool:
