@@ -198,3 +198,21 @@ def test_logout_revokes_session(api):
         assert s.query(UserSession).count() == 0
     client.cookies.clear()
     assert client.get("/me").status_code == 401
+
+
+def test_cross_origin_post_rejected(api):
+    client, _, _ = api
+    r = client.post("/auth/logout", headers={"Origin": "https://evil.example"})
+    assert r.status_code == 403
+
+
+def test_same_origin_post_allowed(api):
+    client, _, _ = api
+    r = client.post("/auth/logout", headers={"Origin": "http://localhost:8000"})
+    assert r.status_code == 200
+
+
+def test_get_ignores_origin(api):
+    client, _, _ = api
+    r = client.get("/me", headers={"Origin": "https://evil.example"})
+    assert r.status_code == 401   # auth failure, not a csrf rejection
