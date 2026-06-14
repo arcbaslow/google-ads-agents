@@ -115,3 +115,24 @@ def test_signin_callback_error_param_consumes_state(api):
     assert "access_denied" in r.json()["detail"]
     with Session() as s:
         assert s.query(OAuthState).count() == 0
+
+
+def test_signin_callback_rejects_missing_sub(api, monkeypatch):
+    client, Session, settings = api
+    # Seed a pre-existing user with NULL google_sub (e.g. a connect-flow user).
+    with Session() as s:
+        s.add(User(id="legacy", email="legacy@goodlabs.kz"))
+        s.commit()
+    state = _start_signin(client, Session)
+    monkeypatch.setattr(
+        oauth_mod, "exchange_code",
+        lambda settings, code, code_verifier, redirect_uri=None: {"id_token": "idtok"})
+    monkeypatch.setattr(
+        oauth_mod, "verify_id_token",
+        lambda settings, raw: {"email": "x@goodlabs.kz", "email_verified": True})  # no sub
+    r = client.get(f"/auth/google/callback?code=c&state={state}", follow_redirects=False)
+    assert r.status_code == 502
+    # The legacy NULL-sub user must NOT have been hijacked / bound to a session.
+    with Session() as s:
+        assert s.query(UserSession).count() == 0
+        assert s.get(User, "legacy").google_sub is None
