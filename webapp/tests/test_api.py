@@ -11,11 +11,13 @@ SCRIPTS = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "s
 if SCRIPTS not in sys.path:
     sys.path.insert(0, SCRIPTS)
 
+from datetime import datetime, timedelta, timezone  # noqa: E402
+
 import app.oauth as oauth_mod  # noqa: E402
 from app.config import Settings  # noqa: E402
 from app.db import get_session  # noqa: E402
 from app.config import get_settings  # noqa: E402
-from app.models import Base, Connection, User  # noqa: E402
+from app.models import Base, Connection, OAuthState, User  # noqa: E402
 from app.main import create_app  # noqa: E402
 
 
@@ -325,3 +327,22 @@ def test_accounts_requires_signin():
     client, Session, settings = _client()
     r = client.get("/accounts")
     assert r.status_code == 401
+
+
+def test_connect_callback_rejects_signin_state(monkeypatch):
+    client, Session, settings = _client()
+    _signin(client, Session, settings, user_id="ua")
+    with Session() as s:
+        s.add(OAuthState(
+            state="S1", user_id="ua", purpose="signin", code_verifier="v",
+            expires_at=datetime.now(timezone.utc) + timedelta(seconds=600),
+        ))
+        s.commit()
+
+    def no_exchange(*args, **kwargs):
+        raise AssertionError("exchange must not run for a signin-purpose state")
+
+    monkeypatch.setattr(oauth_mod, "exchange_code", no_exchange)
+
+    r = client.get("/oauth/google/callback?code=c&state=S1", follow_redirects=False)
+    assert r.status_code == 400

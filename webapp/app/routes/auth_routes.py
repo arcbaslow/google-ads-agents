@@ -53,6 +53,7 @@ def oauth_start(
     session.add(OAuthState(
         state=state,
         user_id=user.id,
+        purpose="connect",
         code_verifier=verifier,
         expires_at=datetime.now(timezone.utc) + timedelta(seconds=STATE_TTL_SECONDS),
     ))
@@ -73,7 +74,7 @@ def oauth_callback(
     session: Session = Depends(get_session),
 ):
     row = session.get(OAuthState, state)
-    if row is None or row.user_id != user.id:
+    if row is None or row.user_id != user.id or row.purpose != "connect":
         raise HTTPException(status_code=400, detail="invalid or expired state")
     expires = row.expires_at
     if expires.tzinfo is None:
