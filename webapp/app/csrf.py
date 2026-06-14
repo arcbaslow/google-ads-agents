@@ -13,7 +13,9 @@ SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
 
 def app_origin(settings: Settings) -> str:
     u = urlparse(settings.signin_redirect_uri)
-    return f"{u.scheme}://{u.netloc}"
+    # Browsers send Origin host lowercased; normalize so an uppercase-host
+    # config does not 403 every same-origin request.
+    return f"{u.scheme}://{u.netloc.lower()}"
 
 
 def require_same_origin(
