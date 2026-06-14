@@ -20,7 +20,6 @@ class Settings(BaseSettings):
     allowed_signins: list[str] = []     # email domains or full emails; empty = anyone
     session_max_hours: int = 24
     cookie_secure: bool = True
-    dev_user_id: str = "dev"
 
 
 @lru_cache

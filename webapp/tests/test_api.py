@@ -52,18 +52,33 @@ def _client():
     return TestClient(app), Session, settings
 
 
+def _signin(client, Session, settings, user_id="ua"):
+    """Mint a user + session directly and set the cookie on the client."""
+    from app import sessions as sessions_mod
+    with Session() as s:
+        if s.get(User, user_id) is None:
+            s.add(User(id=user_id))
+            s.commit()
+        token, _ = sessions_mod.create_session(s, user_id, settings.session_max_hours)
+    client.cookies.set("gads_session", token)
+    return token
+
+
 def test_oauth_start_redirects_and_persists_state():
-    client, Session, _ = _client()
+    client, Session, settings = _client()
+    _signin(client, Session, settings)
     r = client.get("/oauth/google/start", follow_redirects=False)
     assert r.status_code == 307 or r.status_code == 302
     assert "accounts.google.com" in r.headers["location"]
     from app.models import OAuthState
     with Session() as s:
-        assert s.query(OAuthState).count() == 1
+        row = s.query(OAuthState).one()
+        assert row.user_id == "ua"
 
 
 def test_oauth_callback_persists_token_and_consumes_state(monkeypatch):
     client, Session, settings = _client()
+    _signin(client, Session, settings)
 
     # Begin the flow to create a state row.
     client.get("/oauth/google/start", follow_redirects=False)
@@ -99,21 +114,14 @@ def test_oauth_callback_persists_token_and_consumes_state(monkeypatch):
 
 def test_select_rejects_customer_when_accessible_list_unknown():
     client, Session, settings = _client()
-
+    _signin(client, Session, settings, user_id="ua")
     with Session() as s:
-        u = User(id="ua")
-        s.add(u)
-        s.flush()
         conn = Connection(user_id="ua", accessible_customers=None)
         s.add(conn)
         s.commit()
         conn_id = conn.id
 
-    r = client.post(
-        f"/accounts/{conn_id}/select",
-        json={"customer_id": "9999999999"},
-        headers={"X-Dev-User": "ua"},
-    )
+    r = client.post(f"/accounts/{conn_id}/select", json={"customer_id": "9999999999"})
     assert r.status_code == 400
 
     with Session() as s:
@@ -121,7 +129,8 @@ def test_select_rejects_customer_when_accessible_list_unknown():
 
 
 def test_oauth_callback_denied_returns_400_and_consumes_state():
-    client, Session, _ = _client()
+    client, Session, settings = _client()
+    _signin(client, Session, settings)
 
     client.get("/oauth/google/start", follow_redirects=False)
     from app.models import OAuthState
@@ -141,6 +150,7 @@ def test_oauth_callback_denied_returns_400_and_consumes_state():
 
 def test_oauth_callback_persists_token_when_listing_fails(monkeypatch):
     client, Session, settings = _client()
+    _signin(client, Session, settings)
 
     client.get("/oauth/google/start", follow_redirects=False)
     from app.models import OAuthState
@@ -172,7 +182,8 @@ def test_oauth_callback_persists_token_when_listing_fails(monkeypatch):
 
 
 def test_oauth_callback_rejects_missing_or_invalid_id_token(monkeypatch):
-    client, Session, _ = _client()
+    client, Session, settings = _client()
+    _signin(client, Session, settings)
     from app.models import OAuthState
 
     def start():
@@ -223,12 +234,13 @@ def _seed_connection(Session, settings, user_id="ua", token="tok-a"):
 def test_disconnect_revokes_and_clears_token(monkeypatch):
     client, Session, settings = _client()
     conn_id = _seed_connection(Session, settings)
+    _signin(client, Session, settings, user_id="ua")
 
     revoked_with = []
     monkeypatch.setattr(oauth_mod, "revoke_token",
                         lambda token: revoked_with.append(token) or True)
 
-    r = client.post(f"/accounts/{conn_id}/disconnect", headers={"X-Dev-User": "ua"})
+    r = client.post(f"/accounts/{conn_id}/disconnect")
     assert r.status_code == 200
     assert r.json()["revoked"] is True
     assert revoked_with == ["tok-a"]
@@ -243,8 +255,9 @@ def test_disconnect_revokes_and_clears_token(monkeypatch):
 def test_disconnect_blocks_cross_tenant():
     client, Session, settings = _client()
     conn_id = _seed_connection(Session, settings, user_id="ua")
+    _signin(client, Session, settings, user_id="ub")
 
-    r = client.post(f"/accounts/{conn_id}/disconnect", headers={"X-Dev-User": "ub"})
+    r = client.post(f"/accounts/{conn_id}/disconnect")
     assert r.status_code == 404
     assert r.json()["detail"] == "connection not found"
 
@@ -255,13 +268,14 @@ def test_disconnect_blocks_cross_tenant():
 def test_disconnect_clears_locally_when_revocation_fails(monkeypatch):
     client, Session, settings = _client()
     conn_id = _seed_connection(Session, settings)
+    _signin(client, Session, settings, user_id="ua")
 
     def boom(token):
         raise OSError("network down")
 
     monkeypatch.setattr(oauth_mod, "revoke_token", boom)
 
-    r = client.post(f"/accounts/{conn_id}/disconnect", headers={"X-Dev-User": "ua"})
+    r = client.post(f"/accounts/{conn_id}/disconnect")
     assert r.status_code == 200
     assert r.json()["revoked"] is False
 
@@ -285,7 +299,7 @@ def test_summary_resolves_per_user_and_blocks_cross_tenant(monkeypatch):
         cb = Connection(user_id="ub", customer_id="2222222222", refresh_token=ct2, token_version=ver2)
         s.add_all([ca, cb])
         s.commit()
-        ca_id, cb_id = ca.id, cb.id
+        ca_id = ca.id
 
     # Stub the actual Ads read: echo the resolved provider's dev token + customer.
     import app.routes.account_routes as ac
@@ -296,10 +310,18 @@ def test_summary_resolves_per_user_and_blocks_cross_tenant(monkeypatch):
     monkeypatch.setattr(ac, "run_account_summary", fake_summary)
 
     # User A reading their own connection works.
-    r = client.get(f"/accounts/{ca_id}/summary", headers={"X-Dev-User": "ua"})
+    _signin(client, Session, settings, user_id="ua")
+    r = client.get(f"/accounts/{ca_id}/summary")
     assert r.status_code == 200
     assert r.json()["customer_id"] == "1111111111"
 
-    # User A reading user B's connection is blocked (IDOR -> 404).
-    r2 = client.get(f"/accounts/{cb_id}/summary", headers={"X-Dev-User": "ua"})
+    # User B probing user A's connection is blocked (IDOR -> 404).
+    _signin(client, Session, settings, user_id="ub")
+    r2 = client.get(f"/accounts/{ca_id}/summary")
     assert r2.status_code == 404
+
+
+def test_accounts_requires_signin():
+    client, Session, settings = _client()
+    r = client.get("/accounts")
+    assert r.status_code == 401

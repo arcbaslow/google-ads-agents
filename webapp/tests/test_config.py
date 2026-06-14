@@ -23,7 +23,6 @@ def test_settings_load_from_env(monkeypatch):
         monkeypatch.setenv(k, v)
     s = Settings()
     assert s.google_developer_token == "dev"
-    assert s.dev_user_id == "dev"  # default
     assert len(s.fernet_keys) == 1
     assert s.signin_redirect_uri == "http://localhost:8000/auth/google/callback"
     assert s.allowed_signins == []

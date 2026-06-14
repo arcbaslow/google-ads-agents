@@ -1,32 +1,27 @@
-"""Current-user resolution. Stub for this slice; real sign-in replaces it.
-
-resolve_user() is pure (takes a session) so it is unit-testable. get_current_user
-is the FastAPI dependency wrapper.
-"""
+"""Current-user resolution from the session cookie."""
 
 from __future__ import annotations
 
-from fastapi import Depends, Header
+from fastapi import Cookie, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from app.config import Settings, get_settings
+from app import sessions
 from app.db import get_session
 from app.models import User
 
-
-def resolve_user(session: Session, settings: Settings, dev_user_header: str | None) -> User:
-    user_id = dev_user_header or settings.dev_user_id
-    user = session.get(User, user_id)
-    if user is None:
-        user = User(id=user_id)
-        session.add(user)
-        session.commit()
-    return user
+SESSION_COOKIE = "gads_session"
 
 
 def get_current_user(
-    x_dev_user: str | None = Header(default=None),
-    session: Session = Depends(get_session),
-    settings: Settings = Depends(get_settings),
+    gads_session: str | None = Cookie(default=None),
+    db: Session = Depends(get_session),
 ) -> User:
-    return resolve_user(session, settings, x_dev_user)
+    if not gads_session:
+        raise HTTPException(status_code=401, detail="not signed in")
+    row = sessions.resolve_session(db, gads_session)
+    if row is None:
+        raise HTTPException(status_code=401, detail="not signed in")
+    user = db.get(User, row.user_id)
+    if user is None:
+        raise HTTPException(status_code=401, detail="not signed in")
+    return user
