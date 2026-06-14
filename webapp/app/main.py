@@ -4,11 +4,12 @@ from __future__ import annotations
 
 from fastapi import FastAPI
 
-from app.routes import account_routes, auth_routes
+from app.routes import account_routes, auth_routes, signin_routes
 
 
 def create_app() -> FastAPI:
     app = FastAPI(title="Google Ads Agents - web backend")
+    app.include_router(signin_routes.router)
     app.include_router(auth_routes.router)
     app.include_router(account_routes.router)
     return app
