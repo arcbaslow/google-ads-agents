@@ -1,6 +1,7 @@
 from urllib.parse import parse_qs, urlparse
 
-from app.models import OAuthState
+import app.oauth as oauth_mod
+from app.models import OAuthState, User, UserSession
 from app.routes.signin_routes import build_signin_url, email_allowed
 
 
@@ -43,3 +44,74 @@ def test_signin_start_redirects_with_signin_state(api):
         row = s.query(OAuthState).one()
         assert row.purpose == "signin"
         assert row.user_id is None
+
+
+def _start_signin(client, Session):
+    client.get("/auth/google/start", follow_redirects=False)
+    with Session() as s:
+        rows = s.query(OAuthState).filter(OAuthState.purpose == "signin").all()
+        return rows[-1].state
+
+
+def _mock_google(monkeypatch, sub="sub-1", email="dilshat@goodlabs.kz", verified=True):
+    monkeypatch.setattr(
+        oauth_mod, "exchange_code",
+        lambda settings, code, code_verifier, redirect_uri=None: {"id_token": "idtok"})
+    monkeypatch.setattr(
+        oauth_mod, "verify_id_token",
+        lambda settings, raw: {"sub": sub, "email": email, "email_verified": verified})
+
+
+def test_signin_callback_sets_cookie_and_creates_user(api, monkeypatch):
+    client, Session, settings = api
+    state = _start_signin(client, Session)
+    _mock_google(monkeypatch)
+
+    r = client.get(f"/auth/google/callback?code=c&state={state}", follow_redirects=False)
+    assert r.status_code == 200
+    assert r.cookies.get("gads_session")
+    assert "httponly" in r.headers["set-cookie"].lower()
+    assert r.json()["user"]["email"] == "dilshat@goodlabs.kz"
+
+    with Session() as s:
+        user = s.query(User).one()
+        assert user.google_sub == "sub-1"
+        assert s.query(UserSession).one().user_id == user.id
+        assert s.query(OAuthState).count() == 0   # consumed
+
+
+def test_signin_twice_reuses_user_and_refreshes_email(api, monkeypatch):
+    client, Session, settings = api
+
+    state = _start_signin(client, Session)
+    _mock_google(monkeypatch, sub="sub-1", email="old@goodlabs.kz")
+    client.get(f"/auth/google/callback?code=c&state={state}", follow_redirects=False)
+
+    state = _start_signin(client, Session)
+    _mock_google(monkeypatch, sub="sub-1", email="new@goodlabs.kz")
+    client.get(f"/auth/google/callback?code=c&state={state}", follow_redirects=False)
+
+    with Session() as s:
+        user = s.query(User).one()                # still one user
+        assert user.email == "new@goodlabs.kz"
+        assert s.query(UserSession).count() == 2  # one session per sign-in
+
+
+def test_signin_callback_replay_rejected(api, monkeypatch):
+    client, Session, settings = api
+    state = _start_signin(client, Session)
+    _mock_google(monkeypatch)
+    client.get(f"/auth/google/callback?code=c&state={state}", follow_redirects=False)
+    r2 = client.get(f"/auth/google/callback?code=c&state={state}", follow_redirects=False)
+    assert r2.status_code == 400
+
+
+def test_signin_callback_error_param_consumes_state(api):
+    client, Session, settings = api
+    state = _start_signin(client, Session)
+    r = client.get(f"/auth/google/callback?error=access_denied&state={state}",
+                   follow_redirects=False)
+    assert r.status_code == 400
+    assert "access_denied" in r.json()["detail"]
+    with Session() as s:
+        assert s.query(OAuthState).count() == 0
