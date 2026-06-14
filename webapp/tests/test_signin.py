@@ -157,3 +157,44 @@ def test_signin_rejects_unverified_email(api, monkeypatch):
     assert r.status_code == 403
     with Session() as s:
         assert s.query(User).count() == 0
+
+
+def _mint_session(client, Session, settings, user_id="u1"):
+    from app import sessions as sessions_mod
+    with Session() as s:
+        if s.get(User, user_id) is None:
+            s.add(User(id=user_id, email="u1@example.com"))
+            s.commit()
+        token, _ = sessions_mod.create_session(s, user_id, settings.session_max_hours)
+    client.cookies.set("gads_session", token)
+    return token
+
+
+def test_me_requires_signin(api):
+    client, _, _ = api
+    assert client.get("/me").status_code == 401
+
+
+def test_me_rejects_bogus_cookie(api):
+    client, _, _ = api
+    client.cookies.set("gads_session", "not-a-real-token")
+    assert client.get("/me").status_code == 401
+
+
+def test_me_returns_signed_in_user(api):
+    client, Session, settings = api
+    _mint_session(client, Session, settings)
+    r = client.get("/me")
+    assert r.status_code == 200
+    assert r.json() == {"id": "u1", "email": "u1@example.com"}
+
+
+def test_logout_revokes_session(api):
+    client, Session, settings = api
+    _mint_session(client, Session, settings)
+    r = client.post("/auth/logout")
+    assert r.status_code == 200
+    with Session() as s:
+        assert s.query(UserSession).count() == 0
+    client.cookies.clear()
+    assert client.get("/me").status_code == 401
