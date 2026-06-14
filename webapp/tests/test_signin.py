@@ -136,3 +136,24 @@ def test_signin_callback_rejects_missing_sub(api, monkeypatch):
     with Session() as s:
         assert s.query(UserSession).count() == 0
         assert s.get(User, "legacy").google_sub is None
+
+
+def test_signin_rejects_email_outside_allowlist(make_api, monkeypatch):
+    client, Session, settings = make_api(allowed_signins=["goodlabs.kz"])
+    state = _start_signin(client, Session)
+    _mock_google(monkeypatch, email="outsider@example.com")
+    r = client.get(f"/auth/google/callback?code=c&state={state}", follow_redirects=False)
+    assert r.status_code == 403
+    with Session() as s:
+        assert s.query(User).count() == 0
+        assert s.query(UserSession).count() == 0
+
+
+def test_signin_rejects_unverified_email(api, monkeypatch):
+    client, Session, settings = api
+    state = _start_signin(client, Session)
+    _mock_google(monkeypatch, verified=False)
+    r = client.get(f"/auth/google/callback?code=c&state={state}", follow_redirects=False)
+    assert r.status_code == 403
+    with Session() as s:
+        assert s.query(User).count() == 0
