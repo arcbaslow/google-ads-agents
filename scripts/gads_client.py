@@ -18,15 +18,17 @@ def build_client():
     import gads_provider
 
     provider = gads_provider.get_active_provider()
-    cfg: dict[str, Any] = {
+    # load_from_dict does not accept a live credentials object; the GoogleAdsClient
+    # constructor does. Pass in-memory credentials (ADC or user OAuth) directly.
+    login = provider.get_login_customer_id()
+    kwargs: dict[str, Any] = {
+        "credentials": provider.get_credentials(),
         "developer_token": provider.get_developer_token(),
         "use_proto_plus": True,
-        "credentials": provider.get_credentials(),
     }
-    login = provider.get_login_customer_id()
     if login:
-        cfg["login_customer_id"] = login
-    return GoogleAdsClient.load_from_dict(cfg)
+        kwargs["login_customer_id"] = login
+    return GoogleAdsClient(**kwargs)
 
 
 def search_stream(customer_id: str, query: str) -> list[dict[str, Any]]:
