@@ -109,6 +109,12 @@ def send_mutate(customer_id: str, proposed: dict, validate_only: bool) -> dict:
         client.enums.AdvertisingChannelTypeEnum, proposed["campaign"]["advertising_channel_type"]
     )
     c.status = client.enums.CampaignStatusEnum.PAUSED
+    # Required on create since the EU political advertising rules; omitting it
+    # fails with field_error: REQUIRED on contains_eu_political_advertising.
+    c.contains_eu_political_advertising = (
+        client.enums.EuPoliticalAdvertisingStatusEnum
+        .DOES_NOT_CONTAIN_EU_POLITICAL_ADVERTISING
+    )
     if budget_resource:
         c.campaign_budget = budget_resource
 
