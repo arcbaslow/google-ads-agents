@@ -4,9 +4,8 @@ from __future__ import annotations
 
 import json
 
-import pytest
-
 import gads_auth
+import pytest
 
 
 def _ns(**kwargs):
@@ -247,6 +246,7 @@ def test_set_oauth_manual_fallback(monkeypatch):
 def test_main_oauth_login_with_add_profile_runs_flow(monkeypatch):
     """main() must route --oauth-login even when --add-profile is also passed."""
     import sys
+
     import google_auth_oauthlib.flow as flow_mod
 
     class FakeCreds:

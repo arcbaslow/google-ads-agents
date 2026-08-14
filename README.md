@@ -1,5 +1,9 @@
 # google-ads-agents
 
+[![tests](https://github.com/arcbaslow/google-ads-agents/actions/workflows/tests.yml/badge.svg)](https://github.com/arcbaslow/google-ads-agents/actions/workflows/tests.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![version](https://img.shields.io/badge/version-0.6.0-blue.svg)](CHANGELOG.md)
+
 Multi-agent toolkit for Google Ads. Read, analyze, and gate-managed
 mutate paths across Search, Performance Max, App, Display, Shopping,
 and Video. Conversion-tracking and Google tag audits. Keyword research
@@ -36,6 +40,20 @@ parallel and renders a markdown report.
 
 ## Install
 
+### Recommended: `uv`
+
+```
+uv venv
+uv pip install -r scripts/requirements.txt
+uv run python scripts/gads_auth.py --check
+```
+
+[`uv`](https://github.com/astral-sh/uv) is a single-binary Python installer
+and runner. One install of `uv` replaces the venv + pip dance and is
+faster on cold-start.
+
+### Plain venv (works everywhere)
+
 ```
 python -m venv .venv
 
@@ -47,6 +65,12 @@ source .venv/bin/activate
 
 pip install -r scripts/requirements.txt
 ```
+
+### Optional extras
+
+- `pip install -e ".[dev]"` — adds pytest + ruff for contributors.
+- `pip install -r webapp/requirements.txt` — only needed to run the
+  hosted sign-in service under `webapp/`.
 
 ## Authenticate
 
@@ -93,25 +117,28 @@ TTL.
 
 ## Run the tests
 
-The non-API logic is covered by pytest. No credentials needed.
+The non-API logic is covered by pytest. Every adapter is mocked, so no
+credentials and no network access are needed.
+
+There are two independent suites:
 
 ```
-cd scripts
-python -m pytest -q
+pytest scripts/ -q      # the CLI adapters, agents, and hooks
+pytest webapp/ -q       # the hosted sign-in service (needs webapp/requirements.txt)
 ```
 
-154 tests covering: auth profile lifecycle, session expiry, GAQL
+Coverage spans the auth profile lifecycle and session expiry, GAQL
 builder shapes, placement classification, campaign-context validation,
-report rendering (markdown + HTML), the session-gate hook, search-term
-mining, anomaly detection, audit history persistence and diff,
-recommendation triage, pretty-print fallback and table renderer, bid
-strategy recommendation rules, budget pacing thresholds, ad-asset
-audits (RSA strength + PMax coverage), Quality Score component
-weakness ranking, demographic/location outlier rules, creative brief
-parsing, prompt scaffold shape, attach field-type validation,
-Telegram formatter and credential storage, the PostToolUse
-notification hook, and pluggable auth backends (gcloud ADC vs. your own
-OAuth client, the token store, and backend selection).
+markdown and HTML report rendering, both hooks, search-term mining,
+anomaly detection, audit history persistence and diff, recommendation
+triage, bid-strategy fit rules, budget pacing thresholds, RSA strength
+and PMax asset coverage, Quality Score component ranking,
+demographic and location outlier rules, creative brief parsing,
+Telegram formatting and credential storage, and the pluggable auth
+backends (gcloud ADC vs. your own OAuth client, the token store, and
+backend selection).
+
+CI runs both suites on Python 3.10 / 3.11 / 3.12 / 3.13.
 
 ## Use it
 
@@ -219,13 +246,27 @@ is sent until the user approves the JSON. New campaigns are created
 
 ```
 google-ads-agents/
-  agents/        subagent definitions, one per domain
-  scripts/       Python adapters and tests
-  skills/        /gads command routing
-  hooks/         placeholder for pre/post-tool guards
-  docs/          setup guide
+  .claude-plugin/  plugin manifest and marketplace config
+  agents/          21 subagent definitions, one per domain
+  scripts/         Python adapters and tests (the universal CLI)
+  skills/          /gads command routing
+  hooks/           session gate (PreToolUse) + Telegram notify (PostToolUse)
+  webapp/          optional hosted sign-in service (FastAPI)
+  docs/            setup and hooks guides, plus design specs
 ```
 
 ## Licensing
 
 MIT. See [LICENSE](LICENSE).
+
+## Related
+
+Part of a set of marketing-measurement agent toolkits:
+
+- [google-analytics-agent](https://github.com/arcbaslow/google-analytics-agent)
+- [google-search-console-agent](https://github.com/arcbaslow/google-search-console-agent)
+- [meta-ads-agents](https://github.com/arcbaslow/meta-ads-agents)
+- [gtm-diff](https://github.com/arcbaslow/gtm-diff)
+- [figma-taxonomy-gen](https://github.com/arcbaslow/figma-taxonomy-gen)
+
+Built and maintained by [Good Labs](https://goodlabs.kz).

@@ -1,14 +1,13 @@
 import pytest
+from app.config import Settings, get_settings
+from app.db import get_session
+from app.main import create_app
+from app.models import Base
 from cryptography.fernet import Fernet
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
-
-from app.config import Settings, get_settings
-from app.db import get_session
-from app.main import create_app
-from app.models import Base
 
 
 def _make_settings(**over):

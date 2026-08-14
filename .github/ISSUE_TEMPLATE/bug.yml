@@ -1,0 +1,100 @@
+name: Bug report
+description: Something in the toolkit doesn't work the way the docs say it does.
+labels: [bug]
+body:
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: A clear, factual description. No screenshots needed unless they show a UI bug.
+      placeholder: "`python scripts/gads_audit.py --customer 123-456-7890` returned ..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect?
+      placeholder: "I expected ..."
+    validations:
+      required: true
+
+  - type: input
+    id: command
+    attributes:
+      label: Exact command
+      description: Redact the customer ID if you'd rather not share it.
+      placeholder: "python scripts/gads_search.py --customer XXX-XXX-XXXX --days 28 --json"
+    validations:
+      required: true
+
+  - type: textarea
+    id: error
+    attributes:
+      label: Error output
+      description: >
+        Full stderr / stack trace if there was one. Scrub the developer token
+        and any customer IDs before pasting.
+      render: shell
+
+  - type: dropdown
+    id: auth-path
+    attributes:
+      label: Auth path
+      options:
+        - gcloud ADC (Option A, default)
+        - own OAuth client (Option B)
+        - hosted webapp sign-in
+        - not sure
+    validations:
+      required: true
+
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Which adapter / agent?
+      options:
+        - gads-audit (full audit driver)
+        - gads-search / pmax / uac / display / shopping / youtube
+        - gads-conversions / gads-gtag
+        - gads-keywords / gads-competitors
+        - gads-placements (classification or exclusion writes)
+        - gads-recommendations / gads-anomalies / gads-pacing / gads-bidstrategy
+        - gads-assets / gads-quality / gads-demographics
+        - gads-creation (gated campaign creation)
+        - gads-history / gads-notify
+        - auth (gads_auth.py, profiles, session cap)
+        - hooks (session gate or Telegram notify)
+        - webapp (hosted sign-in)
+        - other / not sure
+    validations:
+      required: true
+
+  - type: input
+    id: api-error
+    attributes:
+      label: Google Ads API error
+      description: If the failure came back from Google, the error enum and request ID help a lot.
+      placeholder: "AuthorizationError.DEVELOPER_TOKEN_NOT_APPROVED, request id AbC..."
+
+  - type: input
+    id: python-version
+    attributes:
+      label: Python version
+      placeholder: "3.11.7"
+    validations:
+      required: true
+
+  - type: input
+    id: os
+    attributes:
+      label: OS
+      placeholder: "macOS 14.5 / Ubuntu 22.04 / Windows 11"
+    validations:
+      required: true
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else?
+      description: Account size, MCC structure, custom placement rules, recent changes.
