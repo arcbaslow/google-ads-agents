@@ -1,7 +1,6 @@
 import pytest
-from cryptography.fernet import Fernet
-
 from app.config import Settings
+from cryptography.fernet import Fernet
 
 
 def _env(**over):

@@ -15,6 +15,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -72,11 +73,22 @@ def changes(customer_id: str, days: int = 7) -> dict:
 
 def save_audit(audit: dict) -> Path:
     cid = audit.get("customer_id") or "unknown"
-    # Microsecond precision so back-to-back saves don't clobber each other.
-    ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S_%fZ")
     folder = HISTORY_ROOT / cid
     folder.mkdir(parents=True, exist_ok=True)
-    out = folder / f"{ts}.json"
+
+    # The format has microsecond precision but the clock behind it does not.
+    # On Windows `datetime.now()` advances in ~1ms steps, so five back-to-back
+    # calls return the same value and a second save clobbers the first. Wait
+    # for the clock to actually move rather than inventing a suffix, so the
+    # filename shape stays parseable by the --diff timestamp shortcut.
+    for _ in range(200):
+        ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S_%fZ")
+        out = folder / f"{ts}.json"
+        if not out.exists():
+            break
+        time.sleep(0.002)
+    else:
+        raise RuntimeError(f"could not allocate a unique audit filename in {folder}")
     out.write_text(json.dumps(audit, indent=2, default=str))
     return out
 

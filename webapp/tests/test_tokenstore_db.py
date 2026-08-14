@@ -1,5 +1,4 @@
 import pytest
-
 from app.crypto import Crypto
 from app.models import Connection, User
 from app.tokenstore_db import DbTokenStore

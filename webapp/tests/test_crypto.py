@@ -1,6 +1,5 @@
-from cryptography.fernet import Fernet
-
 from app.crypto import Crypto
+from cryptography.fernet import Fernet
 
 
 def test_round_trip():

@@ -14,11 +14,10 @@ if SCRIPTS not in sys.path:
 from datetime import datetime, timedelta, timezone  # noqa: E402
 
 import app.oauth as oauth_mod  # noqa: E402
-from app.config import Settings  # noqa: E402
+from app.config import Settings, get_settings  # noqa: E402
 from app.db import get_session  # noqa: E402
-from app.config import get_settings  # noqa: E402
-from app.models import Base, Connection, OAuthState, User  # noqa: E402
 from app.main import create_app  # noqa: E402
+from app.models import Base, Connection, OAuthState, User  # noqa: E402
 
 
 def _settings():

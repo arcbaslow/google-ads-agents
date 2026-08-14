@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-
 import gads_notify
 
 

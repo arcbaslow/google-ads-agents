@@ -8,10 +8,10 @@ SCRIPTS = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "s
 if SCRIPTS not in sys.path:
     sys.path.insert(0, SCRIPTS)
 
+from app.crypto import Crypto  # noqa: E402
 from app.models import Connection, User  # noqa: E402
 from app.providers import ConnectionAuthError, WebCredentialProvider  # noqa: E402
 from app.tokenstore_db import DbTokenStore  # noqa: E402
-from app.crypto import Crypto  # noqa: E402
 
 
 @pytest.fixture
