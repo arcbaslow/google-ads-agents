@@ -33,7 +33,9 @@ def _changelog_latest():
         heading = line[3:].strip().strip("[]")
         if heading.lower() == "unreleased":
             continue
-        return heading.split()[0].lstrip("v")
+        # Handles both "## 0.5.1 - date" and the bracketed
+        # "## [1.0.1] - date" Keep a Changelog form.
+        return heading.split()[0].strip("[]").lstrip("v")
     raise AssertionError("no released version heading in CHANGELOG.md")
 
 
