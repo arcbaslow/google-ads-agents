@@ -1,5 +1,26 @@
 # Changelog
 
+## Unreleased
+
+- Version metadata corrected. `pyproject.toml` and
+  `.claude-plugin/plugin.json` both still read `0.1.0` — they were never
+  bumped across the 0.2.0 through 0.6.0 releases, so anything reading
+  the package or plugin version got the wrong answer. Both now track
+  the changelog.
+- CI on Python 3.10 / 3.11 / 3.12 / 3.13 running ruff plus both test
+  suites (`scripts/` and `webapp/tests/`).
+- Added `CONTRIBUTING.md`, `SECURITY.md`, issue and pull-request
+  templates, and Dependabot config covering the root and `webapp/`
+  requirement sets.
+- `pyproject.toml` gained project URLs, trove classifiers, keywords,
+  and a `testpaths` covering both suites. The ruff lint selection is
+  pinned explicitly rather than inherited from ruff's implicit default,
+  which changes between releases and would otherwise turn a ruff
+  upgrade into a red CI run.
+- README: badges, a `uv` install path, and a corrected project
+  structure. The test section no longer carries a hardcoded test count
+  and now names both suites.
+
 ## 0.6.0
 
 - Pluggable auth backends: `scripts/gads_authflow.py` defines an
