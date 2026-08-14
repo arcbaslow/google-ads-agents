@@ -39,7 +39,21 @@ Changelog = "https://github.com/arcbaslow/google-ads-agents/blob/master/CHANGELO
 Issues = "https://github.com/arcbaslow/google-ads-agents/issues"
 
 [tool.setuptools]
-py-modules = []
+# The adapters are flat modules under scripts/, not a package. Without this
+# the built sdist and wheel contain no importable code at all, which makes a
+# release artifact meaningless.
+package-dir = { "" = "scripts" }
+py-modules = [
+  "gads_anomalies", "gads_apply", "gads_assets", "gads_audit", "gads_auth",
+  "gads_authflow", "gads_bidstrategy", "gads_brands", "gads_client",
+  "gads_competitors", "gads_conversions", "gads_creation", "gads_creative",
+  "gads_demographics", "gads_display", "gads_geos", "gads_gtag",
+  "gads_history", "gads_keywords", "gads_notify", "gads_pacing",
+  "gads_placements", "gads_pmax", "gads_provider", "gads_quality",
+  "gads_query", "gads_recommendations", "gads_report", "gads_search",
+  "gads_shopping", "gads_tokenstore", "gads_uac", "gads_utils",
+  "gads_youtube",
+]
 
 [tool.ruff]
 line-length = 100

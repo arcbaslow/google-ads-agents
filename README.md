@@ -2,6 +2,7 @@
 
 [![tests](https://github.com/arcbaslow/google-ads-agents/actions/workflows/tests.yml/badge.svg)](https://github.com/arcbaslow/google-ads-agents/actions/workflows/tests.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![release](https://img.shields.io/github/v/release/arcbaslow/google-ads-agents?display_name=tag&sort=semver)](https://github.com/arcbaslow/google-ads-agents/releases)
 [![version](https://img.shields.io/badge/version-0.6.0-blue.svg)](CHANGELOG.md)
 
 Multi-agent toolkit for Google Ads. Read, analyze, and gate-managed
