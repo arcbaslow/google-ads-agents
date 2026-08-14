@@ -22,7 +22,6 @@ import sys
 
 import gads_utils
 
-
 # ---------- input shapes ----------
 #
 # Negatives file format:

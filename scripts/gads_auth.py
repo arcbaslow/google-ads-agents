@@ -29,6 +29,7 @@ import json
 import os
 import stat
 import sys
+import tempfile
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
@@ -66,13 +67,34 @@ def _ensure_dir(p: Path) -> None:
 
 
 def _save(path: Path, data: dict[str, Any]) -> None:
+    """Write atomically.
+
+    This file holds every profile's developer token and, under the
+    own-OAuth-client backend, the refresh tokens too. Opening the real path
+    with "w" truncates it before a single byte is written, so a crash or a
+    Ctrl-C between truncate and flush leaves it empty and every credential is
+    gone with no backup. Interrupting --oauth-login, which writes a freshly
+    granted refresh token through here, is the most likely way to hit it.
+
+    Writing to a sibling temp file and renaming makes the swap atomic on both
+    POSIX and Windows: readers see either the old file or the new one.
+    """
     _ensure_dir(path)
-    with open(path, "w") as f:
-        json.dump(data, f, indent=2)
+    fd, tmp_name = tempfile.mkstemp(dir=str(path.parent), prefix=f".{path.name}.", suffix=".tmp")
+    tmp = Path(tmp_name)
     try:
-        os.chmod(path, stat.S_IRUSR | stat.S_IWUSR)
-    except (PermissionError, OSError):
-        pass
+        with os.fdopen(fd, "w") as f:
+            json.dump(data, f, indent=2)
+            f.flush()
+            os.fsync(f.fileno())
+        try:
+            os.chmod(tmp, stat.S_IRUSR | stat.S_IWUSR)
+        except (PermissionError, OSError):
+            pass
+        os.replace(tmp, path)
+    except BaseException:
+        tmp.unlink(missing_ok=True)
+        raise
 
 
 def _load(path: Path) -> dict[str, Any] | None:

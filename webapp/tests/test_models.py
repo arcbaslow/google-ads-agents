@@ -1,9 +1,8 @@
 from datetime import datetime, timezone
 
 import pytest
-from sqlalchemy.exc import IntegrityError
-
 from app.models import Connection, OAuthState, User, UserSession
+from sqlalchemy.exc import IntegrityError
 
 
 def test_user_and_connection_roundtrip(session):

@@ -6,10 +6,8 @@ they're integration concerns.
 
 from __future__ import annotations
 
-import pytest
-
 import gads_creative
-
+import pytest
 
 # ---------- brief extraction ----------
 

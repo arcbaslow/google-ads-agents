@@ -14,8 +14,8 @@ from typing import Any
 
 def build_client():
     """Return a configured GoogleAdsClient for the active credential provider."""
-    from google.ads.googleads.client import GoogleAdsClient
     import gads_provider
+    from google.ads.googleads.client import GoogleAdsClient
 
     provider = gads_provider.get_active_provider()
     # load_from_dict does not accept a live credentials object; the GoogleAdsClient

@@ -80,3 +80,10 @@ Skill bodies wire this in; don't bypass.
 `scripts/placements_rules.json` is conservative and editable. When a
 user disagrees with a category match, edit the rules file rather than
 hard-coding an override in the agent.
+
+## Asset role (2026-08)
+
+Shipped and public. Maintenance mode: bugfixes, Google API version bumps,
+and docs only - the active OSS build slot belongs to capi-kit. Role:
+portfolio proof for the measurement practice; the README should keep a link
+to Good Labs services. New features need an explicit owner decision.

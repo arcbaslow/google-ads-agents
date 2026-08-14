@@ -26,11 +26,12 @@ def test_build_client_uses_active_provider(monkeypatch):
     # Inject a fake google-ads client module so build_client() imports it.
     captured = {}
 
+    # build_client() constructs GoogleAdsClient directly rather than going
+    # through load_from_dict, because load_from_dict will not take a live
+    # credentials object.
     class FakeClient:
-        @classmethod
-        def load_from_dict(cls, cfg):
+        def __init__(self, **cfg):
             captured.update(cfg)
-            return "CLIENT"
 
     fake_mod = types.ModuleType("google.ads.googleads.client")
     fake_mod.GoogleAdsClient = FakeClient
@@ -43,9 +44,33 @@ def test_build_client_uses_active_provider(monkeypatch):
 
     import gads_client
     with gads_provider.bind_provider(Fake()):
-        assert gads_client.build_client() == "CLIENT"
+        assert isinstance(gads_client.build_client(), FakeClient)
 
     assert captured["developer_token"] == "DEV"
     assert captured["credentials"] == "CREDS"
     assert captured["login_customer_id"] == "1234567890"
     assert captured["use_proto_plus"] is True
+
+
+def test_build_client_omits_login_customer_id_when_unset(monkeypatch):
+    """A profile with no MCC must not send an empty login_customer_id."""
+    captured = {}
+
+    class FakeClient:
+        def __init__(self, **cfg):
+            captured.update(cfg)
+
+    fake_mod = types.ModuleType("google.ads.googleads.client")
+    fake_mod.GoogleAdsClient = FakeClient
+    monkeypatch.setitem(sys.modules, "google.ads.googleads.client", fake_mod)
+
+    class Fake:
+        def get_credentials(self): return "CREDS"
+        def get_developer_token(self): return "DEV"
+        def get_login_customer_id(self): return None
+
+    import gads_client
+    with gads_provider.bind_provider(Fake()):
+        gads_client.build_client()
+
+    assert "login_customer_id" not in captured
