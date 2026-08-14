@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.6.0 - 2026-08-14
 
 - Version metadata corrected. `pyproject.toml` and
   `.claude-plugin/plugin.json` both still read `0.1.0` — they were never
@@ -21,7 +21,6 @@
   structure. The test section no longer carries a hardcoded test count
   and now names both suites.
 
-## 0.6.0
 
 - Pluggable auth backends: `scripts/gads_authflow.py` defines an
   `AuthBackend` protocol with two implementations. `GcloudAdcBackend`
