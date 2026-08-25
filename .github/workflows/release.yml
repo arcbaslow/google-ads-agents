@@ -16,7 +16,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           # On a release event, github.ref is the tag, so checkout uses it by
           # default. On manual dispatch we leave this empty so checkout falls
