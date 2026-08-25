@@ -23,7 +23,7 @@ jobs:
           # back to the branch HEAD (which carries the release tooling); older
           # tags may predate scripts/check_release_version.py.
           ref: ${{ github.event.release.tag_name }}
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
       - name: Verify version matches release tag
