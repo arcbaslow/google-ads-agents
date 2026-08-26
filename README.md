@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/banner.png" alt="google-ads-agents - Audit and gated writes for Google Ads" width="880">
+</p>
+
 # google-ads-agents
 
 [![tests](https://github.com/arcbaslow/google-ads-agents/actions/workflows/tests.yml/badge.svg)](https://github.com/arcbaslow/google-ads-agents/actions/workflows/tests.yml)
