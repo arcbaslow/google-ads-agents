@@ -1,6 +1,6 @@
 [project]
 name = "google-ads-agents"
-version = "0.6.0"
+version = "0.6.1"
 description = "Multi-agent toolkit for Google Ads. End-user gcloud SSO, per-MCC profiles, 24h session cap. Read paths across all campaign types, conversion and Google tag health, placement safety, gated mutates."
 readme = "README.md"
 license = { file = "LICENSE" }

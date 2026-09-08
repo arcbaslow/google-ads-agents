@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.6.1] - 2026-09-08
+
+### Added
+
+- Distinct SVG banner and project icon, linked CI/release badges, and a screenshot of real output generated from synthetic fixtures.
+- Reproducible offline examples, release notes, maintainer release instructions and a verification record.
+
+### Changed
+
+- Reorganized README around installation, first run, example output, supported capabilities and the actual CI checks.
+- Corrected installation and capability claims, with explicit distinctions between agent workflows, direct CLI operations and optional integrations.
+
 ## 0.6.0 - 2026-08-14
 
 - Version metadata corrected. `pyproject.toml` and
