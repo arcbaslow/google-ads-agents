@@ -15,18 +15,6 @@ Notes for Claude Code working in `google-ads-agents`.
 
 Top-level router: `skills/gads/SKILL.md` — exposes `/gads <command>`.
 
-Read paths:
-
-- `gads-audit` — parallel orchestrator
-- `gads-search`, `gads-pmax`, `gads-uac`, `gads-display`, `gads-shopping`, `gads-youtube`
-- `gads-conversions`, `gads-gtag`
-- `gads-keywords`, `gads-competitors`, `gads-placements`
-
-Write / management paths:
-
-- `gads-creation` — gated campaign creation
-- `gads-placements` — exclusion writes after y/N confirmation
-
 The audit orchestrator runs `gads-conversions` and `gads-gtag` first as
 gates, then fans the rest out in parallel. Each agent returns JSON with
 `summary`, `findings`, `metrics`.
