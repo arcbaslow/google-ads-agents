@@ -30,3 +30,7 @@ not PDF. Use `--save-history` to retain the driver's raw result.
 `--all-customers` lists directly accessible customers, not every child of an
 MCC. Keyword ideas, anomalies and creative inventory are separate commands;
 there is no audit `--seeds` option.
+
+Worker threads retain the caller's bound credential provider at both account
+and adapter levels. This does not add a hosted audit endpoint or manager-tree
+discovery. Providers used in parallel must support concurrent reads.

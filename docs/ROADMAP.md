@@ -231,6 +231,18 @@ See VERIFICATION.md for checks and commit records.
   output must use `type`. Regression tests retain micros and fractional values.
   Discovered while testing real demographic messages during final review.
 
+## Completed follow-up work
+
+### Preserve audit worker credentials
+
+- Completed the provider-context portion of the multi-account audit task.
+  Both worker pools in `scripts/gads_audit.py` copy the caller's context per
+  task, preventing unintended fallback to local credentials.
+- Regression tests in `scripts/test_gads_audit.py` reproduced the failure
+  before the fix and now cover simultaneous callers, accounts and adapters.
+- Effort: small. Risk: medium; providers themselves still need thread-safe
+  access. No hosted audit endpoint or manager hierarchy traversal was added.
+
 ## Next
 
 | Item | Account benefit and evidence | Effort | Risk / reason not built now |
@@ -242,7 +254,7 @@ See VERIFICATION.md for checks and commit records.
 | Add PMax channel, placement and asset metrics | Explain where spend moved and distinguish campaign branding from group assets. [Channel reporting announcement](https://ads-developers.googleblog.com/2026/01/introducing-channel-level-reporting-for.html), [asset fields](https://developers.google.com/google-ads/api/fields/v25/asset_group_asset). | 3–5 days | Medium; aggregating incompatible segments would mislead account decisions. |
 | Add conversion diagnostics and consent evidence | Show primary goals and delivery diagnostics separately from detected HTML tags. `gads_conversions.py`, `gads_gtag.py`; [consent concepts](https://developers.google.com/tag-platform/security/concepts/consent-mode), [upload deprecations](https://developers.google.com/google-ads/api/docs/deprecations). | 3–5 days | High; no event uploads or claims of legal compliance from a static page scan. |
 | Add Demand Gen channel and AI Max settings reads | Explain surface allocation and migrations; begin from the small Now campaign read. [Channel controls](https://developers.google.com/google-ads/api/docs/demand-gen/channel-controls), [release notes](https://developers.google.com/google-ads/api/docs/release-notes). | 2–4 days | Medium; eligibility, automation opt-ins and attribution need separate fixtures. |
-| Repair multi-account audit boundaries | `scripts/gads_audit.py:77` uses ThreadPoolExecutor without copying bound provider context; `scripts/gads_audit.py:105` uses directly accessible accounts rather than expanding manager hierarchies. Hosted audit is not exposed today, so cross-tenant impact is a risk, not an observed leak. | 2–4 days | High; add tenant and manager hierarchy fixtures before exposing hosted audit. |
+| Complete multi-account audit boundaries | Provider context propagation is fixed and tested above. `scripts/gads_audit.py` (`list_all_customers`) still lists directly accessible accounts rather than expanding manager hierarchies. Hosted audit is not exposed today. | 2–3 days | High; add manager hierarchy fixtures and thread-safe database provider lifetimes before exposing hosted audit. |
 | Preserve nested and per-entity findings | `scripts/gads_demographics.py:180` nests findings, while `scripts/gads_report.py:76` inspects top-level findings; `scripts/gads_history.py:127` keys diffs by agent/code, collapsing distinct entities. | 1–2 days | Medium; choose a stable finding identity and output migration first. |
 | Harden hosted state consumption and disconnect | State consumption is read-then-delete; concurrent callbacks need atomic database handling. Disconnect decrypts before its cleanup guard, so corrupt ciphertext can prevent cleanup. `webapp/app/routes/signin_routes.py:80`, `webapp/app/routes/auth_routes.py:75`, `webapp/app/routes/account_routes.py:86`. | 1–3 days | High; database concurrency and cleanup semantics need explicit tests beyond browser-state binding. |
 | Sanitise broader error output | `scripts/gads_audit.py:99` returns raw exception text and a traceback. Provider details may enter reports; no secret disclosure was observed. | 1–2 days | Medium; define useful redacted diagnostics across adapters and distinguish retryable failures from reconnect requirements. |

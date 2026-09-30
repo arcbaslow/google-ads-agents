@@ -134,3 +134,18 @@ with patch('socket.socket.connect', blocked), patch('socket.create_connection', 
 - `scripts/gads_auth.py` and `hooks/session_gate.py` have no diff from master.
   The 24-hour cap, session-gate behavior and release version remain unchanged.
 - Changes were committed locally only. Nothing was pushed, tagged or published.
+
+## Roadmap follow-up checks
+
+Continued on `roadmap-work` from `59ca104` using the same isolated harness and
+Python environment. The starting checks were Ruff passing, 274 adapter tests
+and 62 web tests. All three required checks pass before each follow-up commit.
+
+| Change | Ruff | Adapter tests | Web tests |
+| --- | --- | --- | --- |
+| Preserve bound providers across both audit worker pools | Pass | 277 | 62 |
+
+The provider regression tests failed before the fix: worker threads resolved
+the default file provider. They now pass with two concurrent callers, each
+running two accounts and two adapters. This verifies context isolation with
+mock providers, not the thread safety of a shared database session.
