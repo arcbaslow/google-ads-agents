@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Block incomplete campaign creation before any API access; keep a clearly labelled planning draft.
+
 - Require operation JSON review and explicit y/N confirmation inside negative-keyword, placement and creative write adapters. Apply now validates first; conflicting mode flags are rejected.
 
 ## [0.6.1] - 2026-09-08

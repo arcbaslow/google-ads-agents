@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import gads_creation
+import pytest
 
 
 def _valid_ctx(**overrides):
@@ -70,3 +71,38 @@ def test_propose_mutate_default_name():
     out = gads_creation.propose_mutate(_valid_ctx())
     assert "Acme Widgets" in out["campaign"]["name"]
     assert "leads" in out["campaign"]["name"]
+
+
+@pytest.mark.parametrize("dry", [True, False])
+def test_incomplete_writer_never_constructs_client(monkeypatch, dry):
+    from unittest.mock import Mock
+
+    import gads_client
+    build = Mock(side_effect=AssertionError("client must not be built"))
+    monkeypatch.setattr(gads_client, "build_client", build)
+    with pytest.raises(NotImplementedError, match="No budget or campaign was sent"):
+        gads_creation.send_mutate("123", gads_creation.propose_mutate(_valid_ctx()), dry)
+    build.assert_not_called()
+
+
+@pytest.mark.parametrize("flag", ["--apply", "--validate-only"])
+def test_cli_rejects_writer_before_reading_context(monkeypatch, capsys, flag):
+    import json
+
+    monkeypatch.setattr("sys.argv", ["gads_creation", "--customer", "123",
+                        "--context-file", "nonexistent.json", flag, "--json"])
+    assert gads_creation.main() == 2
+    assert json.loads(capsys.readouterr().out)["status"] == "unsupported"
+
+
+def test_cli_labels_draft_as_planning_only(monkeypatch, tmp_path, capsys):
+    import json
+
+    ctx = tmp_path / "context.json"
+    ctx.write_text(json.dumps(_valid_ctx()))
+    monkeypatch.setattr("sys.argv", ["gads_creation", "--customer", "123",
+                        "--context-file", str(ctx), "--json"])
+    assert gads_creation.main() == 0
+    result = json.loads(capsys.readouterr().out)
+    assert result["status"] == "planning_only"
+    assert result["campaign_plan"]["campaign"]["status"] == "PAUSED"
