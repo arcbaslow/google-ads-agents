@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
+from cryptography.fernet import InvalidToken
 from fastapi import APIRouter, Body, Depends, HTTPException
 from sqlalchemy.orm import Session
 
@@ -83,7 +84,11 @@ def disconnect(
 ):
     conn = _owned_connection(session, user, connection_id)
     store = DbTokenStore(session, Crypto(settings.fernet_keys), settings)
-    record = store.get(conn.id)
+    try:
+        record = store.get(conn.id)
+    except (InvalidToken, IndexError, UnicodeDecodeError):
+        # Unreadable stored credentials must not prevent local disconnection.
+        record = None
     # Best effort at Google; always clear locally so the connection is dead
     # on our side even when the revoke call fails.
     revoked = False

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Clear hosted credentials on disconnect even when the stored token cannot be decrypted; report remote revocation as unconfirmed.
+
 - Preserve bound credential providers across audit account and adapter workers instead of falling back to local credentials.
 
 - Add a sourced maintenance roadmap, deferred proposals and a baseline-to-final verification record.

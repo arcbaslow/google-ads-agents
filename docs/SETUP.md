@@ -184,6 +184,11 @@ HttpOnly SameSite=Lax cookie binds the callback to that browser; production
 uses Secure cookies and therefore requires HTTPS. Starting another sign-in
 flow replaces the previous cookie. Restart sign-in if a flow expires.
 
+Disconnect clears the locally stored token even if its ciphertext or key
+version is unreadable. The response's `revoked` flag is false when revocation
+at Google could not be confirmed; local disconnection alone does not revoke
+the Google grant. Database write failures still require operator attention.
+
 ## API compatibility
 
 The adapters select API v25 and require `google-ads>=33.0.0,<34.0.0`.

@@ -243,6 +243,17 @@ See VERIFICATION.md for checks and commit records.
 - Effort: small. Risk: medium; providers themselves still need thread-safe
   access. No hosted audit endpoint or manager hierarchy traversal was added.
 
+### Clear unreadable credentials on disconnect
+
+- Completed local cleanup in `webapp/app/routes/account_routes.py`
+  (`disconnect`): corrupt ciphertext, unavailable key versions and invalid
+  plaintext encoding no longer leave credentials stored after disconnect.
+  Remote revocation remains unconfirmed when the token cannot be read.
+- Regression tests in `webapp/tests/test_api.py` reproduce all three failures
+  and verify repeated disconnect does not attempt revocation without a token.
+- Effort: small. Risk: low; tenant ownership checks and database failure
+  handling are unchanged. Atomic OAuth state consumption remains below.
+
 ## Next
 
 | Item | Account benefit and evidence | Effort | Risk / reason not built now |
@@ -256,7 +267,7 @@ See VERIFICATION.md for checks and commit records.
 | Add Demand Gen channel and AI Max settings reads | Explain surface allocation and migrations; begin from the small Now campaign read. [Channel controls](https://developers.google.com/google-ads/api/docs/demand-gen/channel-controls), [release notes](https://developers.google.com/google-ads/api/docs/release-notes). | 2–4 days | Medium; eligibility, automation opt-ins and attribution need separate fixtures. |
 | Complete multi-account audit boundaries | Provider context propagation is fixed and tested above. `scripts/gads_audit.py` (`list_all_customers`) still lists directly accessible accounts rather than expanding manager hierarchies. Hosted audit is not exposed today. | 2–3 days | High; add manager hierarchy fixtures and thread-safe database provider lifetimes before exposing hosted audit. |
 | Preserve nested and per-entity findings | `scripts/gads_demographics.py:180` nests findings, while `scripts/gads_report.py:76` inspects top-level findings; `scripts/gads_history.py:127` keys diffs by agent/code, collapsing distinct entities. | 1–2 days | Medium; choose a stable finding identity and output migration first. |
-| Harden hosted state consumption and disconnect | State consumption is read-then-delete; concurrent callbacks need atomic database handling. Disconnect decrypts before its cleanup guard, so corrupt ciphertext can prevent cleanup. `webapp/app/routes/signin_routes.py:80`, `webapp/app/routes/auth_routes.py:75`, `webapp/app/routes/account_routes.py:86`. | 1–3 days | High; database concurrency and cleanup semantics need explicit tests beyond browser-state binding. |
+| Consume hosted OAuth state atomically | State consumption is read-then-delete; concurrent callbacks need atomic database handling. `webapp/app/routes/signin_routes.py:80`, `webapp/app/routes/auth_routes.py:75`. Disconnect cleanup is completed above. | 1–2 days | High; database concurrency needs explicit tests beyond browser-state binding. |
 | Sanitise broader error output | `scripts/gads_audit.py:99` returns raw exception text and a traceback. Provider details may enter reports; no secret disclosure was observed. | 1–2 days | Medium; define useful redacted diagnostics across adapters and distinguish retryable failures from reconnect requirements. |
 | Validate keyword locale choices | `scripts/gads_keywords.py:18` silently substitutes US/English for unsupported codes. Reject unknown codes or resolve constants explicitly so forecasts match the intended market. | 1 day | Medium; clarify supported input forms before changing existing callers. |
 

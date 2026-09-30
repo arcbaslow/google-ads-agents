@@ -1,6 +1,8 @@
 import os
 import sys
+from unittest.mock import Mock
 
+import pytest
 from cryptography.fernet import Fernet
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
@@ -282,6 +284,35 @@ def test_disconnect_clears_locally_when_revocation_fails(monkeypatch):
 
     with Session() as s:
         assert s.get(Connection, conn_id).refresh_token is None
+
+
+@pytest.mark.parametrize("damage", ["ciphertext", "key_version", "encoding"])
+def test_disconnect_clears_unreadable_token(monkeypatch, damage):
+    client, Session, settings = _client()
+    conn_id = _seed_connection(Session, settings)
+    _signin(client, Session, settings)
+    with Session() as s:
+        conn = s.get(Connection, conn_id)
+        if damage == "ciphertext":
+            conn.refresh_token = b"corrupt-ciphertext"
+        elif damage == "key_version":
+            conn.token_version = len(settings.fernet_keys)
+        else:
+            conn.refresh_token = Fernet(settings.fernet_keys[0].encode()).encrypt(b"\xff")
+        s.commit()
+
+    revoke = Mock()
+    monkeypatch.setattr(oauth_mod, "revoke_token", revoke)
+    for _ in range(2):
+        response = client.post(f"/accounts/{conn_id}/disconnect")
+        assert response.status_code == 200
+        assert response.json() == {"connection_id": conn_id, "revoked": False}
+    revoke.assert_not_called()
+    with Session() as s:
+        conn = s.get(Connection, conn_id)
+        assert conn.refresh_token is None
+        assert conn.token_version is None
+        assert conn.revoked_at is not None
 
 
 def test_summary_resolves_per_user_and_blocks_cross_tenant(monkeypatch):
