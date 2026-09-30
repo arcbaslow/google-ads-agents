@@ -1,6 +1,6 @@
 ---
 name: gads-gtag
-description: Google tag / GA4 link / Enhanced Conversions audit. Scans the site for gtag/GTM, checks GA4 link, surfaces Enhanced Conversions enrollment.
+description: Static website tag detection and account conversion-tracking IDs.
 user-invokable: true
 argument-hint: "<customer-id> --site <url>"
 license: MIT
@@ -8,10 +8,12 @@ metadata:
   version: "0.1.0"
 ---
 
-Routes to the `gads-gtag` subagent. The agent runs:
+Routes to the `gads-gtag` subagent.
 
-```
-python scripts/gads_gtag.py --customer <id> --site <url> --json
-```
+Run `python scripts/gads_gtag.py --customer <id> --site <url> --json`.
 
-Returns the standard `summary / findings / metrics` shape.
+Report site_scan (reachability and snippet matches) and linked (customer
+conversion-tracking IDs). The scan reads static HTML; it does not run JavaScript.
+No match does not prove tracking is absent, and a match does not prove delivery.
+The adapter does not query GA4 links, enhanced-conversion enrollment, consent
+signals or real conversion events. Do not certify measurement health from it.

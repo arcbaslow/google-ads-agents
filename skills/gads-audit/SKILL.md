@@ -1,6 +1,6 @@
 ---
 name: gads-audit
-description: Full Google Ads account audit. Fans out to every analysis agent in parallel, gates on auth and 24h session, then renders a markdown report.
+description: Collect supported adapter results and render a Markdown or HTML audit.
 user-invokable: true
 argument-hint: "<customer-id> [--days N]"
 license: MIT
@@ -8,44 +8,25 @@ metadata:
   version: "0.1.0"
 ---
 
-# Audit orchestrator
+Run the session check first. Stop on expiry and follow the sign-in instructions.
+Do not work around the 24-hour cap.
 
-`/gads audit <customer-id> [--days N]`
+```
+python scripts/gads_auth.py --check
+python scripts/gads_audit.py --customer <id> --days 28 --site <url> --output audit.json
+python scripts/gads_report.py --input audit.json --format md --output audit.md
+```
 
-## Sequence
+`--site` is optional. The driver runs its DEFAULT_AGENTS and optional site scan
+in parallel; it does not block analysis on conversion or tag results. Review
+conversion findings and static tag-scan limitations before interpreting the
+other results. A snippet match does not establish healthy measurement.
 
-1. **Auth + session gate.** Run `python scripts/gads_auth.py --check`.
-   If the session is expired or the developer token is missing, stop
-   and instruct the user to re-authenticate. Do not proceed.
+The driver always emits JSON (no `--json` flag). Adapter shapes differ. Inspect
+failed blocks and nested demographic findings explicitly; a completed audit
+is not proof all reads succeeded. The report renderer supports `md` and `html`,
+not PDF. Use `--save-history` to retain the driver's raw result.
 
-2. **Pre-flight gates, in series.** These determine whether the rest
-   of the audit can be trusted:
-   - `gads-conversions` — if there are no primary conversion actions,
-     the rest of the audit's bid-strategy critique is meaningless.
-     Note that in the report and continue with reduced confidence.
-   - `gads-gtag` — if gtag/GA4 isn't installed, conversion data is
-     unreliable. Note and continue.
-
-3. **Fan out in parallel** (one subagent per domain):
-   - gads-search
-   - gads-pmax
-   - gads-uac
-   - gads-display
-   - gads-shopping
-   - gads-youtube
-   - gads-keywords (skip unless `--seeds` provided)
-   - gads-competitors
-   - gads-placements
-
-4. **Merge results.** Each agent returns JSON with `summary`, `findings`,
-   and `metrics`. Concatenate findings, group by severity, build the
-   action plan.
-
-5. **Render** via `python scripts/gads_report.py --input <merged.json>`
-   to markdown by default. HTML and PDF via `--format html|pdf`.
-
-## Output
-
-A single markdown file under `~/.claude/gads-audit-<customer>-<date>.md`
-plus the `~/.claude/gads-audit-<customer>-<date>.json` raw merge for
-reference.
+`--all-customers` lists directly accessible customers, not every child of an
+MCC. Keyword ideas, anomalies and creative inventory are separate commands;
+there is no audit `--seeds` option.

@@ -11,5 +11,5 @@ metadata:
 Routes to the `gads-demographics` subagent. Runs:
 
 ```
-python scripts/gads_demographics.py --customer <id> --days <N> age|gender|device|location|all --json
+python scripts/gads_demographics.py --customer <id> --days <N> --json age|gender|device|location|all
 ```

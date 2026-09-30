@@ -1,6 +1,6 @@
 ---
 name: gads-uac
-description: App campaign (UAC) analysis.
+description: App campaign settings and aggregate performance.
 user-invokable: true
 argument-hint: "<customer-id> [--days N]"
 license: MIT
@@ -8,10 +8,11 @@ metadata:
   version: "0.1.0"
 ---
 
-Routes to the `gads-uac` subagent. The agent runs:
+Routes to the `gads-uac` subagent.
 
-```
-python scripts/gads_uac.py --customer <id> --days <N> --json
-```
+Run `python scripts/gads_uac.py --customer <id> --days 28 --json`.
 
-Returns the standard `summary / findings / metrics` shape.
+Report app ID/store, configured bidding goal and campaign impressions, clicks,
+cost, conversions and all_conversions. Output contains customer_id, date_range
+and campaigns. Conversions are not necessarily installs. Asset coverage,
+SKAdNetwork schemas, Firebase links and Install Referrer health are not queried.

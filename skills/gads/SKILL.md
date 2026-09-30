@@ -1,6 +1,6 @@
 ---
 name: gads
-description: "Google Ads multi-agent toolkit. Audits, campaign-type analysis (Search, Performance Max, App, Display, Shopping, YouTube), conversion + Google tag health, keyword research, auction insights, placement safety with built-in scam/bot/politics/religion/games/adult exclusions, and gated campaign creation. End-user Google SSO via gcloud, 24h session cap. Triggers on: google ads, adwords, search campaign, performance max, pmax, uac, app campaign, display campaign, shopping campaign, youtube ads, video campaign, auction insights, keyword research, conversion tracking, gtag, ga4 link."
+description: "Google Ads multi-agent toolkit. Audits, campaign-type analysis (Search, Performance Max, App, Display, Shopping, YouTube), conversion-action checks and static Google tag detection, keyword research, auction insights, placement safety with built-in scam/bot/politics/religion/games/adult exclusions, and campaign planning. End-user Google SSO via gcloud, 24h session cap. Triggers on: google ads, adwords, search campaign, performance max, pmax, uac, app campaign, display campaign, shopping campaign, youtube ads, video campaign, auction insights, keyword research, conversion tracking, gtag, ga4 link."
 user-invokable: true
 argument-hint: "[command] [customer-id] [options]"
 license: MIT
@@ -19,7 +19,7 @@ Top-level entry point. `/gads <command> <args>`.
 |---------|-------------|
 | `/gads auth` | Print the `gcloud auth application-default login` command, set developer token / login-customer-id |
 | `/gads customers` | List accessible Google Ads customers |
-| `/gads audit <customer-id>` | Full audit, all agents in parallel |
+| `/gads audit <customer-id>` | Collect configured read adapters in parallel |
 | `/gads search <customer-id>` | Search campaigns |
 | `/gads pmax <customer-id>` | Performance Max |
 | `/gads uac <customer-id>` | App campaigns |
@@ -27,25 +27,25 @@ Top-level entry point. `/gads <command> <args>`.
 | `/gads shopping <customer-id>` | Shopping |
 | `/gads youtube <customer-id>` | YouTube / Video |
 | `/gads conversions <customer-id>` | Conversion tracking |
-| `/gads gtag <customer-id> --site <url>` | Google tag / GA4 link / Enhanced Conversions |
+| `/gads gtag <customer-id> --site <url>` | Static tag detection and tracking IDs |
 | `/gads keywords <customer-id> --seeds w1 w2` | Keyword ideas |
-| `/gads competitors <customer-id>` | Auction Insights |
+| `/gads competitors <customer-id>` | Campaign search impression share |
 | `/gads placements <customer-id>` | Display + YouTube placement audit with safety exclusions |
 | `/gads recommendations <customer-id>` | Google's account recommendations, triaged |
 | `/gads anomalies <customer-id>` | Day-level metric anomaly detector |
 | `/gads bidstrategy <customer-id>` | Per-campaign bid strategy fit |
 | `/gads pacing <customer-id>` | Budget pacing, MTD vs target |
-| `/gads assets <customer-id> rsa\|pmax-assets` | Ad-strength and PMax asset coverage |
-| `/gads brands <customer-id> suggest\|exclude` | PMax brand exclusion management |
+| `/gads assets <customer-id> rsa\|pmax-assets` | RSA strength and PMax asset inventory |
+| `/gads brands <customer-id> suggest` | Brand catalogue lookup; exclusions unavailable |
 | `/gads geos <customer-id> --query NAME [...]` | Resolve names to GeoTargetConstant IDs |
 | `/gads quality <customer-id>` | Per-keyword Quality Score with deficient-component grouping |
 | `/gads demographics <customer-id> age\|gender\|device\|location\|all` | Demographic and geographic outliers |
-| `/gads creative <customer-id> <site-url>` | Generate image assets from the brand's site and attach to PMax or Search |
+| `/gads creative <customer-id> <site-url>` | Draft creative briefs/prompts, upload supplied images and attach |
 | `/gads notify --setup\|--test\|--send TEXT` | Telegram bot setup and manual sends |
 | `/gads history <customer-id>` | Change-event log; list and diff saved audits |
 | `/gads apply <customer-id>` | Write paths: negative keywords and placement exclusions |
-| `/gads create <customer-id>` | Campaign creation wizard, with gates |
-| `/gads audit --all-customers` | Audit every accessible customer in parallel |
+| `/gads create <customer-id>` | Campaign planning; API creation unavailable |
+| `/gads audit --all-customers` | Audit directly accessible customers in parallel |
 
 ## Routing
 
