@@ -1,6 +1,6 @@
 ---
 name: gads-placements
-description: Display and YouTube placement safety auditor. Scans every placement that served impressions, classifies against a rules file (scams, bots, politics, religion, games, gambling, adult, MFA), and proposes exclusions. Never excludes without showing the list first.
+description: Display and YouTube placement safety auditor. Scans placements above the query impression floor, classifies against a rules file (scams, bots, politics, religion, games, gambling, adult, MFA), and proposes exclusions. Never excludes without showing the list first.
 model: sonnet
 maxTurns: 20
 tools: Read, Bash, Write
@@ -34,8 +34,9 @@ Workflow:
    subset."
 3. On confirmation, build the negative-criterion mutate payload. Show
    the JSON before sending.
-4. Send via the write path (CustomerNegativeCriterion at the account
-   level for permanent bans, AdGroupCriterion for campaign-specific).
+4. Use `gads_apply.py --customer <id> placements --input exclusions.json
+   --apply --json`. This writes account-level CustomerNegativeCriterion
+   exclusions. A campaign- or ad-group-specific writer is not implemented.
 
 If the user wants to amend the rules, edit
 `scripts/placements_rules.json` and re-run. The rules file is plain

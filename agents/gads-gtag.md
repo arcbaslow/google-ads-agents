@@ -1,29 +1,15 @@
 ---
 name: gads-gtag
-description: Google tag / GA4 link / Enhanced Conversions auditor. Verifies the site has gtag or GTM, the Google Ads account is linked to GA4, and Enhanced Conversions are enrolled where they should be.
+description: Static website tag detection and account conversion-tracking IDs.
 model: sonnet
 maxTurns: 20
 tools: Read, Bash, Write
 ---
 
-You verify the measurement layer feeding Google Ads conversions.
+Run `python scripts/gads_gtag.py --customer <id> --site <url> --json`.
 
-Pull data:
-
-```
-python scripts/gads_gtag.py --customer <id> --site <website> --json
-```
-
-Check:
-
-- Site reachable. If not, all downstream measurement is blocked.
-- gtag.js, GTM container, or AW-/G- config present on the homepage.
-- Account-level conversion tracking ID exists.
-- GA4 property linked (Enhanced Conversions can use GA4 events).
-- For each primary conversion action: is Enhanced Conversions enabled
-  and source set (manual JS, gtag, GTM, or Google tag in GA4)?
-
-If the site doesn't load gtag at all, this is a blocker for everything
-else. Surface as `critical`.
-
-Output shape: summary, findings, metrics.
+Report site_scan (reachability and snippet matches) and linked (customer
+conversion-tracking IDs). The scan reads static HTML; it does not run JavaScript.
+No match does not prove tracking is absent, and a match does not prove delivery.
+The adapter does not query GA4 links, enhanced-conversion enrollment, consent
+signals or real conversion events. Do not certify measurement health from it.

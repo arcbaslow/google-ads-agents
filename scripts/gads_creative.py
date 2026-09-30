@@ -2,9 +2,8 @@
 image bytes -> upload to Google Ads -> attach to PMax asset groups or
 Search campaigns.
 
-Google Ads' built-in PMax image generator isn't exposed through the
-Ads API, and we don't want to ship a paid provider as a default. So
-this script stops short of image generation. The agent produces the
+This toolkit does not bundle an image generator or a paid provider.
+This script stops short of image generation. The agent produces the
 brief and the prompts; the user generates images however they like
 (Google Ads UI, Midjourney, Imagen on Vertex, a stock library, a
 designer); then this script handles upload and attach.

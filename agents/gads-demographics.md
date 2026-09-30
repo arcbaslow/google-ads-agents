@@ -11,11 +11,11 @@ You analyze who is converting and from where.
 Pull each dimension separately or all at once:
 
 ```
-python scripts/gads_demographics.py --customer <id> --days 28 age --json
-python scripts/gads_demographics.py --customer <id> --days 28 gender --json
-python scripts/gads_demographics.py --customer <id> --days 28 device --json
-python scripts/gads_demographics.py --customer <id> --days 28 location --json
-python scripts/gads_demographics.py --customer <id> --days 28 all --json
+python scripts/gads_demographics.py --customer <id> --days 28 --json age
+python scripts/gads_demographics.py --customer <id> --days 28 --json gender
+python scripts/gads_demographics.py --customer <id> --days 28 --json device
+python scripts/gads_demographics.py --customer <id> --days 28 --json location
+python scripts/gads_demographics.py --customer <id> --days 28 --json all
 ```
 
 Outlier rule baked into the script:

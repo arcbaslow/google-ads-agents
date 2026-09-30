@@ -23,7 +23,7 @@ A Python toolkit for investigating Google Ads accounts and preparing changes for
 | Measurement | Conversion-action health and Google tag checks |
 | Optimization | Search-term mining, negative candidates, recommendations, Quality Score and bid-strategy fit |
 | Delivery | Budget pacing, anomalies, placement classification, demographic and geographic breakdowns |
-| Assets | RSA strength, PMax asset coverage, creative briefs and asset workflows |
+| Assets | RSA strength, PMax linked asset inventory, creative briefs and asset workflows |
 | Account operations | Per-MCC auth profiles, saved audit history and multi-account audits |
 | Reviewed changes | Negatives, placements and creative writes with JSON review, confirmation and validation |
 
@@ -67,6 +67,8 @@ python scripts/gads_report.py --input audit.json --format md --output audit.md
 
 Add `--site https://example.com` to include the website tag check, and `--save-history` to retain a snapshot. The local session expires after 24 hours. For multiple MCCs, add profiles and switch with `--use-profile`. For an OAuth-client fallback, see [setup](docs/SETUP.md).
 
+This checkout still expects a developer-token profile. Google has moved API access to Cloud projects; the onboarding migration and current limitations are recorded in the [roadmap](docs/ROADMAP.md).
+
 ## Example output
 
 ![Google Ads audit rendered from the bundled synthetic example](assets/screenshot.png)
@@ -91,7 +93,7 @@ python scripts/gads_history.py --customer 1234567890 --changes --days 7 --json
 python scripts/gads_audit.py --all-customers --days 28 --save-history --output audits.json
 ```
 
-Use `--help` on an adapter for its complete flags. Read commands normally print a compact summary; `--json` selects machine-readable output.
+Use `--help` on an adapter for its complete flags. Most read commands print a compact summary; `--json` selects machine-readable output. The audit driver always emits JSON.
 
 ### Agent workflow
 
@@ -106,14 +108,14 @@ The [router](skills/gads/SKILL.md) exposes commands such as:
 /gads quality 1234567890
 ```
 
-The repository includes [plugin metadata](.claude-plugin/plugin.json), specialist [agent definitions](agents/) and [skills](skills/). Other runtimes can follow [AGENTS.md](AGENTS.md) and call the same Python adapters. The skill orchestrator performs conversion and tag checks before the wider analysis; the standalone `gads_audit.py` driver collects adapter results.
+The repository includes [plugin metadata](.claude-plugin/plugin.json), specialist [agent definitions](agents/) and [skills](skills/). Other runtimes can follow [AGENTS.md](AGENTS.md) and call the same Python adapters. The audit skill runs the standalone driver, then interprets conversion checks and tag-scan limitations before wider analysis. Raw adapter outputs differ; failed blocks and missing fields are not a clean bill of health.
 
 ### Changes to an account
 
 Negative-keyword, placement and creative write commands print the operation JSON to stderr and require an explicit `y` at a `y/N` prompt. `--apply` validates the same operations before applying them; `--validate-only` stops after validation. The flags are mutually exclusive. EOF or unavailable input cancels the request. Do not pipe an automatic approval into these commands.
 
 ```bash
-# Validate a campaign definition through the API without creating it.
+# Produce a campaign planning draft without calling the API.
 python scripts/gads_creation.py --customer 1234567890 --context-file context.json --json
 
 # Validate proposed negatives without applying them.

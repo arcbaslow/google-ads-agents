@@ -1,4 +1,4 @@
-"""Auction Insights / competitor analysis."""
+"""Campaign search impression-share metrics; no competitor-domain rows."""
 
 from __future__ import annotations
 

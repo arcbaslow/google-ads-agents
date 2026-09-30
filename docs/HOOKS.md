@@ -97,7 +97,7 @@ Claude Code pipes a JSON event to the hook's stdin:
 {
   "tool_name": "Bash",
   "tool_input": {
-    "command": "python scripts/gads_audit.py --customer 123 --json"
+    "command": "python scripts/gads_audit.py --customer 123"
   },
   "tool_response": {
     "output": "{\"customer_id\": \"123\", \"agents\": {...}}"
@@ -117,8 +117,7 @@ and selective:
    `~/.claude/gads-credentials.json` for the `telegram` block (token
    + chat_id). No config → silent exit. This is why wiring the hook
    in before setting up Telegram is safe.
-4. **Format gate** — only valid JSON output is processed. If the
-   audit ran in pretty-print mode, the hook bails. Parsing findings
+4. **Format gate** — only valid JSON output is processed. The audit driver always emits JSON. Parsing findings
    from human-readable text would be unreliable.
 
 ### Multi-account audits
@@ -167,8 +166,8 @@ python scripts/gads_notify.py --test    # sends a hello message
 
 - Doesn't fire on non-audit `gads_*` scripts. Broaden
   `_is_audit_command()` in the hook if you want to cover more.
-- Doesn't fire on pretty-print output. Use `--json` when running an
-  audit you want notifications for.
+- Requires captured JSON on stdout. `gads_audit.py` has no `--json`
+  flag; omit `--output` when the hook should inspect its result.
 - Doesn't send anything below `severity: "critical"`. High / medium /
   low findings stay in the audit report.
 - Doesn't retry or queue. If Telegram returns an error, the hook

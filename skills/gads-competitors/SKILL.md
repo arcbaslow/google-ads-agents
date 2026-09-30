@@ -1,6 +1,6 @@
 ---
 name: gads-competitors
-description: Auction Insights and competitor pressure analysis.
+description: Campaign search impression-share metrics; no competitor domains.
 user-invokable: true
 argument-hint: "<customer-id> [--days N]"
 license: MIT
@@ -8,10 +8,11 @@ metadata:
   version: "0.1.0"
 ---
 
-Routes to the `gads-competitors` subagent. The agent runs:
+Routes to the `gads-competitors` subagent.
 
-```
-python scripts/gads_competitors.py --customer <id> --days <N> --json
-```
+Run `python scripts/gads_competitors.py --customer <id> --days 28 --json`.
 
-Returns the standard `summary / findings / metrics` shape.
+Compare search impression share, top/absolute-top impression share and share
+lost to rank or budget. Output contains customer_id, date_range and rows.
+This query does not return competitor domains, overlap, position-above or
+outranking rates. Do not invent a per-domain Auction Insights table.

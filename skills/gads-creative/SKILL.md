@@ -19,9 +19,8 @@ python scripts/gads_creative.py upload --customer <CID> --image /tmp/hero.png --
 python scripts/gads_creative.py attach --customer <CID> --asset-resource "..." --asset-group-id <AG> --field-type MARKETING_IMAGE --apply --json
 ```
 
-We don't bundle an image generator. Google Ads' free PMax generator
-lives in the UI and isn't on the API; everything else (Imagen,
-Midjourney, DALL-E) is paid and bring-your-own.
+We do not bundle an image generator. Supply images from a tool or designer
+you choose; this adapter handles upload and attachment only.
 
 Search image extensions use the same `attach` subcommand with
 `--campaign-id` and `--field-type AD_IMAGE`.

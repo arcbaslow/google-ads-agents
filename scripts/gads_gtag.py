@@ -1,15 +1,6 @@
-"""Google tag / GA4 link / Floodlight check.
+"""Static HTML tag detection and account conversion-tracking IDs.
 
-Three things are tied together here:
-
-  1. Is a Google tag (gtag.js / GTM) on the site at all? We fetch the
-     homepage and look for the snippet patterns.
-  2. Is the Google Ads account linked to a GA4 property? We check
-     CustomerClient.linked_*  resources.
-  3. Enhanced Conversions for Web enrollment status per conversion action.
-
-This is a coarse first pass — it surfaces obvious misconfigs, not every
-subtle one.
+Does not verify GA4 links, consent, enhanced conversions or event delivery.
 """
 
 from __future__ import annotations
