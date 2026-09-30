@@ -158,3 +158,7 @@ validates first and stops on validation failure. Missing input cancels.
 
 Campaign creation is planning-only. Its draft is not API operation JSON; both
 write flags return `unsupported` without creating a client or budget.
+
+Brand catalogue lookup returns entity IDs, display names, primary URLs and
+catalogue states. Brand exclusion writes are unavailable until shared-list
+management is implemented. No exclusion request is sent.

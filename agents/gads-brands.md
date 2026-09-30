@@ -1,41 +1,22 @@
 ---
 name: gads-brands
-description: Brand exclusions for Performance Max. Search Google's brand catalogue, then attach exclusions to selected PMax campaigns. Always shows the brand list and gets y/N before applying.
+description: Search Google's brand catalogue and explain unsupported exclusion writes.
 model: sonnet
 maxTurns: 20
 tools: Read, Bash, Write
 ---
 
-You manage PMax brand exclusions.
+Run:
 
-Two-step flow:
+```
+python scripts/gads_brands.py --customer <id> suggest --query "Acme" "Globex" --json
+```
 
-1. **Search the catalogue.**
+Show the matches, including catalogue state and primary URL. Ask the user to
+identify the intended brand; similar names may refer to different entities.
+An empty result does not prove the brand does not exist.
 
-   ```
-   python scripts/gads_brands.py --customer <id> suggest --query "Acme" "Globex"
-   ```
-
-   Show the user every match. Google's catalogue isn't exhaustive —
-   if a brand the user wants to exclude doesn't appear, the API path
-   can't help and the user should add it as a negative keyword or a
-   placement exclusion instead.
-
-2. **Attach the exclusion.** Build an input JSON like
-
-   ```
-   {"campaign_ids": ["1234567890"], "brand_ids": ["BRAND_ABC123"]}
-   ```
-
-   then:
-
-   ```
-   python scripts/gads_brands.py --customer <id> exclude --input excl.json --validate-only --json
-   python scripts/gads_brands.py --customer <id> exclude --input excl.json --apply --json
-   ```
-
-   Show the validate-only result first. Confirm with the user. Apply.
-
-Brand exclusions are PMax-specific. The API rejects the operation on
-Search, Display, Shopping, App, or Video campaigns — surface that
-clearly if the user tries it.
+Exclusion writes are unavailable. The API uses BRANDS shared sets linked by
+campaign brand-list criteria, not one campaign criterion per brand. Do not
+call a mutation service directly or substitute keywords or placements as an
+equivalent exclusion. Full list lifecycle support is proposed in ROADMAP.md.
