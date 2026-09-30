@@ -19,7 +19,7 @@ A Python toolkit for investigating Google Ads accounts and preparing changes for
 
 | Area | Included capabilities |
 | --- | --- |
-| Campaigns | Search, Performance Max, App, Display, Shopping and YouTube analysis |
+| Campaigns | Search, Performance Max, App, Display, Demand Gen, Shopping and YouTube analysis |
 | Measurement | Conversion-action health and Google tag checks |
 | Optimization | Search-term mining, negative candidates, recommendations, Quality Score and bid-strategy fit |
 | Delivery | Budget pacing, anomalies, placement classification, demographic and geographic breakdowns |
@@ -86,6 +86,7 @@ Read the [generated report](examples/demo/report.md) or inspect the [input fixtu
 
 ```bash
 python scripts/gads_search.py --customer 1234567890 --days 28 --negative-candidates --json
+python scripts/gads_demandgen.py --customer 1234567890 --days 28 --json
 python scripts/gads_placements.py --customer 1234567890 --days 28 --json
 python scripts/gads_recommendations.py --customer 1234567890 --json
 python scripts/gads_anomalies.py --customer 1234567890 --days 30 --baseline-days 14 --z 2.0 --json
