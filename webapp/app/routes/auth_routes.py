@@ -32,11 +32,11 @@ def list_accessible_customers(settings: Settings, refresh_token: str) -> list[st
         "client_id": settings.google_oauth_client_id,
         "client_secret": settings.google_oauth_client_secret,
     })
-    client = GoogleAdsClient.load_from_dict({
-        "developer_token": settings.google_developer_token,
-        "use_proto_plus": True,
-        "credentials": backend.credentials(),
-    })
+    client = GoogleAdsClient(
+        developer_token=settings.google_developer_token,
+        use_proto_plus=True,
+        credentials=backend.credentials(),
+    )
     svc = client.get_service("CustomerService")
     res = svc.list_accessible_customers()
     return [name.split("/")[-1] for name in res.resource_names]
