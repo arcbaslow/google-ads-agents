@@ -30,3 +30,6 @@ Output: summary line, then a list of recommendations grouped by triage
 bucket. For each, show the projected base→potential delta in
 conversions and cost. Reference the resource_name so the user can apply
 it via the UI or via the Ads API mutate.
+
+Read results expose API field names such as `type`, not Python
+protobuf attribute names such as `type_`. Preserve the returned enum labels.

@@ -16,3 +16,6 @@ python scripts/gads_recommendations.py --customer <id> --json
 
 Returns the standard `summary / findings / metrics` shape with
 recommendation rows grouped by triage bucket.
+
+Read results expose API field names such as `type`, not Python
+protobuf attribute names such as `type_`. Preserve the returned enum labels.

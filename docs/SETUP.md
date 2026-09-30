@@ -207,3 +207,7 @@ applying that filter to other totals would change their scope. See the
 
 Age demographics uses the API's `age_range_view`. Run
 `python scripts/gads_demographics.py --customer <id> --days 28 --json age`.
+
+Read-result JSON preserves snake_case field names and uses the API spelling
+for Python reserved words (`type`, not `type_`). This keeps demographic and
+recommendation enum labels intact.

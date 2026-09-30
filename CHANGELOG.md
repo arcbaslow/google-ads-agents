@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Preserve API field names such as type when serializing Python protobuf responses, so demographic buckets and recommendation types no longer fall back to UNKNOWN.
+
 - Fix the age-demographics query to use age_range_view and check embedded query resources against v25.
 
 - Add read-only Demand Gen campaign totals to the CLI, audit driver and agent routing, with explicit reporting limitations.
