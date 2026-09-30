@@ -204,3 +204,6 @@ Clicks and channel/asset breakdowns are deliberately outside this adapter.
 Google documents a CROSS_NETWORK click-type filter for Demand Gen clicks;
 applying that filter to other totals would change their scope. See the
 [reporting guide](https://developers.google.com/google-ads/api/docs/demand-gen/reporting).
+
+Age demographics uses the API's `age_range_view`. Run
+`python scripts/gads_demographics.py --customer <id> --days 28 --json age`.

@@ -95,3 +95,15 @@ def test_all_combines_all_dimensions(monkeypatch):
     monkeypatch.setattr(gads_demographics.gads_client, "search_stream", lambda c, q: [])
     out = gads_demographics.all_breakdowns("123")
     assert set(out.keys()) == {"customer_id", "age", "gender", "device", "location"}
+
+
+def test_age_read_uses_age_range_view_and_preserves_bucket(monkeypatch):
+    from unittest.mock import Mock
+
+    search = Mock(return_value=[_row("1", "Campaign", "age_range", "AGE_RANGE_25_34")])
+    monkeypatch.setattr(gads_demographics.gads_client, "search_stream", search)
+    result = gads_demographics.by_age("123")
+    query = search.call_args.args[1]
+    assert "FROM age_range_view" in query
+    assert result["buckets"][0]["bucket"] == "AGE_RANGE_25_34"
+

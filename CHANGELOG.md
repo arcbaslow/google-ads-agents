@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Fix the age-demographics query to use age_range_view and check embedded query resources against v25.
+
 - Add read-only Demand Gen campaign totals to the CLI, audit driver and agent routing, with explicit reporting limitations.
 
 - Correct command examples and agent claims about report formats, measurement checks, campaign reads and unsupported write paths.

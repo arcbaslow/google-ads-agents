@@ -30,7 +30,7 @@ AGE_QUERY = """
       metrics.cost_micros,
       metrics.conversions,
       metrics.conversions_value
-    FROM age_view
+    FROM age_range_view
     WHERE segments.date BETWEEN '{start}' AND '{end}'
 """
 
