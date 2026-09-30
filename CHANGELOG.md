@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Preserve bound credential providers across audit account and adapter workers instead of falling back to local credentials.
+
 - Add a sourced maintenance roadmap, deferred proposals and a baseline-to-final verification record.
 
 - Preserve API field names such as type when serializing Python protobuf responses, so demographic buckets and recommendation types no longer fall back to UNKNOWN.

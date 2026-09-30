@@ -17,6 +17,7 @@ import concurrent.futures
 import json
 import sys
 import traceback
+from contextvars import copy_context
 from typing import Any, Callable
 
 import gads_bidstrategy
@@ -77,7 +78,10 @@ def run(customer_id: str, days: int = 28, site: str | None = None,
 
     agents: dict[str, Any] = {}
     with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as pool:
-        future_to_name = {pool.submit(_safe, fn): name for name, fn in work}
+        # Each worker needs its own context; one Context cannot run concurrently.
+        future_to_name = {
+            pool.submit(copy_context().run, _safe, fn): name for name, fn in work
+        }
         for fut in concurrent.futures.as_completed(future_to_name):
             agents[future_to_name[fut]] = fut.result()
 
@@ -116,7 +120,7 @@ def run_many(customer_ids: list[str], days: int, site: str | None,
     results: dict[str, Any] = {}
     with concurrent.futures.ThreadPoolExecutor(max_workers=account_workers) as pool:
         futures = {
-            pool.submit(run, cid, days, site, agent_workers): cid
+            pool.submit(copy_context().run, run, cid, days, site, agent_workers): cid
             for cid in customer_ids
         }
         for fut in concurrent.futures.as_completed(futures):

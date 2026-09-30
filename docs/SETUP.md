@@ -128,6 +128,11 @@ or from inside Claude Code:
 /gads audit <id>
 ```
 
+The audit driver preserves a bound credential provider across account and
+adapter workers. Custom providers must support concurrent reads; copying
+their context does not make a database session safe to share between threads.
+The hosted service does not expose the audit driver.
+
 ## Session expiry
 
 The local session is good for 24 hours from the last
