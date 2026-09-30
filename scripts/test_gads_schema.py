@@ -1,7 +1,9 @@
 """Offline schema checks; these do not prove GAQL field compatibility."""
 
+import ast
 import inspect
 import re
+from pathlib import Path
 
 import gads_assets
 import gads_client
@@ -15,6 +17,11 @@ QUERIES = {
     for name, fn in inspect.getmembers(gads_query, inspect.isfunction)
 }
 QUERIES.update(rsa=gads_assets.RSA_QUERY, pmax_inventory=gads_assets.PMAX_ASSET_QUERY)
+for path in sorted(Path(__file__).parent.glob("gads_*.py")):
+    for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+        if (isinstance(node, ast.Constant) and isinstance(node.value, str)
+                and re.search(r"\bFROM\s+[a-z_]+", node.value)):
+            QUERIES[f"{path.stem}:{node.lineno}"] = node.value
 
 
 @pytest.mark.parametrize("query", QUERIES.values(), ids=QUERIES.keys())

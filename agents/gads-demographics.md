@@ -34,3 +34,6 @@ Don't recommend cuts purely on impressions or CTR — only on
 conversion economics. CTR is misleading on small samples.
 
 Output: summary, findings, per-bucket table per dimension.
+
+The age breakdown reads `age_range_view` and preserves the returned age-range
+buckets. It reports observed performance, not a complete audience inventory.

@@ -13,3 +13,6 @@ Routes to the `gads-demographics` subagent. Runs:
 ```
 python scripts/gads_demographics.py --customer <id> --days <N> --json age|gender|device|location|all
 ```
+
+The age breakdown reads `age_range_view` and preserves the returned age-range
+buckets. It reports observed performance, not a complete audience inventory.
