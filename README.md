@@ -25,7 +25,7 @@ A Python toolkit for investigating Google Ads accounts and preparing changes for
 | Delivery | Budget pacing, anomalies, placement classification, demographic and geographic breakdowns |
 | Assets | RSA strength, PMax asset coverage, creative briefs and asset workflows |
 | Account operations | Per-MCC auth profiles, saved audit history and multi-account audits |
-| Reviewed changes | Campaign creation, negatives and placement exclusions through explicit apply paths |
+| Reviewed changes | Negatives, placements and creative writes with JSON review, confirmation and validation |
 
 ## Installation
 
@@ -114,13 +114,13 @@ Negative-keyword, placement and creative write commands print the operation JSON
 
 ```bash
 # Validate a campaign definition through the API without creating it.
-python scripts/gads_creation.py --customer 1234567890 --context-file context.json --validate-only --json
+python scripts/gads_creation.py --customer 1234567890 --context-file context.json --json
 
 # Validate proposed negatives without applying them.
 python scripts/gads_apply.py --customer 1234567890 negatives --input negatives.json --validate-only --json
 ```
 
-Campaign creation checks the business context, website, measurement setup, goal, budget, bidding and targeting. New campaigns are created paused. Replace `--validate-only` with `--apply` only after reviewing the result.
+Campaign creation currently produces a planning draft from supplied context. It does not verify website reachability or measurement health. Both `--validate-only` and `--apply` are blocked because the former writer omitted bidding and targeting and could leave an orphan budget. A future writer must create campaigns paused.
 
 ### Optional hooks and sign-in service
 

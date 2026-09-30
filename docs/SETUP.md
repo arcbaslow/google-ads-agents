@@ -155,3 +155,6 @@ Negative-keyword, placement and creative writes enforce JSON review and `y/N`
 in the Python adapter. Preview and prompt go to stderr; the result goes to
 stdout. Both validation and application require a human answer. `--apply`
 validates first and stops on validation failure. Missing input cancels.
+
+Campaign creation is planning-only. Its draft is not API operation JSON; both
+write flags return `unsupported` without creating a client or budget.

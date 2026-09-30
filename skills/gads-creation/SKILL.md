@@ -1,6 +1,6 @@
 ---
 name: gads-creation
-description: Campaign creation and management wizard with required context gates (business, website, goal, analytics installed, conversions correct). New campaigns are created PAUSED.
+description: Collect campaign context and produce a planning draft. API creation is unavailable.
 user-invokable: true
 argument-hint: "<customer-id>"
 license: MIT
@@ -8,15 +8,14 @@ metadata:
   version: "0.1.0"
 ---
 
-Routes to the `gads-creation` subagent. The agent collects context one
-field at a time, saves it to `/tmp/gads-ctx-<customer>.json`, runs:
+Routes to the `gads-creation` subagent. Collect context and run:
 
 ```
-python scripts/gads_creation.py --customer <id> --context-file /tmp/gads-ctx-<customer>.json --json
+python scripts/gads_creation.py --customer <id> --context-file context.json --json
 ```
 
-If `blocked`, the agent surfaces the missing/invalid fields and works
-through them with the user. If `ready`, it shows the proposed mutate
-JSON and waits for `y/N` before sending.
-
-All new campaigns are created `PAUSED`. The user must unpause manually.
+`blocked` lists missing or invalid context. `planning_only` contains a
+`campaign_plan`, not executable API operations. It does not prove the site or
+measurement works. `--apply` and `--validate-only` return `unsupported` before
+API access. Do not substitute a direct API call. A future writer must preserve
+the reviewed settings and create the campaign PAUSED.
