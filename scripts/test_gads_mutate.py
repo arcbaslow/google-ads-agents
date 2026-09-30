@@ -108,5 +108,3 @@ def test_conflicting_modes_rejected_before_io(module, args, monkeypatch):
     with pytest.raises(SystemExit) as exc:
         module.main()
     assert exc.value.code == 2
-
-
