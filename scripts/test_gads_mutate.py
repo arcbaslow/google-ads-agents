@@ -14,7 +14,7 @@ from google.ads.googleads.client import GoogleAdsClient
 from google.auth.credentials import AnonymousCredentials
 
 
-@pytest.fixture(params=["negatives", "placements", "upload", "pmax"])
+@pytest.fixture(params=["negatives", "placements", "upload", "pmax", "search"])
 def writer(request, monkeypatch, tmp_path):
     types = GoogleAdsClient(credentials=AnonymousCredentials(), developer_token="test",
                            use_proto_plus=True)
@@ -45,7 +45,7 @@ def writer(request, monkeypatch, tmp_path):
         mutation = service.mutate_asset_group_assets
     else:
         call = partial(gads_creative.attach_to_search_campaign,
-            "123", "9", asset, "IMAGE")
+            "123", "9", asset, "AD_IMAGE")
         mutation = service.mutate_campaign_assets
     mutation.return_value = SimpleNamespace(results=[SimpleNamespace(resource_name=asset)])
     return call, mutation

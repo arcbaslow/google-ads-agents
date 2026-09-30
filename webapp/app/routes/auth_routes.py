@@ -25,6 +25,7 @@ def list_accessible_customers(settings: Settings, refresh_token: str) -> list[st
     """Resolve the customer IDs the granted identity can access. Network call;
     mocked in tests. Implemented via the toolkit's client."""
     import gads_authflow
+    from gads_client import API_VERSION
     from google.ads.googleads.client import GoogleAdsClient
 
     backend = gads_authflow.OAuthClientBackend({
@@ -35,6 +36,7 @@ def list_accessible_customers(settings: Settings, refresh_token: str) -> list[st
     client = GoogleAdsClient(
         developer_token=settings.google_developer_token,
         use_proto_plus=True,
+        version=API_VERSION,
         credentials=backend.credentials(),
     )
     svc = client.get_service("CustomerService")

@@ -50,6 +50,7 @@ def test_build_client_uses_active_provider(monkeypatch):
     assert captured["credentials"] == "CREDS"
     assert captured["login_customer_id"] == "1234567890"
     assert captured["use_proto_plus"] is True
+    assert captured["version"] == "v25"
 
 
 def test_build_client_omits_login_customer_id_when_unset(monkeypatch):

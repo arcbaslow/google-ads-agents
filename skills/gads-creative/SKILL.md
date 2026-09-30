@@ -24,7 +24,7 @@ lives in the UI and isn't on the API; everything else (Imagen,
 Midjourney, DALL-E) is paid and bring-your-own.
 
 Search image extensions use the same `attach` subcommand with
-`--campaign-id` and `--field-type IMAGE`.
+`--campaign-id` and `--field-type AD_IMAGE`.
 
 The supported write adapters display the exact operation JSON and prompt for
 `y/N` in Python, including for validation. `--apply` validates before sending

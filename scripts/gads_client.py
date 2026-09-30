@@ -11,6 +11,8 @@ from __future__ import annotations
 
 from typing import Any
 
+API_VERSION = "v25"
+
 
 def build_client():
     """Return a configured GoogleAdsClient for the active credential provider."""
@@ -25,6 +27,7 @@ def build_client():
         "credentials": provider.get_credentials(),
         "developer_token": provider.get_developer_token(),
         "use_proto_plus": True,
+        "version": API_VERSION,
     }
     if login:
         kwargs["login_customer_id"] = login

@@ -53,36 +53,39 @@ def test_rsa_weak_with_zero_impressions_skipped(monkeypatch):
     assert out["findings"] == []
 
 
-def _pmax_row(ag_id, ag_name, field_type, label="GOOD"):
-    return {
-        "asset_group": {"id": ag_id, "name": ag_name},
-        "asset_group_asset": {
-            "asset": f"asset/{field_type}",
-            "field_type": field_type,
-            "performance_label": label,
-            "status": "ENABLED",
-        },
-    }
+def test_pmax_inventory_uses_real_fields_without_performance_conclusions(monkeypatch):
+    from google.ads.googleads.client import GoogleAdsClient
+    from google.auth.credentials import AnonymousCredentials
+
+    types = GoogleAdsClient(credentials=AnonymousCredentials(), developer_token="test",
+                           use_proto_plus=True, version="v25")
+    rows = []
+    for status in ["ENABLED", "PAUSED"]:
+        row = types.get_type("GoogleAdsRow")
+        row.asset_group.id = 1
+        row.asset_group.name = "Group"
+        row.asset_group_asset.asset = "customers/123/assets/7"
+        row.asset_group_asset.field_type = types.enums.AssetFieldTypeEnum.HEADLINE
+        row.asset_group_asset.status = getattr(types.enums.AssetLinkStatusEnum, status)
+        rows.append(gads_assets.gads_client._row_to_dict(row))
+    queries = []
+
+    def search(customer, query):
+        queries.append(query)
+        return rows
+
+    monkeypatch.setattr(gads_assets.gads_client, "search_stream", search)
+    result = gads_assets.pmax_assets("123")
+    assert "performance_label" not in queries[0]
+    assert "PERFORMANCE_MAX" in queries[0]
+    assert result["asset_groups"][0]["by_field_type"] == {
+        "HEADLINE": {"total": 2, "by_status": {"ENABLED": 1, "PAUSED": 1}}}
+    assert result["findings"] == []  # missing logos/video is not proof of a gap
+    assert result["limitations"]
 
 
-def test_pmax_full_coverage_no_findings(monkeypatch):
-    rows = [_pmax_row("1", "AG", t) for t in gads_assets.REQUIRED_PMAX_TYPES]
-    monkeypatch.setattr(gads_assets.gads_client, "search_stream", lambda c, q: rows)
-    out = gads_assets.pmax_assets("123")
-    assert out["findings"] == []
-
-
-def test_pmax_missing_types_flagged(monkeypatch):
-    rows = [_pmax_row("1", "AG", "HEADLINE")]
-    monkeypatch.setattr(gads_assets.gads_client, "search_stream", lambda c, q: rows)
-    out = gads_assets.pmax_assets("123")
-    msgs = [f["message"] for f in out["findings"] if f["code"] == "pmax_asset_coverage_gap"]
-    assert msgs and "VIDEO" in msgs[0]
-
-
-def test_pmax_low_assets_flagged(monkeypatch):
-    rows = [_pmax_row("1", "AG", t, "GOOD") for t in gads_assets.REQUIRED_PMAX_TYPES]
-    rows.append(_pmax_row("1", "AG", "HEADLINE", "LOW"))
-    monkeypatch.setattr(gads_assets.gads_client, "search_stream", lambda c, q: rows)
-    out = gads_assets.pmax_assets("123")
-    assert any(f["code"] == "pmax_low_assets_serving" for f in out["findings"])
+def test_pmax_empty_inventory_is_not_a_clean_bill_of_health(monkeypatch):
+    monkeypatch.setattr(gads_assets.gads_client, "search_stream", lambda c, q: [])
+    result = gads_assets.pmax_assets("123")
+    assert result["asset_groups"] == []
+    assert result["limitations"]

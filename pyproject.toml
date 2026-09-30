@@ -24,7 +24,7 @@ classifiers = [
     "Topic :: Office/Business :: Financial",
 ]
 dependencies = [
-    "google-ads>=25.0.0",
+    "google-ads>=33.0.0,<34.0.0",
     "google-auth>=2.30.0",
     "google-auth-oauthlib>=1.2.0",
 ]
