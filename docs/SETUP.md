@@ -218,6 +218,20 @@ applying that filter to other totals would change their scope. See the
 Age demographics uses the API's `age_range_view`. Run
 `python scripts/gads_demographics.py --customer <id> --days 28 --json age`.
 
+## Keyword research locales
+
+`gads_keywords.py` accepts languages `en`, `es`, `de`, `fr` and countries
+`US`, `GB`, `CA`, `AU`. Input is trimmed and case-insensitive. Omitting the
+options still selects English and the US. Any other code, numeric ID or
+resource name is rejected before client construction; unsupported input no
+longer silently selects English or the US. Python callers receive ValueError;
+the CLI reports the supported choices and exits with status 2.
+
+These are adapter limits, not the full set of Google Ads locales. The
+[keyword request reference](https://developers.google.com/google-ads/api/reference/rpc/v25/GenerateKeywordIdeasRequest)
+defines language and geography as resource names. Supporting additional
+markets needs explicit constant resolution rather than a fallback.
+
 Read-result JSON preserves snake_case field names and uses the API spelling
 for Python reserved words (`type`, not `type_`). This keeps demographic and
 recommendation enum labels intact.

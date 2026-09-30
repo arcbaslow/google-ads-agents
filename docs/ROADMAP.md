@@ -254,11 +254,28 @@ See VERIFICATION.md for checks and commit records.
 - Effort: small. Risk: low; tenant ownership checks and database failure
   handling are unchanged. Atomic OAuth state consumption remains below.
 
+### Reject unsupported keyword locales
+
+- Completed `scripts/gads_keywords.py` locale validation before client
+  construction. The existing four languages and four countries remain
+  supported, case-insensitively; unsupported codes now raise a clear error
+  instead of silently requesting US/English data for a different market.
+- Evidence: `scripts/test_gads_keywords.py` reproduces the fallback and checks
+  CLI rejection, normalized output, empty results and real v25 message shapes.
+  Request fields were checked against the official
+  [v25 request reference](https://developers.google.com/google-ads/api/reference/rpc/v25/GenerateKeywordIdeasRequest);
+  language IDs match the [language table](https://developers.google.com/google-ads/api/data/codes-formats#languages).
+- Effort: small. Risk: low; callers relying on undocumented fallback now fail
+  explicitly. Numeric IDs and regional language codes remain unsupported.
+  General constant discovery was considered and deferred: it needs a separate
+  input contract and targetability checks against
+  [geo target data](https://developers.google.com/google-ads/api/data/geotargets).
+
 ## Next
 
 | Item | Account benefit and evidence | Effort | Risk / reason not built now |
 | --- | --- | --- | --- |
-| Expand adapter tests and structured read errors | Prevent silent audit omissions; the baseline coverage gaps above include the audit dispatcher itself. Test empty results, permissions, removed resources and malformed responses. | 3–5 days | Medium; needs adapter-specific expected behavior, beyond a single small repair. |
+| Expand adapter tests and structured read errors | Prevent silent audit omissions. Follow-up tests now cover audit provider propagation and keyword locale behavior; other baseline gaps remain. Test permissions, removed resources and malformed responses per adapter. | 3–5 days | Medium; needs adapter-specific expected behavior, beyond a single small repair. |
 | Review Cloud project access and onboarding | Let newly approved projects connect without an obsolete token requirement. `gads_auth.py`, `gads_provider.py`, web settings and SETUP assume a token. [Migration guide](https://developers.google.com/google-ads/api/docs/api-policy/developer-token). | 2–4 days | High; changes both credential models and onboarding; preserve the 24-hour gate. |
 | Build an atomic, channel-specific campaign writer | Apply exactly the reviewed budget, bidding, targeting and declaration with temporary resource names in one validated batch. [Mutating resources](https://developers.google.com/google-ads/api/docs/mutating/overview), N2. | 5–10 days | High; broad channel creation is not a small feature. Search language retirement and political declarations need explicit design. |
 | Implement brand shared-list lifecycle | Exclude the intended brands without duplicate lists or unintended campaign scope. [Shared sets](https://developers.google.com/google-ads/api/docs/targeting/shared-sets), N3. | 2–4 days | High; needs list ownership, reuse, idempotency and campaign compatibility rules. |
@@ -269,7 +286,6 @@ See VERIFICATION.md for checks and commit records.
 | Preserve nested and per-entity findings | `scripts/gads_demographics.py:180` nests findings, while `scripts/gads_report.py:76` inspects top-level findings; `scripts/gads_history.py:127` keys diffs by agent/code, collapsing distinct entities. | 1–2 days | Medium; choose a stable finding identity and output migration first. |
 | Consume hosted OAuth state atomically | State consumption is read-then-delete; concurrent callbacks need atomic database handling. `webapp/app/routes/signin_routes.py:80`, `webapp/app/routes/auth_routes.py:75`. Disconnect cleanup is completed above. | 1–2 days | High; database concurrency needs explicit tests beyond browser-state binding. |
 | Sanitise broader error output | `scripts/gads_audit.py:99` returns raw exception text and a traceback. Provider details may enter reports; no secret disclosure was observed. | 1–2 days | Medium; define useful redacted diagnostics across adapters and distinguish retryable failures from reconnect requirements. |
-| Validate keyword locale choices | `scripts/gads_keywords.py:18` silently substitutes US/English for unsupported codes. Reject unknown codes or resolve constants explicitly so forecasts match the intended market. | 1 day | Medium; clarify supported input forms before changing existing callers. |
 
 ## Later
 

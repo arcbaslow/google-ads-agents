@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Reject unsupported keyword research locales before API access, accept case-insensitive supported codes and report the actual requested market.
+
 - Clear hosted credentials on disconnect even when the stored token cannot be decrypted; report remote revocation as unconfirmed.
 
 - Preserve bound credential providers across audit account and adapter workers instead of falling back to local credentials.
