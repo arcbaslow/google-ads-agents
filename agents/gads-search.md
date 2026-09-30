@@ -38,3 +38,8 @@ directly. Use this shape:
   "metrics": {...}
 }
 ```
+
+The supported write adapters display the exact operation JSON and prompt for
+`y/N` in Python, including for validation. `--apply` validates before sending
+the same operations. Let the operator review and answer the prompt; do not
+pipe approval or substitute a direct API call. stdout remains the JSON result.

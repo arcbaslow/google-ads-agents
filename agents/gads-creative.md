@@ -131,3 +131,8 @@ Markdown progress notes between steps. Each generated image's path
 should be quoted exactly so the user can copy-open it. Final summary:
 list every uploaded asset's resource name, which campaign or asset
 group it was attached to, and the field type.
+
+The supported write adapters display the exact operation JSON and prompt for
+`y/N` in Python, including for validation. `--apply` validates before sending
+the same operations. Let the operator review and answer the prompt; do not
+pipe approval or substitute a direct API call. stdout remains the JSON result.

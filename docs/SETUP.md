@@ -148,3 +148,10 @@ script refuses to run and prints the gcloud command. Re-sign-in and the
   use a test account.
 - **`USER_PERMISSION_DENIED`** — the signed-in Google account doesn't
   have access to that Ads customer ID. Check via `--customers`.
+
+## Reviewing writes
+
+Negative-keyword, placement and creative writes enforce JSON review and `y/N`
+in the Python adapter. Preview and prompt go to stderr; the result goes to
+stdout. Both validation and application require a human answer. `--apply`
+validates first and stops on validation failure. Missing input cancels.
