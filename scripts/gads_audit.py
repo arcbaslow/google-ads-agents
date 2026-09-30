@@ -23,6 +23,7 @@ import gads_bidstrategy
 import gads_client
 import gads_competitors
 import gads_conversions
+import gads_demandgen
 import gads_demographics
 import gads_display
 import gads_gtag
@@ -46,6 +47,7 @@ DEFAULT_AGENTS: list[tuple[str, Callable[..., Any]]] = [
     ("gads-pmax",           lambda cid, days: gads_pmax.asset_groups(cid, days)),
     ("gads-uac",            lambda cid, days: gads_uac.app_campaigns(cid, days)),
     ("gads-display",        lambda cid, days: gads_display.display_campaigns(cid, days)),
+    ("gads-demandgen",      lambda cid, days: gads_demandgen.demand_gen_campaigns(cid, days)),
     ("gads-shopping",       lambda cid, days: gads_shopping.shopping_campaigns(cid, days)),
     ("gads-youtube",        lambda cid, days: gads_youtube.youtube_campaigns(cid, days)),
     ("gads-competitors",    lambda cid, days: gads_competitors.auction_insights(cid, days)),

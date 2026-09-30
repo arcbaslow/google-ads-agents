@@ -191,3 +191,16 @@ PMax asset output is an inventory of non-removed group links, grouped by type
 and status. It does not include campaign branding, groups without links,
 performance labels or required-coverage findings. A link status is not proof
 that an asset is serving. See ROADMAP.md for reporting proposals and sources.
+
+## Demand Gen reads
+
+Use `python scripts/gads_demandgen.py --customer <id> --days 28 --json` or
+`/gads demandgen <id>`. The audit driver includes the same read. It returns
+campaign status, bidding type, impressions, cost_micros, conversions and
+conversion value. It excludes removed campaigns and uses a date range ending
+yesterday. Zero-activity campaigns may be absent from a metrics query.
+
+Clicks and channel/asset breakdowns are deliberately outside this adapter.
+Google documents a CROSS_NETWORK click-type filter for Demand Gen clicks;
+applying that filter to other totals would change their scope. See the
+[reporting guide](https://developers.google.com/google-ads/api/docs/demand-gen/reporting).

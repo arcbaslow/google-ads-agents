@@ -1,6 +1,6 @@
 ---
 name: gads
-description: "Google Ads multi-agent toolkit. Audits, campaign-type analysis (Search, Performance Max, App, Display, Shopping, YouTube), conversion-action checks and static Google tag detection, keyword research, auction insights, placement safety with built-in scam/bot/politics/religion/games/adult exclusions, and campaign planning. End-user Google SSO via gcloud, 24h session cap. Triggers on: google ads, adwords, search campaign, performance max, pmax, uac, app campaign, display campaign, shopping campaign, youtube ads, video campaign, auction insights, keyword research, conversion tracking, gtag, ga4 link."
+description: "Google Ads multi-agent toolkit. Audits, campaign-type analysis (Search, Performance Max, App, Display, Demand Gen, Shopping, YouTube), conversion-action checks and static Google tag detection, keyword research, auction insights, placement safety with built-in scam/bot/politics/religion/games/adult exclusions, and campaign planning. End-user Google SSO via gcloud, 24h session cap. Triggers on: google ads, adwords, search campaign, performance max, pmax, uac, app campaign, display campaign, shopping campaign, youtube ads, video campaign, auction insights, keyword research, conversion tracking, gtag, ga4 link."
 user-invokable: true
 argument-hint: "[command] [customer-id] [options]"
 license: MIT
@@ -24,6 +24,7 @@ Top-level entry point. `/gads <command> <args>`.
 | `/gads pmax <customer-id>` | Performance Max |
 | `/gads uac <customer-id>` | App campaigns |
 | `/gads display <customer-id>` | Display |
+| `/gads demandgen <customer-id>` | Demand Gen campaign totals |
 | `/gads shopping <customer-id>` | Shopping |
 | `/gads youtube <customer-id>` | YouTube / Video |
 | `/gads conversions <customer-id>` | Conversion tracking |
@@ -56,6 +57,7 @@ Top-level entry point. `/gads <command> <args>`.
 | `pmax <id>` | gads-pmax |
 | `uac <id>` or `app <id>` | gads-uac |
 | `display <id>` | gads-display |
+| `demandgen <id>` or `demand-gen <id>` | gads-demandgen |
 | `shopping <id>` | gads-shopping |
 | `youtube <id>` or `video <id>` | gads-youtube |
 | `conversions <id>` | gads-conversions |

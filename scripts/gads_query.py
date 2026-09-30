@@ -101,6 +101,24 @@ def display_campaigns(start: str, end: str) -> str:
     """
 
 
+def demand_gen_campaigns(start: str, end: str) -> str:
+    return f"""
+        SELECT
+          campaign.id,
+          campaign.name,
+          campaign.status,
+          campaign.bidding_strategy_type,
+          metrics.impressions,
+          metrics.cost_micros,
+          metrics.conversions,
+          metrics.conversions_value
+        FROM campaign
+        WHERE campaign.advertising_channel_type = 'DEMAND_GEN'
+          AND campaign.status != 'REMOVED'
+          AND segments.date BETWEEN '{start}' AND '{end}'
+    """
+
+
 def shopping_campaigns(start: str, end: str) -> str:
     return f"""
         SELECT
