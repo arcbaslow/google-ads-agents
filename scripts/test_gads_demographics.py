@@ -106,4 +106,3 @@ def test_age_read_uses_age_range_view_and_preserves_bucket(monkeypatch):
     query = search.call_args.args[1]
     assert "FROM age_range_view" in query
     assert result["buckets"][0]["bucket"] == "AGE_RANGE_25_34"
-
