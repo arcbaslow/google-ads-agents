@@ -169,3 +169,7 @@ The optional hosted service constructs its Ads client from the connected
 user's refreshed in-memory credentials. It lists directly accessible customer
 IDs after OAuth consent; this is not a recursive manager-account expansion.
 If listing fails, the callback retains the connection and returns a warning.
+
+A permanent OAuth refresh failure on the hosted account summary returns HTTP
+409 with `reconnect required`. Reconnect through OAuth consent. Retryable
+refresh failures are not classified as revoked grants.
