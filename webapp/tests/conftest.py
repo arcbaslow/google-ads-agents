@@ -49,7 +49,7 @@ def make_api():
         app = create_app()
         app.dependency_overrides[get_settings] = lambda: settings
         app.dependency_overrides[get_session] = override_session
-        return TestClient(app), Session, settings
+        return TestClient(app, base_url="https://testserver"), Session, settings
 
     return make
 

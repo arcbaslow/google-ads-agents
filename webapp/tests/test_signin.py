@@ -44,6 +44,13 @@ def test_signin_start_redirects_with_signin_state(api):
         row = s.query(OAuthState).one()
         assert row.purpose == "signin"
         assert row.user_id is None
+        assert r.cookies.get("gads_signin_state") == row.state
+    cookie = r.headers["set-cookie"].lower()
+    assert "httponly" in cookie
+    assert "secure" in cookie
+    assert "samesite=lax" in cookie
+    assert "max-age=600" in cookie
+    assert "path=/auth/google" in cookie
 
 
 def _start_signin(client, Session):
@@ -72,6 +79,7 @@ def test_signin_callback_sets_cookie_and_creates_user(api, monkeypatch):
     assert r.cookies.get("gads_session")
     assert "httponly" in r.headers["set-cookie"].lower()
     assert r.json()["user"]["email"] == "dilshat@goodlabs.kz"
+    assert client.cookies.get("gads_signin_state") is None
 
     with Session() as s:
         user = s.query(User).one()
@@ -216,3 +224,48 @@ def test_get_ignores_origin(api):
     client, _, _ = api
     r = client.get("/me", headers={"Origin": "https://evil.example"})
     assert r.status_code == 401   # auth failure, not a csrf rejection
+
+
+def test_callback_cannot_finish_in_another_browser(api, monkeypatch):
+    from unittest.mock import Mock
+
+    from fastapi.testclient import TestClient
+
+    client, Session, _ = api
+    state = _start_signin(client, Session)
+    exchange = Mock(side_effect=AssertionError("must not exchange code"))
+    monkeypatch.setattr(oauth_mod, "exchange_code", exchange)
+    other = TestClient(client.app, base_url="https://testserver")
+    response = other.get(f"/auth/google/callback?state={state}&code=c")
+    assert response.status_code == 400
+    exchange.assert_not_called()
+    with Session() as db:
+        assert db.get(OAuthState, state) is not None  # other browser cannot consume it
+        assert db.query(UserSession).count() == 0
+
+
+def test_new_signin_cookie_rejects_previous_flow(api, monkeypatch):
+    from unittest.mock import Mock
+
+    client, Session, _ = api
+    state = _start_signin(client, Session)
+    client.get("/auth/google/start", follow_redirects=False)
+    exchange = Mock(side_effect=AssertionError("must not exchange code"))
+    monkeypatch.setattr(oauth_mod, "exchange_code", exchange)
+    assert client.get(f"/auth/google/callback?state={state}&code=c").status_code == 400
+    exchange.assert_not_called()
+
+
+def test_bound_but_expired_state_is_rejected(api, monkeypatch):
+    from datetime import datetime, timedelta, timezone
+    from unittest.mock import Mock
+
+    client, Session, _ = api
+    state = _start_signin(client, Session)
+    with Session() as db:
+        db.get(OAuthState, state).expires_at = datetime.now(timezone.utc) - timedelta(seconds=1)
+        db.commit()
+    exchange = Mock(side_effect=AssertionError("must not exchange code"))
+    monkeypatch.setattr(oauth_mod, "exchange_code", exchange)
+    assert client.get(f"/auth/google/callback?state={state}&code=c").status_code == 400
+    exchange.assert_not_called()

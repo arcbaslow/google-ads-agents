@@ -173,3 +173,8 @@ If listing fails, the callback retains the connection and returns a warning.
 A permanent OAuth refresh failure on the hosted account summary returns HTTP
 409 with `reconnect required`. Reconnect through OAuth consent. Retryable
 refresh failures are not classified as revoked grants.
+
+Hosted sign-in must start and finish in the same browser. A short-lived
+HttpOnly SameSite=Lax cookie binds the callback to that browser; production
+uses Secure cookies and therefore requires HTTPS. Starting another sign-in
+flow replaces the previous cookie. Restart sign-in if a flow expires.

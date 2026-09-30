@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Bind hosted sign-in callbacks to the initiating browser with a short-lived HttpOnly state cookie.
+
 - Return reconnect-required status for permanent hosted OAuth refresh failures without exposing provider diagnostics.
 
 - Fix hosted account discovery by passing refreshed in-memory credentials to the Google Ads client constructor.
