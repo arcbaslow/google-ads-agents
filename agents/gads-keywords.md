@@ -14,6 +14,11 @@ Pull data:
 python scripts/gads_keywords.py --customer <id> --seeds <s1> <s2> ... --language en --geo US --json
 ```
 
+The adapter supports languages `en`, `es`, `de`, `fr` and countries `US`,
+`GB`, `CA`, `AU`. Codes are case-insensitive. Unknown codes, numeric IDs and
+regional language codes are rejected before API access. Do not substitute
+another market when the requested locale is unsupported.
+
 For each request:
 
 1. Confirm geo, language, and seed list with the user before running.

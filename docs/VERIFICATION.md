@@ -145,6 +145,7 @@ and 62 web tests. All three required checks pass before each follow-up commit.
 | --- | --- | --- | --- |
 | Preserve bound providers across both audit worker pools | Pass | 277 | 62 |
 | Clear unreadable tokens during hosted disconnect | Pass | 277 | 65 |
+| Reject unsupported keyword research locales | Pass | 292 | 65 |
 
 The provider regression tests failed before the fix: worker threads resolved
 the default file provider. They now pass with two concurrent callers, each
@@ -154,3 +155,8 @@ mock providers, not the thread safety of a shared database session.
 Disconnect regression tests failed before the fix for corrupt ciphertext,
 an unavailable key version and invalid plaintext encoding. They now verify
 local cleanup and repeat disconnection without calling Google revocation.
+
+Keyword tests reproduced silent locale substitution before the fix. They
+cover invalid codes before client construction, supported constant mappings,
+case normalization, empty results and real v25 response messages with mocked
+services. No live keyword request was made.
