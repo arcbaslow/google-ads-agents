@@ -162,3 +162,10 @@ write flags return `unsupported` without creating a client or budget.
 Brand catalogue lookup returns entity IDs, display names, primary URLs and
 catalogue states. Brand exclusion writes are unavailable until shared-list
 management is implemented. No exclusion request is sent.
+
+## Hosted account discovery
+
+The optional hosted service constructs its Ads client from the connected
+user's refreshed in-memory credentials. It lists directly accessible customer
+IDs after OAuth consent; this is not a recursive manager-account expansion.
+If listing fails, the callback retains the connection and returns a warning.

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Fix hosted account discovery by passing refreshed in-memory credentials to the Google Ads client constructor.
+
 - Report the actual brand catalogue state and block the invalid direct-brand exclusion writer.
 
 - Block incomplete campaign creation before any API access; keep a clearly labelled planning draft.
