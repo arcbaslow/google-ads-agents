@@ -345,3 +345,20 @@ def test_connect_callback_rejects_signin_state(monkeypatch):
 
     r = client.get("/oauth/google/callback?code=c&state=S1", follow_redirects=False)
     assert r.status_code == 400
+
+
+def test_summary_returns_reconnect_for_revoked_refresh_token(monkeypatch):
+    import gads_authflow
+    from google.auth.exceptions import RefreshError
+
+    client, Session, settings = _client()
+    conn_id = _seed_connection(Session, settings)
+    _signin(client, Session, settings)
+
+    def revoked(self):
+        raise RefreshError("invalid_grant: private provider diagnostic")
+
+    monkeypatch.setattr(gads_authflow.OAuthClientBackend, "credentials", revoked)
+    response = client.get(f"/accounts/{conn_id}/summary")
+    assert response.status_code == 409
+    assert response.json() == {"detail": "reconnect required"}

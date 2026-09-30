@@ -62,3 +62,25 @@ def test_get_credentials_builds_backend(session, settings, conn, monkeypatch):
     assert p.get_credentials() == "REFRESHED"
     assert captured["record"]["refresh_token"] == "rtok"
     assert captured["record"]["client_id"] == settings.google_oauth_client_id
+
+
+@pytest.mark.parametrize("retryable", [False, True])
+def test_refresh_failure_requires_reconnect_only_when_permanent(
+        session, settings, conn, monkeypatch, retryable):
+    import gads_authflow
+    from google.auth.exceptions import RefreshError
+
+    store = DbTokenStore(session, Crypto(settings.fernet_keys), settings)
+    store.set(conn.id, {"refresh_token": "rtok"})
+
+    def fail_refresh(self):
+        raise RefreshError("provider diagnostic with sensitive text", retryable=retryable)
+
+    monkeypatch.setattr(gads_authflow.OAuthClientBackend, "credentials", fail_refresh)
+    provider = WebCredentialProvider(store, settings, conn)
+    expected = RefreshError if retryable else ConnectionAuthError
+    with pytest.raises(expected) as exc:
+        provider.get_credentials()
+    if not retryable:
+        assert "sensitive text" not in str(exc.value)
+        assert "reconnect required" in str(exc.value)

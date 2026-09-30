@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Return reconnect-required status for permanent hosted OAuth refresh failures without exposing provider diagnostics.
+
 - Fix hosted account discovery by passing refreshed in-memory credentials to the Google Ads client constructor.
 
 - Report the actual brand catalogue state and block the invalid direct-brand exclusion writer.

@@ -25,13 +25,20 @@ class WebCredentialProvider:
 
     def get_credentials(self) -> Any:
         import gads_authflow
+        from google.auth.exceptions import RefreshError
 
         record = self._store.get(self._connection.id)
         if not record:
             raise ConnectionAuthError(
                 f"connection {self._connection.id} has no stored refresh token"
             )
-        return gads_authflow.OAuthClientBackend(record).credentials()
+        try:
+            return gads_authflow.OAuthClientBackend(record).credentials()
+        except RefreshError as exc:
+            # Transient refresh failures are not evidence of a revoked grant.
+            if exc.retryable:
+                raise
+            raise ConnectionAuthError("Google authorization expired; reconnect required") from None
 
     def get_developer_token(self) -> str:
         return self._settings.google_developer_token
