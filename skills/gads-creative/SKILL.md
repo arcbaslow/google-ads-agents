@@ -25,3 +25,8 @@ Midjourney, DALL-E) is paid and bring-your-own.
 
 Search image extensions use the same `attach` subcommand with
 `--campaign-id` and `--field-type IMAGE`.
+
+The supported write adapters display the exact operation JSON and prompt for
+`y/N` in Python, including for validation. `--apply` validates before sending
+the same operations. Let the operator review and answer the prompt; do not
+pipe approval or substitute a direct API call. stdout remains the JSON result.

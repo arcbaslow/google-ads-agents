@@ -110,7 +110,7 @@ The repository includes [plugin metadata](.claude-plugin/plugin.json), specialis
 
 ### Changes to an account
 
-Review the proposed operation before using a write command. The agent workflow asks for confirmation; the Python CLI treats `--apply` as authorization and does **not** add an interactive confirmation prompt.
+Negative-keyword, placement and creative write commands print the operation JSON to stderr and require an explicit `y` at a `y/N` prompt. `--apply` validates the same operations before applying them; `--validate-only` stops after validation. The flags are mutually exclusive. EOF or unavailable input cancels the request. Do not pipe an automatic approval into these commands.
 
 ```bash
 # Validate a campaign definition through the API without creating it.

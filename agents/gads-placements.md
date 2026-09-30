@@ -45,3 +45,8 @@ Never auto-exclude without the explicit confirmation step.
 
 Output shape: summary, `to_exclude` grouped by category, totals, and a
 ready-to-mutate JSON proposal when the user approves.
+
+The supported write adapters display the exact operation JSON and prompt for
+`y/N` in Python, including for validation. `--apply` validates before sending
+the same operations. Let the operator review and answer the prompt; do not
+pipe approval or substitute a direct API call. stdout remains the JSON result.

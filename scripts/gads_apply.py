@@ -21,6 +21,7 @@ import json
 import sys
 
 import gads_utils
+from gads_mutate import reviewed_mutate
 
 # ---------- input shapes ----------
 #
@@ -59,7 +60,8 @@ def apply_negatives(customer_id: str, payload: dict, validate_only: bool) -> dic
         crit.keyword.match_type = getattr(client.enums.KeywordMatchTypeEnum, match_type)
         operations.append(op)
 
-    resp = svc.mutate_campaign_criteria(
+    resp = reviewed_mutate(
+        svc.mutate_campaign_criteria,
         customer_id=customer_id,
         operations=operations,
         validate_only=validate_only,
@@ -98,7 +100,8 @@ def apply_placement_exclusions(customer_id: str, payload: dict, validate_only: b
             crit.placement.url = url
         operations.append(op)
 
-    resp = svc.mutate_customer_negative_criteria(
+    resp = reviewed_mutate(
+        svc.mutate_customer_negative_criteria,
         customer_id=customer_id,
         operations=operations,
         validate_only=validate_only,
@@ -124,8 +127,9 @@ def main() -> int:
                      help="JSON as produced by gads_placements.scan --to_exclude")
 
     for s in (neg, pla):
-        s.add_argument("--validate-only", action="store_true")
-        s.add_argument("--apply", action="store_true")
+        mode = s.add_mutually_exclusive_group()
+        mode.add_argument("--validate-only", action="store_true")
+        mode.add_argument("--apply", action="store_true")
         s.add_argument("--json", action="store_true")
 
     args = p.parse_args()

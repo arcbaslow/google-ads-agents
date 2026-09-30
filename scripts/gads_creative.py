@@ -33,6 +33,7 @@ import urllib.request
 from pathlib import Path
 
 import gads_utils
+from gads_mutate import reviewed_mutate
 
 USER_AGENT = "gads-agents/0.5"
 SITE_FETCH_TIMEOUT = 10
@@ -210,7 +211,8 @@ def upload_image_asset(customer_id: str, image_path: Path, name: str | None,
     asset.name = name or Path(image_path).stem
     asset.image_asset.data = image_bytes
 
-    resp = svc.mutate_assets(
+    resp = reviewed_mutate(
+        svc.mutate_assets,
         customer_id=customer_id,
         operations=[op],
         validate_only=validate_only,
@@ -252,7 +254,8 @@ def attach_to_asset_group(customer_id: str, asset_group_id: str, asset_resource:
     aga.asset = asset_resource
     aga.field_type = getattr(client.enums.AssetFieldTypeEnum, field_type)
 
-    resp = svc.mutate_asset_group_assets(
+    resp = reviewed_mutate(
+        svc.mutate_asset_group_assets,
         customer_id=customer_id,
         operations=[op],
         validate_only=validate_only,
@@ -287,7 +290,8 @@ def attach_to_search_campaign(customer_id: str, campaign_id: str, asset_resource
     ca.asset = asset_resource
     ca.field_type = getattr(client.enums.AssetFieldTypeEnum, field_type)
 
-    resp = svc.mutate_campaign_assets(
+    resp = reviewed_mutate(
+        svc.mutate_campaign_assets,
         customer_id=customer_id,
         operations=[op],
         validate_only=validate_only,
@@ -319,8 +323,9 @@ def main() -> int:
     u.add_argument("--customer", required=True)
     u.add_argument("--image", required=True)
     u.add_argument("--name", help="Asset display name (default: filename stem)")
-    u.add_argument("--validate-only", action="store_true")
-    u.add_argument("--apply", action="store_true")
+    mode = u.add_mutually_exclusive_group()
+    mode.add_argument("--validate-only", action="store_true")
+    mode.add_argument("--apply", action="store_true")
 
     a = sub.add_parser("attach", help="Link an uploaded asset to a campaign or asset group")
     a.add_argument("--customer", required=True)
@@ -331,8 +336,9 @@ def main() -> int:
     grp = a.add_mutually_exclusive_group(required=True)
     grp.add_argument("--asset-group-id", help="PMax asset group ID")
     grp.add_argument("--campaign-id", help="Search campaign ID")
-    a.add_argument("--validate-only", action="store_true")
-    a.add_argument("--apply", action="store_true")
+    mode = a.add_mutually_exclusive_group()
+    mode.add_argument("--validate-only", action="store_true")
+    mode.add_argument("--apply", action="store_true")
 
     for s in (b, pr, u, a):
         s.add_argument("--json", action="store_true")
