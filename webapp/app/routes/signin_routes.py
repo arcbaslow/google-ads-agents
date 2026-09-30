@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import secrets
 from datetime import datetime, timedelta, timezone
 from urllib.parse import urlencode
 
@@ -18,6 +19,8 @@ from app.models import OAuthState, User
 router = APIRouter()
 
 STATE_TTL_SECONDS = 600
+SIGNIN_STATE_COOKIE = "gads_signin_state"
+SIGNIN_COOKIE_PATH = "/auth/google"
 SIGNIN_SCOPES = ["openid", "email"]
 
 
@@ -66,7 +69,12 @@ def signin_start(
         expires_at=datetime.now(timezone.utc) + timedelta(seconds=STATE_TTL_SECONDS),
     ))
     db.commit()
-    return RedirectResponse(build_signin_url(settings, state, challenge), status_code=302)
+    response = RedirectResponse(build_signin_url(settings, state, challenge), status_code=302)
+    response.set_cookie(
+        SIGNIN_STATE_COOKIE, state, max_age=STATE_TTL_SECONDS,
+        httponly=True, secure=settings.cookie_secure, samesite="lax", path=SIGNIN_COOKIE_PATH,
+    )
+    return response
 
 
 @router.get("/auth/google/callback")
@@ -74,9 +82,12 @@ def signin_callback(
     state: str = Query(...),
     code: str | None = Query(None),
     error: str | None = Query(None),
+    browser_state: str | None = Cookie(default=None, alias=SIGNIN_STATE_COOKIE),
     settings: Settings = Depends(get_settings),
     db: Session = Depends(get_session),
 ):
+    if not browser_state or not secrets.compare_digest(browser_state.encode(), state.encode()):
+        raise HTTPException(status_code=400, detail="invalid or expired state")
     row = db.get(OAuthState, state)
     if row is None or row.purpose != "signin":
         raise HTTPException(status_code=400, detail="invalid or expired state")
@@ -139,6 +150,8 @@ def signin_callback(
         max_age=settings.session_max_hours * 3600,
         httponly=True, secure=settings.cookie_secure, samesite="lax", path="/",
     )
+    resp.delete_cookie(SIGNIN_STATE_COOKIE, path=SIGNIN_COOKIE_PATH,
+                       httponly=True, secure=settings.cookie_secure, samesite="lax")
     return resp
 
 

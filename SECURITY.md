@@ -73,3 +73,8 @@ write path without this pattern will not be merged.
 I aim to acknowledge security reports within 7 days and ship a fix or
 mitigation within 30 days. For high-severity issues affecting active
 users, both windows shrink.
+
+Hosted sign-in callbacks require the initiating browser's short-lived HttpOnly
+SameSite state cookie as well as a valid server-stored state. Production uses
+Secure cookies. This check does not replace the existing session expiry or
+per-user connection ownership checks.
