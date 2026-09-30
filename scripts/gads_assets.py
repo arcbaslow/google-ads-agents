@@ -6,11 +6,8 @@ Two reads in one script:
          (POOR, AVERAGE, GOOD, EXCELLENT) and the headline/description
          counts. Flags ads with POOR/AVERAGE strength.
 
-  - pmax-assets: Performance Max asset performance labels at the
-                 asset-group / asset level
-                 (UNSPECIFIED, BEST, GOOD, LOW, LEARNING). Flags
-                 assets labelled LOW that are still serving and asset
-                 groups missing creative coverage by type.
+  - pmax-assets: linked asset inventory by field type and link status.
+    No performance labels or required-coverage conclusions.
 """
 
 from __future__ import annotations
@@ -46,16 +43,13 @@ PMAX_ASSET_QUERY = """
       asset_group.name,
       asset_group_asset.asset,
       asset_group_asset.field_type,
-      asset_group_asset.performance_label,
       asset_group_asset.status
     FROM asset_group_asset
     WHERE asset_group_asset.status != 'REMOVED'
+      AND campaign.advertising_channel_type = 'PERFORMANCE_MAX'
 """
 
 WEAK_RSA_STRENGTHS = {"POOR", "AVERAGE"}
-LOW_PMAX_LABELS = {"LOW"}
-REQUIRED_PMAX_TYPES = {"HEADLINE", "LONG_HEADLINE", "DESCRIPTION", "MARKETING_IMAGE",
-                       "LOGO", "VIDEO"}
 
 
 def rsa_strength(customer_id: str, days: int = 28) -> dict:
@@ -107,7 +101,6 @@ def pmax_assets(customer_id: str) -> dict:
     rows = gads_client.search_stream(customer_id, PMAX_ASSET_QUERY)
 
     by_group: dict[str, dict] = {}
-    findings: list[dict] = []
     for row in rows:
         ag = row.get("asset_group", {})
         ga = row.get("asset_group_asset", {})
@@ -118,44 +111,23 @@ def pmax_assets(customer_id: str) -> dict:
             "asset_group_id": ag_id,
             "asset_group_name": ag.get("name"),
             "by_field_type": {},
-            "low_assets": [],
         })
         ft = ga.get("field_type", "UNKNOWN")
-        label = ga.get("performance_label", "UNSPECIFIED")
-        bucket = entry["by_field_type"].setdefault(ft, {"total": 0, "by_label": {}})
+        status = ga.get("status", "UNSPECIFIED")
+        bucket = entry["by_field_type"].setdefault(ft, {"total": 0, "by_status": {}})
         bucket["total"] += 1
-        bucket["by_label"][label] = bucket["by_label"].get(label, 0) + 1
-        if label in LOW_PMAX_LABELS:
-            entry["low_assets"].append({"asset": ga.get("asset"), "field_type": ft})
-
-    for entry in by_group.values():
-        present = set(entry["by_field_type"].keys())
-        missing = REQUIRED_PMAX_TYPES - present
-        if missing:
-            findings.append({
-                "severity": "medium",
-                "code": "pmax_asset_coverage_gap",
-                "message": (
-                    f"{entry['asset_group_name']!r} missing asset types: "
-                    + ", ".join(sorted(missing))
-                ),
-            })
-        if entry["low_assets"]:
-            findings.append({
-                "severity": "low",
-                "code": "pmax_low_assets_serving",
-                "message": (
-                    f"{entry['asset_group_name']!r} has "
-                    f"{len(entry['low_assets'])} assets labelled LOW. "
-                    "Replace or pause them."
-                ),
-            })
+        bucket["by_status"][status] = bucket["by_status"].get(status, 0) + 1
 
     return {
         "customer_id": customer_id,
         "asset_groups": list(by_group.values()),
-        "findings": findings,
-        "summary": f"{len(by_group)} PMax asset groups scanned, {len(findings)} finding(s)",
+        "findings": [],
+        "limitations": [
+            "Inventory of non-removed group links only; groups without links are absent.",
+            "No performance labels, campaign-level branding or required-coverage assessment.",
+            "Link status does not establish whether an asset is serving.",
+        ],
+        "summary": f"{len(by_group)} PMax asset groups with linked assets",
     }
 
 
@@ -165,7 +137,7 @@ def main() -> int:
     p.add_argument("--days", type=int, default=28)
     sub = p.add_subparsers(dest="action", required=True)
     sub.add_parser("rsa", help="Responsive Search Ad strength audit")
-    sub.add_parser("pmax-assets", help="PMax asset coverage and labels")
+    sub.add_parser("pmax-assets", help="PMax linked asset inventory")
     p.add_argument("--json", action="store_true")
     args = p.parse_args()
     cid = gads_utils.normalize_customer_id(args.customer)

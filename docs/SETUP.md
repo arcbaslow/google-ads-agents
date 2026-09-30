@@ -178,3 +178,16 @@ Hosted sign-in must start and finish in the same browser. A short-lived
 HttpOnly SameSite=Lax cookie binds the callback to that browser; production
 uses Secure cookies and therefore requires HTTPS. Starting another sign-in
 flow replaces the previous cookie. Restart sign-in if a flow expires.
+
+## API compatibility
+
+The adapters select API v25 and require `google-ads>=33.0.0,<34.0.0`.
+Reinstall the project dependencies when updating from an older checkout.
+Shopping output uses `feed_label` rather than `sales_country`; a feed label
+need not be a country. Video reporting uses `video_trueview_views` and
+`video_trueview_view_rate`. Search image attachment uses `AD_IMAGE`.
+
+PMax asset output is an inventory of non-removed group links, grouped by type
+and status. It does not include campaign branding, groups without links,
+performance labels or required-coverage findings. A link status is not proof
+that an asset is serving. See ROADMAP.md for reporting proposals and sources.

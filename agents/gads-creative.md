@@ -119,7 +119,7 @@ For Search image extensions:
 python scripts/gads_creative.py attach --customer <CID> \
     --asset-resource "customers/.../assets/..." \
     --campaign-id <CAMPAIGN_ID> \
-    --field-type IMAGE \
+    --field-type AD_IMAGE \
     --validate-only --json
 ```
 

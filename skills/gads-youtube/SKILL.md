@@ -14,4 +14,5 @@ Routes to the `gads-youtube` subagent. The agent runs:
 python scripts/gads_youtube.py --customer <id> --days <N> --json
 ```
 
-Returns the standard `summary / findings / metrics` shape.
+Returns `customer_id`, `date_range` and `campaigns`. Video views and view
+rate use the v25 TrueView fields. No format or frequency breakdown is queried.

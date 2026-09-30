@@ -94,7 +94,7 @@ def display_campaigns(start: str, end: str) -> str:
           metrics.clicks,
           metrics.cost_micros,
           metrics.conversions,
-          metrics.video_views
+          metrics.video_trueview_views
         FROM campaign
         WHERE campaign.advertising_channel_type = 'DISPLAY'
           AND segments.date BETWEEN '{start}' AND '{end}'
@@ -107,7 +107,7 @@ def shopping_campaigns(start: str, end: str) -> str:
           campaign.id,
           campaign.name,
           campaign.shopping_setting.merchant_id,
-          campaign.shopping_setting.sales_country,
+          campaign.shopping_setting.feed_label,
           metrics.impressions,
           metrics.clicks,
           metrics.cost_micros,
@@ -127,8 +127,8 @@ def youtube_campaigns(start: str, end: str) -> str:
           metrics.impressions,
           metrics.clicks,
           metrics.cost_micros,
-          metrics.video_views,
-          metrics.video_view_rate,
+          metrics.video_trueview_views,
+          metrics.video_trueview_view_rate,
           metrics.video_quartile_p25_rate,
           metrics.video_quartile_p50_rate,
           metrics.video_quartile_p75_rate,

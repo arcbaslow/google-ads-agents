@@ -1,4 +1,4 @@
-"""Shopping campaign read path. Covers standard Shopping plus PMax with feed."""
+"""Shopping campaign read path. Standard Shopping only, with merchant ID and feed label."""
 
 from __future__ import annotations
 

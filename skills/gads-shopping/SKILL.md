@@ -1,6 +1,6 @@
 ---
 name: gads-shopping
-description: Shopping and PMax-with-feed analysis.
+description: Standard Shopping campaign totals and feed labels.
 user-invokable: true
 argument-hint: "<customer-id> [--days N]"
 license: MIT
@@ -14,4 +14,5 @@ Routes to the `gads-shopping` subagent. The agent runs:
 python scripts/gads_shopping.py --customer <id> --days <N> --json
 ```
 
-Returns the standard `summary / findings / metrics` shape.
+Returns `customer_id`, `date_range` and `campaigns`, including merchant ID
+and feed label. Does not include PMax or Merchant Center feed diagnostics.

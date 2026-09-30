@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Select Google Ads API v25 explicitly and require google-ads 33.x (v25.2 support). Replace removed video and Shopping fields, use AD_IMAGE for Search attachment, and report PMax asset inventory by type/status without unsupported performance-label or coverage findings.
+
 - Bind hosted sign-in callbacks to the initiating browser with a short-lived HttpOnly state cookie.
 
 - Return reconnect-required status for permanent hosted OAuth refresh failures without exposing provider diagnostics.

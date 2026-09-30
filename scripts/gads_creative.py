@@ -233,7 +233,7 @@ PMAX_FIELD_TYPES = {
 
 # Search campaign image-extension field type. We name only what we actually
 # support attaching here.
-SEARCH_FIELD_TYPES = {"IMAGE"}
+SEARCH_FIELD_TYPES = {"AD_IMAGE"}
 
 
 def attach_to_asset_group(customer_id: str, asset_group_id: str, asset_resource: str,
