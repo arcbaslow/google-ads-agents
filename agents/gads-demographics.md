@@ -37,3 +37,6 @@ Output: summary, findings, per-bucket table per dimension.
 
 The age breakdown reads `age_range_view` and preserves the returned age-range
 buckets. It reports observed performance, not a complete audience inventory.
+
+Read results expose API field names such as `type`, not Python
+protobuf attribute names such as `type_`. Preserve the returned enum labels.

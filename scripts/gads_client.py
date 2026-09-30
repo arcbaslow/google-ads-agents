@@ -54,5 +54,35 @@ def _msg_to_dict(value) -> Any:
     from google.protobuf.json_format import MessageToDict
 
     if hasattr(value, "DESCRIPTOR"):
-        return MessageToDict(value, preserving_proto_field_name=True)
+        data = MessageToDict(value, preserving_proto_field_name=True)
+        return _restore_reserved_names(data, value.DESCRIPTOR)
     return value
+
+
+def _restore_reserved_names(data, descriptor):
+    """Use API names for Python-keyword fields while keeping snake_case keys.
+
+    The Python schema calls fields such as `type` `type_`; preserving proto
+    names otherwise makes real responses disagree with the adapters' fixtures.
+    """
+    if not isinstance(data, dict):
+        return data
+    result = {}
+    for key, value in data.items():
+        field = descriptor.fields_by_name.get(key)
+        name = key
+        if field is not None:
+            if key.endswith("_") and field.json_name == key[:-1]:
+                name = field.json_name
+            nested = field.message_type
+            if nested is not None:
+                if nested.GetOptions().map_entry:
+                    message = nested.fields_by_name["value"].message_type
+                    if message is not None:
+                        value = {k: _restore_reserved_names(v, message) for k, v in value.items()}
+                elif isinstance(value, list):
+                    value = [_restore_reserved_names(v, nested) for v in value]
+                else:
+                    value = _restore_reserved_names(value, nested)
+        result[name] = value
+    return result
