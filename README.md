@@ -113,7 +113,7 @@ The repository includes [plugin metadata](.claude-plugin/plugin.json), specialis
 
 ### Changes to an account
 
-Negative-keyword, placement and creative write commands print the operation JSON to stderr and require an explicit `y` at a `y/N` prompt. `--apply` validates the same operations before applying them; `--validate-only` stops after validation. The flags are mutually exclusive. EOF or unavailable input cancels the request. Do not pipe an automatic approval into these commands.
+Supported write commands print the operation JSON to stderr and require an explicit `y` at a `y/N` prompt. `--apply` validates the same operations before applying them; `--validate-only` stops after validation. The flags are mutually exclusive. EOF or unavailable input cancels the request. Do not pipe an automatic approval into these commands.
 
 ```bash
 # Produce a campaign planning draft without calling the API.
@@ -123,7 +123,7 @@ python scripts/gads_creation.py --customer 1234567890 --context-file context.jso
 python scripts/gads_apply.py --customer 1234567890 negatives --input negatives.json --validate-only --json
 ```
 
-Campaign creation currently produces a planning draft from supplied context. It does not verify website reachability or measurement health. Both `--validate-only` and `--apply` are blocked because the former writer omitted bidding and targeting and could leave an orphan budget. A future writer must create campaigns paused.
+Campaign context produces a planning draft and does not verify measurement health. A separate strict `--search-spec` creates a PAUSED Search shell, dedicated budget and locations atomically after review and validation. See [bounded writes](docs/WRITES.md) for the required fields and limits.
 
 ### Optional hooks and sign-in service
 

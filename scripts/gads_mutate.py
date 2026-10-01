@@ -43,3 +43,16 @@ def reviewed_mutate(mutation, *, customer_id: str, operations: list,
         return response
     return mutation(customer_id=customer_id, operations=copy.deepcopy(reviewed),
                     validate_only=False)
+
+
+def reviewed_atomic_mutate(client, customer_id: str, operations: list, validate_only: bool):
+    """Use GoogleAdsService for linked resources, without partial writes or retries."""
+    service = client.get_service("GoogleAdsService")
+
+    def send(*, customer_id, operations, validate_only):
+        return service.mutate(customer_id=customer_id, mutate_operations=operations,
+                              validate_only=validate_only, partial_failure=False, retry=None)
+
+    print("Atomic request: partial_failure=false; automatic retries disabled.", file=sys.stderr)
+    return reviewed_mutate(send, customer_id=customer_id, operations=operations,
+                           validate_only=validate_only)

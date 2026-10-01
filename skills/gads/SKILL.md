@@ -45,7 +45,7 @@ Top-level entry point. `/gads <command> <args>`.
 | `/gads notify --setup\|--test\|--send TEXT` | Telegram bot setup and manual sends |
 | `/gads history <customer-id>` | Change-event log; list and diff saved audits |
 | `/gads apply <customer-id>` | Write paths: negative keywords and placement exclusions |
-| `/gads create <customer-id>` | Campaign planning; API creation unavailable |
+| `/gads create <customer-id>` | Campaign planning and reviewed PAUSED Search shells |
 | `/gads audit --all-customers` | Audit directly accessible customers in parallel |
 
 ## Routing
