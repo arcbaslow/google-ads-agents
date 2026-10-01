@@ -22,3 +22,14 @@ These are configuration reads, not historical delivery or migration forecasts.
 
 Sources: [channel controls](https://developers.google.com/google-ads/api/docs/demand-gen/channel-controls),
 [AI Max settings](https://developers.google.com/google-ads/api/reference/rpc/v25/Campaign.AiMaxSetting).
+
+## Conversion and consent evidence
+
+`gads_conversions.py --customer <id> --diagnostics --json` reads recent offline
+import diagnostics by client. Empty results do not establish health. For
+enhanced conversions for leads, use the appropriate diagnostics in the Ads UI.
+The tag scanner lists mentions of consent signal names in HTML; it never
+executes scripts or verifies runtime consent, event delivery or compliance.
+
+Sources: [upload summaries](https://developers.google.com/google-ads/api/docs/conversions/upload-summaries),
+[consent concepts](https://developers.google.com/tag-platform/security/concepts/consent-mode).

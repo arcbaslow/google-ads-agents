@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Add offline conversion-upload diagnostics and explicitly limited static consent-signal evidence.
+
 - Add read-only Demand Gen channel controls and Search AI Max settings commands.
 
 - Add separate PMax channel, placement-impression, asset-metric and campaign-branding reads.

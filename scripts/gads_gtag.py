@@ -39,6 +39,13 @@ def scan_site(url: str) -> dict:
         for m in pat.finditer(html):
             out["tags_found"].append(m.group(0))
     out["has_gtag"] = bool(out["tags_found"])
+    out["consent_evidence"] = {
+        "mentioned_in_html": [signal for signal in (
+            "ad_storage", "analytics_storage", "ad_user_data", "ad_personalization",
+        ) if re.search(r"\b" + signal + r"\b", html)],
+        "runtime_verified": False,
+        "limitations": "Text presence only, including comments. A CMP may inject settings at runtime; absence is inconclusive.",
+    }
     return out
 
 

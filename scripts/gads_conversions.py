@@ -9,6 +9,27 @@ import gads_client
 import gads_query
 import gads_utils
 
+UPLOAD_QUERY = """
+    SELECT offline_conversion_upload_client_summary.client,
+      offline_conversion_upload_client_summary.status,
+      offline_conversion_upload_client_summary.alerts,
+      offline_conversion_upload_client_summary.last_upload_date_time,
+      offline_conversion_upload_client_summary.total_event_count,
+      offline_conversion_upload_client_summary.successful_event_count,
+      offline_conversion_upload_client_summary.pending_event_count,
+      offline_conversion_upload_client_summary.daily_summaries
+    FROM offline_conversion_upload_client_summary
+"""
+
+
+def upload_diagnostics(customer_id: str) -> dict:
+    customer_id = gads_utils.normalize_customer_id(customer_id)
+    return {"customer_id": customer_id,
+            "upload_diagnostics": gads_client.search_stream(customer_id, UPLOAD_QUERY),
+            "limitations": [
+                "Recent offline import diagnostics by client; no rows does not establish healthy tracking.",
+                "Not a test of browser events, runtime consent or enhanced-conversions-for-leads health.",
+            ]}
 
 def list_conversion_actions(customer_id: str) -> dict:
     rows = gads_client.search_stream(customer_id, gads_query.conversion_actions())
@@ -45,11 +66,14 @@ def health(customer_id: str) -> dict:
 def main() -> int:
     p = argparse.ArgumentParser()
     p.add_argument("--customer", required=True)
-    p.add_argument("--health", action="store_true")
+    mode = p.add_mutually_exclusive_group()
+    mode.add_argument("--health", action="store_true")
+    mode.add_argument("--diagnostics", action="store_true")
     p.add_argument("--json", action="store_true")
     args = p.parse_args()
     cid = gads_utils.normalize_customer_id(args.customer)
-    data = health(cid) if args.health else list_conversion_actions(cid)
+    data = (upload_diagnostics(cid) if args.diagnostics
+            else health(cid) if args.health else list_conversion_actions(cid))
     gads_utils.emit(data, args.json)
     return 0
 
