@@ -16,7 +16,7 @@ from typing import Any, Protocol
 
 class CredentialProvider(Protocol):
     def get_credentials(self) -> Any: ...
-    def get_developer_token(self) -> str: ...
+    def get_developer_token(self) -> str | None: ...
     def get_login_customer_id(self) -> str | None: ...
 
 
@@ -27,7 +27,7 @@ class FileCredentialProvider:
         import gads_auth
         return gads_auth.get_credentials()
 
-    def get_developer_token(self) -> str:
+    def get_developer_token(self) -> str | None:
         import gads_auth
         return gads_auth.get_developer_token()
 

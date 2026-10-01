@@ -35,15 +35,16 @@ Don't spawn a subagent for a one-shot lookup.
 ```
 python scripts/gads_auth.py --check
 python scripts/gads_auth.py --adc                    # print gcloud command
-python scripts/gads_auth.py --add-profile NAME --developer-token TOKEN [--login-customer-id MCC]
+python scripts/gads_auth.py --add-profile NAME [--developer-token TOKEN] [--login-customer-id MCC]
 python scripts/gads_auth.py --use-profile NAME
 python scripts/gads_auth.py --list-profiles
 python scripts/gads_auth.py --customers
 python scripts/gads_auth.py --logout
 ```
 
-One profile per MCC. Each carries its own developer token plus
-login-customer-id. When the user works across multiple MCCs in a
+One profile per MCC. Each carries authentication settings and an optional
+login-customer-id. Developer tokens are optional legacy configuration; API
+access belongs to the OAuth Cloud project. When the user works across multiple MCCs in a
 session, suggest switching with `--use-profile` rather than re-entering
 the token. The active profile name is shown by `--check`.
 

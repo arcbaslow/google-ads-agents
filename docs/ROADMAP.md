@@ -292,6 +292,10 @@ Rejected directions remain rejected; the original open questions remain open.
   Mocked permission, refresh, transient, unexpected and Ads errors retain no raw
   provider messages. No retries were added to writes.
 
+- Completed: optional legacy tokens in local profiles and hosted settings, with
+  Cloud-project onboarding. Tokenless client construction is tested offline;
+  Cloud approval and account access remain external checks. The session cap is unchanged.
+
 ## Next
 
 | Item | Account benefit and evidence | Effort | Risk / reason not built now |

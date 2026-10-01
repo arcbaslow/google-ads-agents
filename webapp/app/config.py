@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     fernet_keys: list[str]                 # oldest first, newest last (append-only)
     google_oauth_client_id: str
     google_oauth_client_secret: str
-    google_developer_token: str
+    google_developer_token: str | None = None
     oauth_redirect_uri: str
     signin_redirect_uri: str
     allowed_signins: list[str] = []     # email domains or full emails; empty = anyone

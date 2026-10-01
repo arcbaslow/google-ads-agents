@@ -52,8 +52,7 @@ def test_remove_only_profile_clears_active():
     gads_auth.add_profile("a", "T1", "1")
     gads_auth.remove_profile("a")
     assert gads_auth.active_profile_name() is None
-    with pytest.raises(gads_auth.AuthRequiredError):
-        gads_auth.get_developer_token()
+    assert gads_auth.get_developer_token() is None
 
 
 def test_env_overrides_profile_token(monkeypatch):
@@ -289,3 +288,19 @@ def test_expired_session_hint_is_method_aware():
         gads_auth.enforce_session()
     assert "--oauth-login" in str(exc.value)
     assert "application-default" not in str(exc.value)
+
+
+def test_add_profile_without_legacy_token_keeps_session_gate():
+    gads_auth.add_profile("cloud", login_customer_id="123-456-7890")
+    assert gads_auth.get_developer_token() is None
+    assert gads_auth.get_login_customer_id() == "1234567890"
+    with pytest.raises(gads_auth.SessionExpiredError):
+        gads_auth.get_credentials()
+
+
+def test_add_profile_command_accepts_cloud_project_access(capsys):
+    assert gads_auth.cmd_add_profile(_ns(
+        add_profile="cloud", developer_token=None, login_customer_id=None,
+    )) == 0
+    assert gads_auth.active_profile_name() == "cloud"
+    assert gads_auth.get_developer_token() is None

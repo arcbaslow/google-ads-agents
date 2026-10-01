@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Allow local and hosted Cloud-project authentication without legacy developer tokens and update onboarding instructions.
+
 - Redact audit and write-command provider failures into stable error categories with retryability hints; omit raw tracebacks from audits.
 
 - Consume hosted OAuth state atomically before code exchange, preventing concurrent callback replay.
