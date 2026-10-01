@@ -51,3 +51,8 @@ reports inaccessible branches as partial. Traversal is capped at 1000 manager
 visits. This is a CLI feature; the hosted service still exposes no audit endpoint.
 
 Reference: [account hierarchy](https://developers.google.com/google-ads/api/docs/account-management/get-account-hierarchy).
+
+Saved audit exports: `python scripts/gads_export.py --audit-file audit.json
+--format csv --output findings.csv` (one command line). JSON and Prometheus
+text are also available. Preserve failed-adapter and incomplete-discovery
+records; explain snapshot age. See docs/REPORTING.md.

@@ -178,3 +178,7 @@ Maintained by [Good Labs](https://goodlabs.kz) — measurement implementation, t
 ## License
 
 [MIT](LICENSE) © Dilshat Rakhimov. This is an independent project; it is not an official product of the platform vendors.
+
+Read-only GAQL and saved multi-account audit exports are documented in
+[REPORTING.md](docs/REPORTING.md). Local monitoring output does not refresh
+credentials or schedule new account reads.

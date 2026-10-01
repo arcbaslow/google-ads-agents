@@ -321,6 +321,10 @@ Rejected directions remain rejected; the original open questions remain open.
 - Completed: remaining baseline read adapters have mocked row, empty and
   failure coverage. CLI and network errors are redacted; see REPORTING.md.
 
+- Completed: local multi-account exports, bounded GAQL export and saved-audit
+  monitoring text. REPORTING.md documents truncation, failures and snapshot
+  freshness limits. No reporting service or background account access was added.
+
 ## Next
 
 | Item | Account benefit and evidence | Effort | Risk / reason not built now |
