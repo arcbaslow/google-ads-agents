@@ -12,3 +12,13 @@ campaign-level link inventory, not historical metrics or proof of serving.
 Sources: [campaign reporting](https://developers.google.com/google-ads/api/performance-max/campaign-reporting),
 [asset-group asset fields](https://developers.google.com/google-ads/api/fields/v25/asset_group_asset),
 [campaign assets](https://developers.google.com/google-ads/api/fields/v25/campaign_asset).
+
+## Demand Gen and AI Max settings
+
+Demand Gen `--channel-controls` reads current ad-group channel controls;
+Search `--ai-max-settings` reads current enablement and bundling requirements.
+Missing optional fields remain absent. Neither command changes settings.
+These are configuration reads, not historical delivery or migration forecasts.
+
+Sources: [channel controls](https://developers.google.com/google-ads/api/docs/demand-gen/channel-controls),
+[AI Max settings](https://developers.google.com/google-ads/api/reference/rpc/v25/Campaign.AiMaxSetting).

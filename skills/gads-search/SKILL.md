@@ -21,3 +21,7 @@ The supported write adapters display the exact operation JSON and prompt for
 `y/N` in Python, including for validation. `--apply` validates before sending
 the same operations. Let the operator review and answer the prompt; do not
 pipe approval or substitute a direct API call. stdout remains the JSON result.
+
+Use `gads_search.py --customer <id> --ai-max-settings --json` for current Search
+AI Max enablement and bundling requirements. This read does not opt in, predict
+migration timing or measure the impact of AI Max.

@@ -21,3 +21,7 @@ performance read, not a complete inventory of campaigns with no activity.
 There is no channel, audience or asset breakdown. Clicks are omitted because
 Demand Gen requires a separate click-type filter; do not infer CTR or CPC.
 Retain limitations and distinguish a failed read from an empty result.
+
+Use `gads_demandgen.py --customer <id> --channel-controls --json` for current
+ad-group channel configuration. Interpret channel_config before selected flags;
+these settings do not show historical delivery or surface spend.
