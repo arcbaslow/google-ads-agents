@@ -311,6 +311,10 @@ Rejected directions remain rejected; the original open questions remain open.
   Hosted audit remains unexposed, so database-backed providers are not shared
   across audit workers. Reference and limits: REPORTING.md.
 
+- Completed: bounded atomic PAUSED Search shell creation. Legacy plans remain
+  non-executable; owner assertions, supported settings and retry limits are
+  documented in WRITES.md. Other campaign types remain outside this writer.
+
 ## Next
 
 | Item | Account benefit and evidence | Effort | Risk / reason not built now |

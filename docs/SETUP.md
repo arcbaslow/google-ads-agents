@@ -155,8 +155,9 @@ in the Python adapter. Preview and prompt go to stderr; the result goes to
 stdout. Both validation and application require a human answer. `--apply`
 validates first and stops on validation failure. Missing input cancels.
 
-Campaign creation is planning-only. Its draft is not API operation JSON; both
-write flags return `unsupported` without creating a client or budget.
+Campaign context remains planning-only. The strict `--search-spec` writer creates
+a PAUSED Search shell with a dedicated budget and explicit locations. See
+[bounded writes](WRITES.md) before using validation or application.
 
 Brand catalogue lookup returns entity IDs, display names, primary URLs and
 catalogue states. Brand exclusion writes are unavailable until shared-list

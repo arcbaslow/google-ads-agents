@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Add a strict PAUSED Search shell writer with explicit owner declarations and atomic budget, campaign and location creation after review and validation.
+
 - Add explicit manager-tree audit discovery with deduplication, partial-failure reporting and per-account manager login routing.
 
 - Add offline conversion-upload diagnostics and explicitly limited static consent-signal evidence.

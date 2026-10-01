@@ -1,8 +1,7 @@
-"""Campaign planning only. The draft is not executable operation JSON.
+"""Campaign planning and a bounded atomic PAUSED Search writer.
 
-The former writer omitted bidding and targeting and sent the budget separately.
-Both validation and application are blocked until a complete atomic writer is
-reviewed. Plans retain PAUSED as the required initial campaign status.
+Legacy planning drafts remain non-executable; --search-spec uses a strict
+owner-supplied contract documented in docs/WRITES.md.
 
 Required context, any missing field aborts:
 
@@ -25,6 +24,69 @@ import json
 import sys
 
 import gads_utils
+
+
+def create_search_campaign(customer_id: str, spec: dict, validate_only: bool = True) -> dict:
+    """Create a paused Search shell; ads and subsequent activation are separate work."""
+    import gads_client
+    from gads_mutate import reviewed_atomic_mutate
+
+    expected = {"name", "budget_micros", "bidding", "geo_target_ids", "language_mode",
+                "eu_political_advertising", "analytics_confirmed", "conversions_confirmed"}
+    if not isinstance(spec, dict) or set(spec) != expected:
+        raise ValueError("Search spec must contain exactly the documented fields")
+    cid = gads_utils.normalize_customer_id(customer_id)
+    if not cid.isascii() or not cid.isdigit():
+        raise ValueError("Customer ID must be numeric")
+    name = spec["name"]
+    if not isinstance(name, str) or not name.strip() or any(c in name for c in "\x00\n\r"):
+        raise ValueError("A non-empty campaign name without control characters is required")
+    amount = spec["budget_micros"]
+    if type(amount) is not int or not 0 < amount < 2**63:
+        raise ValueError("budget_micros must be a positive integer")
+    if spec["bidding"] != "MAXIMIZE_CONVERSIONS" or spec["language_mode"] != "AUTOMATIC":
+        raise ValueError("Only MAXIMIZE_CONVERSIONS and AUTOMATIC language are supported")
+    for key in ("analytics_confirmed", "conversions_confirmed"):
+        if spec[key] is not True:
+            raise ValueError(f"{key} must be explicitly true")
+    if type(spec["eu_political_advertising"]) is not bool:
+        raise ValueError("An explicit boolean EU political advertising declaration is required")
+    geos = spec["geo_target_ids"]
+    if (not isinstance(geos, list) or not geos or len(geos) > 100
+            or any(not isinstance(g, str) or not g.isascii() or not g.isdigit() for g in geos)):
+        raise ValueError("Provide 1–100 numeric geo target IDs as strings")
+
+    client = gads_client.build_client()
+    budget_name, campaign_name = f"customers/{cid}/campaignBudgets/-1", f"customers/{cid}/campaigns/-2"
+    budget = client.get_type("MutateOperation")
+    budget.campaign_budget_operation.create = {
+        "resource_name": budget_name, "name": name + " budget", "amount_micros": amount,
+        "delivery_method": "STANDARD", "explicitly_shared": False,
+    }
+    campaign = client.get_type("MutateOperation")
+    campaign.campaign_operation.create = {
+        "resource_name": campaign_name, "name": name, "status": "PAUSED",
+        "advertising_channel_type": "SEARCH", "campaign_budget": budget_name,
+        "maximize_conversions": {},
+        "network_settings": {"target_google_search": True, "target_search_network": False,
+                             "target_content_network": False, "target_partner_search_network": False},
+        "geo_target_type_setting": {"positive_geo_target_type": "PRESENCE"},
+        "contains_eu_political_advertising": (
+            "CONTAINS_EU_POLITICAL_ADVERTISING" if spec["eu_political_advertising"]
+            else "DOES_NOT_CONTAIN_EU_POLITICAL_ADVERTISING"),
+    }
+    operations = [budget, campaign]
+    for geo in sorted(set(geos)):
+        op = client.get_type("MutateOperation")
+        op.campaign_criterion_operation.create = {
+            "campaign": campaign_name, "location": {"geo_target_constant": f"geoTargetConstants/{geo}"},
+        }
+        operations.append(op)
+    response = reviewed_atomic_mutate(client, cid, operations, validate_only)
+    return {"status": "validated" if validate_only else "applied", "customer_id": cid,
+            "response": gads_client._msg_to_dict(response._pb),
+            "limitations": ["PAUSED Search shell only; no ads, keywords or activation.",
+                            "No idempotency guarantee: inspect account state before retrying an uncertain write."]}
 
 REQUIRED_FIELDS = [
     "business", "website", "goal", "analytics_ok", "conversions_ok",
@@ -79,13 +141,30 @@ def send_mutate(customer_id: str, proposed: dict, validate_only: bool) -> dict:
 def main() -> int:
     p = argparse.ArgumentParser()
     p.add_argument("--customer", required=True)
-    p.add_argument("--context-file", required=True, help="JSON file with required fields")
+    source = p.add_mutually_exclusive_group(required=True)
+    source.add_argument("--context-file", help="Legacy planning context; not executable")
+    source.add_argument("--search-spec", help="Strict JSON spec for a PAUSED Search shell")
     mode = p.add_mutually_exclusive_group()
-    mode.add_argument("--validate-only", action="store_true", help="Unsupported; returns an error")
-    mode.add_argument("--apply", action="store_true", help="Unsupported; returns an error")
+    mode.add_argument("--validate-only", action="store_true", help="Review and validate a Search spec only")
+    mode.add_argument("--apply", action="store_true", help="Review, validate and apply a Search spec")
     p.add_argument("--json", action="store_true")
     args = p.parse_args()
     cid = gads_utils.normalize_customer_id(args.customer)
+
+    if args.search_spec:
+        if not (args.validate_only or args.apply):
+            gads_utils.emit({"status": "no_op", "hint": "Choose --validate-only or --apply"}, args.json)
+            return 0
+        import gads_errors
+        try:
+            with open(args.search_spec) as f:
+                spec = json.load(f)
+            result = create_search_campaign(cid, spec, validate_only=not args.apply)
+        except Exception as exc:
+            gads_utils.emit(gads_errors.describe(exc), args.json)
+            return 3
+        gads_utils.emit(result, args.json)
+        return 0
 
     if args.validate_only or args.apply:
         try:

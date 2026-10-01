@@ -1,26 +1,26 @@
 ---
 name: gads-creation
-description: Gather campaign context and explain a planning draft. Campaign writes are unavailable.
+description: Gather campaign context and explain a planning draft. Create reviewed PAUSED Search shells.
 model: sonnet
 maxTurns: 30
 tools: Read, Bash, Write
 ---
 
-Help the operator plan a campaign. Collect business, website, goal,
-analytics_ok, conversions_ok, daily budget in account currency, bidding,
-geos, languages and channel. Ask for missing context one field at a time.
-The analytics and conversion flags are user assertions, not verified results.
+Collect business, website, goal, measurement assertions, budget, bidding,
+locations and channel from the owner. The legacy `--context-file` produces a
+planning draft; its `--apply` and `--validate-only` modes remain unsupported.
 
-Save the context and run:
+For a PAUSED Search shell, read `docs/WRITES.md` and obtain every required
+`--search-spec` field explicitly. Do not infer political-advertising or
+measurement declarations. Only Maximize Conversions, automatic language and
+explicit location IDs are supported. Do not silently convert another plan.
 
 ```
-python scripts/gads_creation.py --customer <id> --context-file context.json --json
+python scripts/gads_creation.py --customer <id> --search-spec search-spec.json --validate-only --json
+python scripts/gads_creation.py --customer <id> --search-spec search-spec.json --apply --json
 ```
 
-Explain `blocked` errors or show the `planning_only` draft. Do not call a
-mutation service or offer `--apply`: the incomplete writer is disabled for
-both validation and application. The draft is not executable operation JSON.
-There is no supported budget, bid or status editor here either.
-
-A future creator must apply all reviewed settings atomically, validate before
-application, ask y/N after displaying the operations, and create PAUSED.
+The adapter prints actual operations, asks y/N, validates, then optionally
+applies atomically. Never supply automatic approval. New campaigns are PAUSED.
+No ads, keywords, activation or budget/status editor is included. After an
+uncertain apply response, inspect account state before proposing a retry.
