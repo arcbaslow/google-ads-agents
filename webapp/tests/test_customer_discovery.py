@@ -22,3 +22,10 @@ def test_discovery_accepts_in_memory_credentials(settings, monkeypatch):
     monkeypatch.setattr(GoogleAdsClient, "get_service", get_service)
     assert list_accessible_customers(settings, "mock-refresh") == ["123", "456"]
     refresh.assert_called_once_with()
+
+
+def test_hosted_settings_do_not_require_legacy_token(settings):
+    from app.config import Settings
+    values = settings.model_dump()
+    values.pop("google_developer_token")
+    assert Settings(**values).google_developer_token is None

@@ -75,3 +75,17 @@ def test_build_client_omits_login_customer_id_when_unset(monkeypatch):
         gads_client.build_client()
 
     assert "login_customer_id" not in captured
+
+
+def test_real_client_accepts_tokenless_provider():
+    import gads_client
+    from google.auth.credentials import AnonymousCredentials
+
+    class Provider:
+        def get_credentials(self): return AnonymousCredentials()
+        def get_developer_token(self): return None
+        def get_login_customer_id(self): return None
+
+    with gads_provider.bind_provider(Provider()):
+        client = gads_client.build_client()
+    assert client.developer_token is None

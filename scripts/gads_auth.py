@@ -228,18 +228,11 @@ def active_profile() -> dict[str, Any]:
     return data.get("profiles", {}).get(name, {})
 
 
-def get_developer_token() -> str:
+def get_developer_token() -> str | None:
     env = os.environ.get("GOOGLE_ADS_DEVELOPER_TOKEN")
     if env:
         return env
-    token = active_profile().get("developer_token")
-    if not token:
-        raise AuthRequiredError(
-            "No developer token configured for the active profile. Run:\n"
-            "  python scripts/gads_auth.py --add-profile <NAME> --developer-token <TOKEN> [--login-customer-id <MCC>]\n"
-            "  python scripts/gads_auth.py --use-profile <NAME>"
-        )
-    return token
+    return active_profile().get("developer_token") or None
 
 
 def get_login_customer_id() -> str | None:
@@ -249,10 +242,10 @@ def get_login_customer_id() -> str | None:
     return active_profile().get("login_customer_id")
 
 
-def add_profile(name: str, developer_token: str, login_customer_id: str | None = None) -> None:
+def add_profile(name: str, developer_token: str | None = None, login_customer_id: str | None = None) -> None:
     data = _profiles()
     data.setdefault("profiles", {})[name] = {
-        "developer_token": developer_token.strip(),
+        "developer_token": (developer_token or "").strip() or None,
         "login_customer_id": (login_customer_id or "").replace("-", "").strip() or None,
     }
     if not data.get("active"):
@@ -420,9 +413,6 @@ def cmd_logout(_args) -> int:
 
 
 def cmd_add_profile(args) -> int:
-    if not args.developer_token:
-        print(json.dumps({"error": "--developer-token is required with --add-profile"}, indent=2))
-        return 2
     add_profile(args.add_profile, args.developer_token, args.login_customer_id)
     session_start()
     print(json.dumps({"added": args.add_profile, "profiles": list_profiles()}, indent=2))
@@ -451,16 +441,11 @@ def cmd_oauth_login(args) -> int:
     name = args.add_profile or active_profile_name()
     if not name:
         print(json.dumps({
-            "error": "no profile. Pass --add-profile NAME --developer-token TOKEN, "
+            "error": "no profile. Pass --add-profile NAME, "
                      "or select an existing profile with --use-profile first."
         }, indent=2))
         return 2
     if args.add_profile:
-        if not args.developer_token:
-            print(json.dumps(
-                {"error": "--developer-token is required with --add-profile"}, indent=2
-            ))
-            return 2
         add_profile(args.add_profile, args.developer_token, args.login_customer_id)
 
     from google_auth_oauthlib.flow import InstalledAppFlow
@@ -503,7 +488,7 @@ def main() -> int:
     p.add_argument("--use-profile", metavar="NAME")
     p.add_argument("--remove-profile", metavar="NAME")
     p.add_argument("--list-profiles", action="store_true")
-    p.add_argument("--developer-token", metavar="TOKEN", help="paired with --add-profile")
+    p.add_argument("--developer-token", metavar="TOKEN", help="optional legacy token; access is granted to the OAuth Cloud project")
     p.add_argument("--login-customer-id", metavar="ID", help="paired with --add-profile (optional)")
     p.add_argument("--set-developer-token", metavar="TOKEN", help="set on the active profile")
     p.add_argument("--set-login-customer-id", metavar="ID", help="set on the active profile")

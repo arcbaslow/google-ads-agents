@@ -112,3 +112,6 @@ guide the user through:
 - Lookback: 28 days
 - Output: markdown (no emoji)
 - Mutate: always `PAUSED` first, never auto-unpause
+
+New profiles do not require developer tokens. API access is approved for the
+Cloud project owning the OAuth client. Use docs/SETUP.md; preserve session checks.

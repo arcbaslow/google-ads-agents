@@ -5,7 +5,7 @@ from google.auth.exceptions import RefreshError
 
 
 def describe(exc: Exception) -> dict:
-    from gads_auth import AuthRequiredError
+    from gads_auth import AuthRequiredError, SessionExpiredError
     from gads_mutate import MutationCancelled
 
     code, message, retryable = "unexpected_error", "Operation failed; inspect configuration and inputs.", False
@@ -16,7 +16,7 @@ def describe(exc: Exception) -> dict:
             code, message, retryable = "temporarily_unavailable", "Authentication service temporarily unavailable.", True
         else:
             code, message = "authentication_required", "Reconnect the Google account."
-    elif isinstance(exc, (AuthRequiredError, api_errors.Unauthorized)):
+    elif isinstance(exc, (AuthRequiredError, SessionExpiredError, api_errors.Unauthorized)):
         code, message = "authentication_required", "Sign in again; check the session and credentials."
     elif isinstance(exc, api_errors.Forbidden):
         code, message = "permission_denied", "Check account permissions and Cloud project access."

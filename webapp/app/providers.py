@@ -40,7 +40,7 @@ class WebCredentialProvider:
                 raise
             raise ConnectionAuthError("Google authorization expired; reconnect required") from None
 
-    def get_developer_token(self) -> str:
+    def get_developer_token(self) -> str | None:
         return self._settings.google_developer_token
 
     def get_login_customer_id(self) -> str | None:

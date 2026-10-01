@@ -13,19 +13,18 @@ Verify:
 gcloud --version
 ```
 
-## 2. Get a developer token
+## 2. Approve the OAuth Cloud project
 
-The Google Ads API requires a developer token. It is account-level
-(tied to a manager account / MCC), not user-level.
+API access belongs to the Google Cloud project that owns your OAuth client.
+Enable the Google Ads API and apply for the appropriate access level in that
+project's Google Ads API page in Cloud Console. Developer tokens were retired
+on September 9, 2026. A token from another project does not grant access.
+See Google's [migration guide](https://developers.google.com/google-ads/api/docs/api-policy/developer-token).
 
-1. Sign into a Google Ads manager account at https://ads.google.com.
-2. Go to **Tools & Settings → API Center**
-   (URL: https://ads.google.com/aw/apicenter).
-3. Apply for a token if you don't have one. A new token defaults to
-   **test access** which is fine for read paths against test accounts.
-   Production access requires a separate approval.
-
-Keep the token. You'll paste it once.
+For new integrations, use your own OAuth client in the approved project
+(Option B). With gcloud ADC, confirm which OAuth client/project issues the
+credentials; setting a quota project alone does not transfer API access.
+Workspace administrator policy can still require approval of the OAuth app.
 
 ## 3. Sign in
 
@@ -44,15 +43,13 @@ command. Run it. A browser opens, sign in, grant access.
 
 ### Option B — your own OAuth client (restricted Google Workspace)
 
-If your Workspace admin blocks the gcloud sign-in ("Access blocked: this app
-is blocked"), use your own OAuth client. It does not depend on the gcloud app
-and needs no admin help.
+Use your own OAuth client to select the Cloud project with approved Ads API
+access. Your organisation may still require administrator approval.
 
 1. Create a Google Cloud project in your Workspace org
    (https://console.cloud.google.com/projectcreate).
 2. APIs & Services -> OAuth consent screen -> User type **Internal**.
-   Internal apps skip Google verification for the restricted `adwords`
-   scope and are not subject to the org's third-party-app block.
+   Follow the applicable verification and administrator requirements.
 3. APIs & Services -> Credentials -> Create credentials -> OAuth client ID ->
    Application type **Desktop app**. Download the JSON as
    `client_secret.json`.
@@ -61,7 +58,7 @@ and needs no admin help.
 ```
 python scripts/gads_auth.py --oauth-login \
     --client-secrets client_secret.json \
-    --add-profile acme --developer-token <TOKEN> --login-customer-id <MCC>
+    --add-profile acme --login-customer-id <MCC>
 ```
 
 A browser opens on a localhost port; sign in and grant access. The refresh
@@ -86,12 +83,11 @@ python scripts/gads_auth.py --set-oauth acme \
 Option B users who passed `--add-profile` to `--oauth-login` already have a
 profile and can skip to Verify.
 
-Add a profile per manager account. Each profile owns its developer token
-and (optional) login-customer-id.
+Add a profile per manager account. Each profile stores its authentication method
+and optional login-customer-id. Legacy developer tokens remain optional.
 
 ```
 python scripts/gads_auth.py --add-profile acme \
-    --developer-token <TOKEN> \
     --login-customer-id <MCC-id>
 ```
 
@@ -100,7 +96,7 @@ automatically. For multiple MCCs, add a profile per account and switch
 with `--use-profile`:
 
 ```
-python scripts/gads_auth.py --add-profile widgets --developer-token <TOKEN2> --login-customer-id <MCC2>
+python scripts/gads_auth.py --add-profile widgets --login-customer-id <MCC2>
 python scripts/gads_auth.py --use-profile widgets
 python scripts/gads_auth.py --list-profiles
 ```
@@ -146,11 +142,9 @@ script refuses to run and prints the gcloud command. Re-sign-in and the
   you haven't run the `gcloud auth application-default login` command,
   or `~/.config/gcloud/application_default_credentials.json` was
   deleted.
-- **`developer_token missing`** — run
-  `python scripts/gads_auth.py --set-developer-token <TOKEN>`.
-- **API returns `DEVELOPER_TOKEN_NOT_APPROVED`** — your token is in
-  test mode; either apply for production access at the API Center, or
-  use a test account.
+- A missing legacy developer token is allowed; verify the OAuth Cloud project has access.
+- **`CLOUD_PROJECT_NOT_APPROVED_FOR_PRODUCTION`** — request production access
+  in the OAuth project's Google Ads API page in Cloud Console.
 - **`USER_PERMISSION_DENIED`** — the signed-in Google account doesn't
   have access to that Ads customer ID. Check via `--customers`.
 

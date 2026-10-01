@@ -29,7 +29,7 @@ A Python toolkit for investigating Google Ads accounts and preparing changes for
 
 ## Installation
 
-Requires **Python 3.10+**. Live queries also require Google Ads account access, a developer token, and Google Cloud SDK (`gcloud`) for the default authentication path.
+Requires **Python 3.10+**. Live queries also require Google Ads account access, an approved OAuth Cloud project, and Google Cloud SDK (`gcloud`) for the default authentication path.
 
 ```bash
 git clone https://github.com/arcbaslow/google-ads-agents.git
@@ -52,7 +52,7 @@ First print and run the Google sign-in command, then register a manager-account 
 ```bash
 python scripts/gads_auth.py --adc
 # Run the gcloud command printed above, then configure your profile:
-python scripts/gads_auth.py --add-profile demo --developer-token YOUR_DEVELOPER_TOKEN --login-customer-id YOUR_MCC_ID
+python scripts/gads_auth.py --add-profile demo --login-customer-id YOUR_MCC_ID
 python scripts/gads_auth.py --use-profile demo
 python scripts/gads_auth.py --check
 python scripts/gads_auth.py --customers
@@ -67,7 +67,7 @@ python scripts/gads_report.py --input audit.json --format md --output audit.md
 
 Add `--site https://example.com` to include the website tag check, and `--save-history` to retain a snapshot. The local session expires after 24 hours. For multiple MCCs, add profiles and switch with `--use-profile`. For an OAuth-client fallback, see [setup](docs/SETUP.md).
 
-This checkout still expects a developer-token profile. Google has moved API access to Cloud projects; the onboarding migration and current limitations are recorded in the [roadmap](docs/ROADMAP.md).
+Developer tokens are optional legacy configuration. API access belongs to the OAuth Cloud project; see [setup](docs/SETUP.md) for approval and authentication instructions.
 
 ## Example output
 
