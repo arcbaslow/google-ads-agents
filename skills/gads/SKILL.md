@@ -132,3 +132,6 @@ gate, accepts only reads and reports truncation; see docs/REPORTING.md.
 
 For offline safety task fixtures and the transcript rubric, see docs/EVALUATION.md.
 Passing adapter tests does not establish that a language-model runtime follows the rubric.
+
+For read-only handoff to external tools, follow docs/INTEROPERABILITY.md.
+An independent MCP server does not inherit this toolkit's session gate.

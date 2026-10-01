@@ -182,3 +182,6 @@ Maintained by [Good Labs](https://goodlabs.kz) — measurement implementation, t
 Read-only GAQL and saved multi-account audit exports are documented in
 [REPORTING.md](docs/REPORTING.md). Local monitoring output does not refresh
 credentials or schedule new account reads.
+
+See [read-only interoperability](docs/INTEROPERABILITY.md) for query and export
+handoffs, and [offline evaluation](docs/EVALUATION.md) for safety task fixtures.

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Document read-only interoperability, completed bounded roadmap scope and continuation verification results.
+
 - Redact local authentication backend diagnostics and history-query CLI failures while retaining reconnect commands.
 
 - Expose API-reported AI Max migration dates and PMax asset-group URL tracking settings without inferring rollout dates or measurement health.

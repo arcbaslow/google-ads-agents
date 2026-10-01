@@ -1,6 +1,7 @@
 # Roadmap
 
 Reviewed on 2026-09-30 against v0.6.1, baseline commit `1aa6db6`.
+Implementation status updated on 2026-10-01; release notes were rechecked.
 The owner explicitly authorised this maintenance and feature pass. The session
 cap, session hook and requirement to review every write remain in force.
 Effort estimates are engineering days, including mocked tests and documentation.
@@ -82,7 +83,7 @@ Relevant changes in the past year:
 - Developer tokens were retired in favour of Cloud project access on September
   9. Existing approved projects and requests carrying tokens can continue, but
   a new project's access cannot be obtained by borrowing an old token. Current
-  setup still requires a token; it needs an access-model review.
+  baseline setup required a token. Optional legacy-token onboarding is now implemented.
   [access migration](https://developers.google.com/google-ads/api/docs/api-policy/developer-token)
 - Consent checks must distinguish `ad_user_data` and `ad_personalization` from
   basic tag presence. Static HTML detection in `gads_gtag.py` cannot establish
@@ -122,7 +123,7 @@ See VERIFICATION.md for checks and commit records.
   fields in `propose_mutate` never reach the campaign operation. The political
   advertising declaration is hard-coded rather than supplied by the owner.
 - Effort: half a day. Risk: low; a broken write path becomes explicitly
-  unsupported. A replacement remains Next and must always create PAUSED.
+  unsupported. The bounded replacement is now implemented under Next and creates PAUSED.
 
 ### N3. Repair brand suggestions and block invalid exclusions
 
@@ -136,7 +137,8 @@ See VERIFICATION.md for checks and commit records.
   [BrandSuggestion](https://developers.google.com/google-ads/api/reference/rpc/v25/BrandSuggestion),
   [CampaignCriterion](https://developers.google.com/google-ads/api/reference/rpc/v25/CampaignCriterion),
   [brand shared sets](https://developers.google.com/google-ads/api/docs/targeting/shared-sets).
-- Effort: half a day. Risk: low. Full shared-list lifecycle is deferred.
+- Effort: half a day. Risk: low. Bounded create/reuse/attach is now implemented under Next;
+  edits and removal remain excluded.
 
 ### N4. Repair hosted credential construction and reconnect errors
 
@@ -241,7 +243,8 @@ See VERIFICATION.md for checks and commit records.
 - Regression tests in `scripts/test_gads_audit.py` reproduced the failure
   before the fix and now cover simultaneous callers, accounts and adapters.
 - Effort: small. Risk: medium; providers themselves still need thread-safe
-  access. No hosted audit endpoint or manager hierarchy traversal was added.
+  access. This initial follow-up added no hosted endpoint or hierarchy traversal;
+  CLI hierarchy traversal was added in the continuation below.
 
 ### Clear unreadable credentials on disconnect
 
@@ -252,7 +255,7 @@ See VERIFICATION.md for checks and commit records.
 - Regression tests in `webapp/tests/test_api.py` reproduce all three failures
   and verify repeated disconnect does not attempt revocation without a token.
 - Effort: small. Risk: low; tenant ownership checks and database failure
-  handling are unchanged. Atomic OAuth state consumption remains below.
+  handling are unchanged. Atomic OAuth state consumption is completed below.
 
 ### Reject unsupported keyword locales
 
@@ -274,9 +277,9 @@ See VERIFICATION.md for checks and commit records.
 ## Implementation continuation (2026-10-01)
 
 The owner authorised bounded versions of the campaign writer and brand-list
-lifecycle. Remaining Next items are being implemented in separate commits.
-Later items will use local exports, offline fixtures and interoperability
-instructions where a new service would change the project architecture.
+lifecycle. All Now, Next and Later rows have an implemented result within
+the bounded scope below. Later items use local exports, offline fixtures and
+interoperability instructions where a service would change project architecture.
 Rejected directions remain rejected; the original open questions remain open.
 
 - Completed: nested findings collection and entity-aware history. Evidence:
@@ -325,34 +328,41 @@ Rejected directions remain rejected; the original open questions remain open.
   monitoring text. REPORTING.md documents truncation, failures and snapshot
   freshness limits. No reporting service or background account access was added.
 
+- Completed: final error review also removed provider text from local auth
+  diagnostics and protected the history-query CLI with the common error boundary.
+
 - Completed: five offline agent task fixtures and executable adapter contracts.
   EVALUATION.md separates those checks from unperformed model-runtime evaluation.
 
 ## Next
 
-| Item | Account benefit and evidence | Effort | Risk / reason not built now |
-| --- | --- | --- | --- |
-| Expand adapter tests and structured read errors | Prevent silent audit omissions. Follow-up tests now cover audit provider propagation and keyword locale behavior; other baseline gaps remain. Test permissions, removed resources and malformed responses per adapter. | 3–5 days | Medium; needs adapter-specific expected behavior, beyond a single small repair. |
-| Review Cloud project access and onboarding | Let newly approved projects connect without an obsolete token requirement. `gads_auth.py`, `gads_provider.py`, web settings and SETUP assume a token. [Migration guide](https://developers.google.com/google-ads/api/docs/api-policy/developer-token). | 2–4 days | High; changes both credential models and onboarding; preserve the 24-hour gate. |
-| Build an atomic, channel-specific campaign writer | Apply exactly the reviewed budget, bidding, targeting and declaration with temporary resource names in one validated batch. [Mutating resources](https://developers.google.com/google-ads/api/docs/mutating/overview), N2. | 5–10 days | High; broad channel creation is not a small feature. Search language retirement and political declarations need explicit design. |
-| Implement brand shared-list lifecycle | Exclude the intended brands without duplicate lists or unintended campaign scope. [Shared sets](https://developers.google.com/google-ads/api/docs/targeting/shared-sets), N3. | 2–4 days | High; needs list ownership, reuse, idempotency and campaign compatibility rules. |
-| Add PMax channel, placement and asset metrics | Explain where spend moved and distinguish campaign branding from group assets. [Channel reporting announcement](https://ads-developers.googleblog.com/2026/01/introducing-channel-level-reporting-for.html), [asset fields](https://developers.google.com/google-ads/api/fields/v25/asset_group_asset). | 3–5 days | Medium; aggregating incompatible segments would mislead account decisions. |
-| Add conversion diagnostics and consent evidence | Show primary goals and delivery diagnostics separately from detected HTML tags. `gads_conversions.py`, `gads_gtag.py`; [consent concepts](https://developers.google.com/tag-platform/security/concepts/consent-mode), [upload deprecations](https://developers.google.com/google-ads/api/docs/deprecations). | 3–5 days | High; no event uploads or claims of legal compliance from a static page scan. |
-| Add Demand Gen channel and AI Max settings reads | Explain surface allocation and migrations; begin from the small Now campaign read. [Channel controls](https://developers.google.com/google-ads/api/docs/demand-gen/channel-controls), [release notes](https://developers.google.com/google-ads/api/docs/release-notes). | 2–4 days | Medium; eligibility, automation opt-ins and attribution need separate fixtures. |
-| Complete multi-account audit boundaries | Provider context propagation is fixed and tested above. `scripts/gads_audit.py` (`list_all_customers`) still lists directly accessible accounts rather than expanding manager hierarchies. Hosted audit is not exposed today. | 2–3 days | High; add manager hierarchy fixtures and thread-safe database provider lifetimes before exposing hosted audit. |
-| Preserve nested and per-entity findings | `scripts/gads_demographics.py:180` nests findings, while `scripts/gads_report.py:76` inspects top-level findings; `scripts/gads_history.py:127` keys diffs by agent/code, collapsing distinct entities. | 1–2 days | Medium; choose a stable finding identity and output migration first. |
-| Consume hosted OAuth state atomically | State consumption is read-then-delete; concurrent callbacks need atomic database handling. `webapp/app/routes/signin_routes.py:80`, `webapp/app/routes/auth_routes.py:75`. Disconnect cleanup is completed above. | 1–2 days | High; database concurrency needs explicit tests beyond browser-state binding. |
-| Sanitise broader error output | `scripts/gads_audit.py:99` returns raw exception text and a traceback. Provider details may enter reports; no secret disclosure was observed. | 1–2 days | Medium; define useful redacted diagnostics across adapters and distinguish retryable failures from reconnect requirements. |
+Completed within the stated scope. Original effort estimates are retained.
+
+| Item | Account benefit and evidence | Effort | Risk / remaining limit | Result |
+| --- | --- | --- | --- | --- |
+| Expand adapter tests and structured read errors | Prevent silent audit omissions. Follow-up tests cover provider propagation, locale behavior and the baseline adapter gaps, including permissions, missing resources and malformed transport. | 3–5 days | Medium; mocked schema and transport coverage cannot prove account eligibility. | Completed: `test_gads_read_boundaries.py`, per-adapter tests and `gads_errors.py`; [errors](REPORTING.md#read-failures). |
+| Review Cloud project access and onboarding | Let newly approved projects connect without an obsolete token requirement. Baseline `gads_auth.py`, `gads_provider.py`, web settings and SETUP assumed a token. [Migration guide](https://developers.google.com/google-ads/api/docs/api-policy/developer-token). | 2–4 days | High; production project approval remains an external prerequisite. | Completed: optional legacy token in CLI/provider/hosted settings; [setup](SETUP.md). |
+| Build an atomic, channel-specific campaign writer | Apply exactly the reviewed budget, bidding, targeting and declaration with temporary resource names in one validated batch. [Mutating resources](https://developers.google.com/google-ads/api/docs/mutating/overview), N2. | 5–10 days | High; Search shell only, no ads or activation; uncertain applies need account review. | Completed bounded writer: `gads_creation.py`; [contract](WRITES.md#search-campaign-shells). |
+| Implement brand shared-list lifecycle | Exclude the intended brands without duplicate lists or unintended campaign scope. [Shared sets](https://developers.google.com/google-ads/api/docs/targeting/shared-sets), N3. | 2–4 days | High; no list editing/removal, Search restrictions or concurrency lock. | Completed bounded PMax create/reuse/attach: `gads_brands.py`; [contract](WRITES.md#pmax-brand-exclusions). |
+| Add PMax channel, placement and asset metrics | Explain where spend moved and distinguish campaign branding from group assets. [Channel reporting announcement](https://ads-developers.googleblog.com/2026/01/introducing-channel-level-reporting-for.html), [asset fields](https://developers.google.com/google-ads/api/fields/v25/asset_group_asset). | 3–5 days | Medium; incompatible segments must not be summed. | Completed: `gads_pmax.py` channels, placements, assets, branding and tracking; [reads](REPORTING.md). |
+| Add conversion diagnostics and consent evidence | Show primary goals and delivery diagnostics separately from detected HTML tags. `gads_conversions.py`, `gads_gtag.py`; [consent concepts](https://developers.google.com/tag-platform/security/concepts/consent-mode), [upload deprecations](https://developers.google.com/google-ads/api/docs/deprecations). | 3–5 days | High; no event upload, runtime consent verification or compliance guarantee. | Completed bounded reads: `gads_conversions.py`, `gads_gtag.py`; [limits](REPORTING.md). |
+| Add Demand Gen channel and AI Max settings reads | Explain surface allocation and migrations; begin from the small Now campaign read. [Channel controls](https://developers.google.com/google-ads/api/docs/demand-gen/channel-controls), [release notes](https://developers.google.com/google-ads/api/docs/release-notes). | 2–4 days | Medium; configuration is not attribution or a rollout-impact forecast. | Completed: `gads_demandgen.py`, `gads_search.py`, including API migration dates; [reads](REPORTING.md). |
+| Complete multi-account audit boundaries | Provider context propagation is fixed and tested above. `scripts/gads_audit.py` defaults to direct access; explicit hierarchy discovery is now available. Hosted audit is not exposed. | 2–3 days | High; hosted audit remains unexposed; database provider thread lifetimes would need separate work. | Completed CLI scope: `gads_accounts.py` traversal and `gads_audit.py` login routing/context tests. |
+| Preserve nested and per-entity findings | `scripts/gads_demographics.py:180` nests findings, while `scripts/gads_report.py:76` inspects top-level findings; `scripts/gads_history.py:127` keys diffs by agent/code, collapsing distinct entities. | 1–2 days | Medium; legacy findings without entities use their message as identity. | Completed: `gads_findings.py`, report/history/notification integration and regression tests. |
+| Consume hosted OAuth state atomically | Baseline state consumption was read-then-delete; concurrent callbacks need atomic database handling. `webapp/app/routes/signin_routes.py:80`, `webapp/app/routes/auth_routes.py:75`. Disconnect cleanup is completed above. | 1–2 days | High; independent SQLite concurrency tested, production PostgreSQL not exercised. | Completed: `webapp/app/oauth_state.py` and both OAuth callbacks. |
+| Sanitise broader error output | Baseline `scripts/gads_audit.py:99` returned raw exception text and a traceback. Provider details may enter reports; no secret disclosure was observed. | 1–2 days | Medium; fixed error categories intentionally omit detailed provider diagnostics. | Completed: audit, read CLIs, writers and network error redaction in `gads_errors.py` and callers. |
 
 ## Later
 
-| Proposal | Evidence and value | Effort | Risk / decision |
-| --- | --- | --- | --- |
-| Optional read-only MCP interface or interoperability guide | Google's [Google Ads MCP](https://github.com/googleads/google-ads-mcp) provides query and resource-metadata tools. Schema discovery is useful for validating agent-generated GAQL. | 3–5 days | Medium; reuse upstream where practical; a new server changes project shape and must preserve session gates. |
-| Reusable multi-account report exports | Google's [Ads API Report Fetcher](https://github.com/google/ads-api-report-fetcher) offers configurable reports and output integrations. This toolkit's reports are local Markdown/HTML. | 3–5 days | Medium; valuable for teams, but reporting infrastructure is outside the current adapter repair. |
-| Read-only query export | [cohnen/mcp-google-ads](https://github.com/cohnen/mcp-google-ads) documents general GAQL tools with table, JSON and CSV output. A reviewed query/export command could cover occasional reporting gaps. | 2–3 days | Medium; validate query scope and preserve the session gate; do not copy stale example fields. |
-| Agent evaluation fixtures | [google-ads-api-agent](https://github.com/itallstartedwithaidea/google-ads-api-agent) documents campaign creation, experiments and ad-schedule managers, beyond this toolkit's reads. Compare those workflows using mocked tasks, especially confirmation and unsupported requests. Its advertised capabilities have not been executed or safety-audited here. | 3–5 days | Low for offline evaluation; no unattended spend changes. |
-| Monitoring integrations | [Ads Monitor](https://github.com/google-marketing-solutions/ads-monitor) uses monitoring infrastructure for account signals. Exporting findings could help existing operations teams. | 3–5 days | Medium; no autonomous session renewal or hidden background access after 24 hours. |
+Completed through local adapters, fixtures and a guide, without new services.
+
+| Proposal | Evidence and value | Effort | Risk / decision | Result |
+| --- | --- | --- | --- | --- |
+| Optional read-only MCP interface or interoperability guide | Google's [Google Ads MCP](https://github.com/googleads/google-ads-mcp) provides query and resource-metadata tools. Schema discovery is useful for validating agent-generated GAQL. | 3–5 days | Medium; independent upstream authentication does not inherit this session gate. | Completed guide: [INTEROPERABILITY.md](INTEROPERABILITY.md). A new server remains rejected. |
+| Reusable multi-account report exports | Google's [Ads API Report Fetcher](https://github.com/google/ads-api-report-fetcher) offers configurable reports and output integrations. The baseline reports were local Markdown/HTML. | 3–5 days | Medium; no warehouse connectors or reporting service. | Completed local JSON/CSV export in `gads_export.py`; failures and entities are retained. |
+| Read-only query export | [cohnen/mcp-google-ads](https://github.com/cohnen/mcp-google-ads) documents general GAQL tools with table, JSON and CSV output. A reviewed query/export command could cover occasional reporting gaps. | 2–3 days | Medium; server field compatibility remains unverified, results are bounded. | Completed SELECT-only single-account JSON/CSV export with session enforcement and truncation reporting. |
+| Agent evaluation fixtures | [google-ads-api-agent](https://github.com/itallstartedwithaidea/google-ads-api-agent) documents campaign creation, experiments and ad-schedule managers, beyond this toolkit's reads. Compare those workflows using mocked tasks, especially confirmation and unsupported requests. Its advertised capabilities have not been executed or safety-audited here. | 3–5 days | Low for offline evaluation; no language-model runtime was scored. | Completed [fixtures and rubric](EVALUATION.md) plus executable mocked adapter contracts. |
+| Monitoring integrations | [Ads Monitor](https://github.com/google-marketing-solutions/ads-monitor) uses monitoring infrastructure for account signals. Exporting findings could help existing operations teams. | 3–5 days | Medium; snapshot freshness must be checked by the consuming monitor. | Completed local Prometheus text export of saved audit counts/failures; no scheduler, token renewal or push service. |
 
 ## Open questions and rejected directions
 
@@ -384,5 +394,7 @@ Rejected directions remain rejected; the original open questions remain open.
 N1: `5d3ee11`; N2: `9eda92c`; N3: `aa4faa7`; N4: `ca03248` and
 `3649efa`; N5: `e8e44fe`; N6: `73aa769`; N7: `b4fda27`; N8: `54eb00b`;
 N9: `f65ad48`; N10: `5947a0e`.
+Continuation commit hashes and per-commit checks are recorded in
+[VERIFICATION.md](VERIFICATION.md#bounded-roadmap-continuation-2026-10-01).
 All code changes have an Unreleased changelog entry. No live service or account
 was used to validate these changes. The session cap and hook are unchanged.
