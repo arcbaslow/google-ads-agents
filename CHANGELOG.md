@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Add session-gated bounded GAQL exports and local multi-account audit exports in JSON, spreadsheet-safe CSV and Prometheus text.
+
 - Return redacted JSON failures from read commands and remove provider exception bodies from site scans, creative fetches and Telegram errors. Add mocked coverage for the remaining baseline read adapters.
 
 - Add reviewed atomic PMax brand-list creation and exact-content reuse, with duplicate, scope and content-drift checks.

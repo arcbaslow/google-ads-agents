@@ -56,3 +56,62 @@ wrappers and geo suggestions using real v25 messages with mocked services,
 including empty rows, permissions, missing resources and malformed transport.
 Other adapter tests cover transformations and write boundaries; this is not a
 claim of complete branch coverage or server-side field compatibility.
+
+## Local exports
+
+Export a saved single-account or multi-account audit without API access:
+
+```sh
+python scripts/gads_export.py --audit-file audit.json --format csv --output findings.csv
+python scripts/gads_export.py --audit-file audit.json --format json --output findings.json
+python scripts/gads_export.py --audit-file audit.json --format prometheus --output findings.prom
+```
+
+Rows distinguish account, adapter status, finding and incomplete discovery.
+Nested finding paths and entity IDs survive export; raw legacy exception
+messages are excluded. JSON preserves nested values. CSV flattens object keys,
+encodes arrays as JSON, keeps numeric types and prefixes formula-like strings
+with an apostrophe for spreadsheet safety. Empty query CSV has no header.
+
+Prometheus text includes finding counts by account/severity, failed-adapter
+counts and a discovery-incomplete gauge. It represents the saved snapshot,
+not a live account. Check the audit date range and file age separately in your
+monitoring system; zero findings is not evidence that every check ran or that
+tracking works. No credentials, scheduler, HTTP server, push gateway or
+notification delivery are involved. Publish the file to an existing collector
+only through your own approved process. This covers the local integration
+portion of the [Ads Monitor comparison](https://github.com/google-marketing-solutions/ads-monitor)
+without installing its infrastructure.
+
+## Bounded GAQL export
+
+Save a reviewed query, for example:
+
+```sql
+SELECT campaign.id, campaign.name, metrics.cost_micros
+FROM campaign
+WHERE segments.date DURING LAST_30_DAYS
+ORDER BY campaign.id
+```
+
+```sh
+python scripts/gads_export.py --customer 1234567890 --query-file report.gaql --limit 1000 --format json --output report.json
+```
+
+JSON and CSV are supported. A numeric customer is required and only the
+SearchStream read service is called, through the normal provider/session gate.
+The command accepts one SELECT/FROM query with optional WHERE and ORDER BY,
+rejects comments, multiple statements, LIMIT and PARAMETERS, and appends its
+own limit. `--limit` accepts 1–10000 rows. One extra row detects truncation;
+JSON records `truncated` and CSV emits a warning on stderr. No automatic
+pagination beyond that limit or multi-account query fan-out is provided.
+
+The syntax check is conservative; Google validates actual field compatibility
+and account permission. A failed request returns exit code 3 without replacing
+an existing `--output` file. Always check exit status before consuming stdout
+as CSV, since failure output is JSON.
+
+See the [official GAQL structure](https://developers.google.com/google-ads/api/docs/query/structure).
+The export scope addresses the local reporting gap compared with
+[Ads API Report Fetcher](https://github.com/google/ads-api-report-fetcher);
+warehouse connectors and hosted reporting remain outside this toolkit.

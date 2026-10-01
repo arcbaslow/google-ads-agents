@@ -123,3 +123,9 @@ Read CLI failures return exit code 3 with a redacted JSON error. Explain
 `temporarily_unavailable`; never interpret a failed report as zero spend or
 healthy tracking. Python calls still raise, and audits keep per-agent failed
 blocks. See docs/REPORTING.md. Do not retry writes based on a retryability hint.
+
+For an occasional read missing from a dedicated adapter, use
+`python scripts/gads_export.py --customer <id> --query-file report.gaql
+--limit 1000 --format json --output report.json` on one line. Review the GAQL
+against the selected API reference first. This command preserves the session
+gate, accepts only reads and reports truncation; see docs/REPORTING.md.
