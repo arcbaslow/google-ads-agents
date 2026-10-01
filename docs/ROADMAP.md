@@ -315,6 +315,9 @@ Rejected directions remain rejected; the original open questions remain open.
   non-executable; owner assertions, supported settings and retry limits are
   documented in WRITES.md. Other campaign types remain outside this writer.
 
+- Completed: bounded PMax brand-list creation, reuse and attachment, with no
+  edits to shared content. WRITES.md records ownership, retry and scope limits.
+
 ## Next
 
 | Item | Account benefit and evidence | Effort | Risk / reason not built now |

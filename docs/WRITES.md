@@ -50,3 +50,31 @@ Request fields were checked against the official [Campaign reference](https://de
 and [Search language deprecation](https://developers.google.com/google-ads/api/docs/deprecations).
 Tests use actual v25 protobufs and mocked services. Server validation and
 account eligibility have not been exercised against live accounts.
+
+## PMax brand exclusions
+
+Use `gads_brands.py suggest` to obtain catalogue IDs, then have the owner select
+the intended brands and campaigns. `exclude` takes `--campaign-ids` and
+`--brand-ids`, or `--input` containing exactly those two JSON arrays. Each
+array accepts 1–100 strings. An explicit `--validate-only` or `--apply` is
+required; both modes still require the interactive review.
+
+The adapter reads campaign eligibility, existing BRANDS lists, list contents
+and campaign links in the selected account. A deterministic name derived from
+the sorted brand IDs identifies a managed list. It reuses that list only when
+its current contents match exactly; duplicate names, foreign resource names
+and changed contents fail closed. New list, members and negative campaign
+brand-list criteria use one atomic request. Existing lists are never edited.
+Already attached campaigns need no operation.
+
+Only active or paused PMax campaigns are supported. No Search restrictions,
+cross-account list sharing, list edits, removal or deletion are included.
+Names identify managed content, not ownership permissions. Concurrent operators
+are not locked: sequential repeat requests avoid duplicates, but an uncertain
+apply must be investigated in the account before retrying.
+
+Request fields follow [shared sets](https://developers.google.com/google-ads/api/docs/targeting/shared-sets),
+[BrandInfo.entity_id](https://developers.google.com/google-ads/api/reference/rpc/v25/BrandInfo)
+and [CampaignCriterion.brand_list](https://developers.google.com/google-ads/api/reference/rpc/v25/CampaignCriterion).
+Server validation decides catalogue eligibility and account limits. Mocked
+checks do not establish that a particular brand can be excluded in a real account.

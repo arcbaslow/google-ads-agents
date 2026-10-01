@@ -37,7 +37,7 @@ Top-level entry point. `/gads <command> <args>`.
 | `/gads bidstrategy <customer-id>` | Per-campaign bid strategy fit |
 | `/gads pacing <customer-id>` | Budget pacing, MTD vs target |
 | `/gads assets <customer-id> rsa\|pmax-assets` | RSA strength and PMax asset inventory |
-| `/gads brands <customer-id> suggest` | Brand catalogue lookup; exclusions unavailable |
+| `/gads brands <customer-id> suggest` | Brand lookup and reviewed PMax list exclusions |
 | `/gads geos <customer-id> --query NAME [...]` | Resolve names to GeoTargetConstant IDs |
 | `/gads quality <customer-id>` | Per-keyword Quality Score with deficient-component grouping |
 | `/gads demographics <customer-id> age\|gender\|device\|location\|all` | Demographic and geographic outliers |

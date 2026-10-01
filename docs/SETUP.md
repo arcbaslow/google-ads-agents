@@ -160,8 +160,8 @@ a PAUSED Search shell with a dedicated budget and explicit locations. See
 [bounded writes](WRITES.md) before using validation or application.
 
 Brand catalogue lookup returns entity IDs, display names, primary URLs and
-catalogue states. Brand exclusion writes are unavailable until shared-list
-management is implemented. No exclusion request is sent.
+catalogue states. Bounded PMax exclusions create or reuse exact-content
+managed lists after review and validation. See [bounded writes](WRITES.md).
 
 ## Hosted account discovery
 
