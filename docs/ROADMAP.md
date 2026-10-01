@@ -299,6 +299,10 @@ Rejected directions remain rejected; the original open questions remain open.
 - Completed: PMax channels, placement impressions, asset metrics and branding
   reads. See REPORTING.md for sources and aggregation limits; no account writes.
 
+- Completed: Demand Gen channel-control and Search AI Max settings reads.
+  The bounded scope is current configuration; migration forecasts and channel
+  attribution remain outside these commands. Sources and limits: REPORTING.md.
+
 ## Next
 
 | Item | Account benefit and evidence | Effort | Risk / reason not built now |

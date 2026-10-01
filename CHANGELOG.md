@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Add read-only Demand Gen channel controls and Search AI Max settings commands.
+
 - Add separate PMax channel, placement-impression, asset-metric and campaign-branding reads.
 
 - Allow local and hosted Cloud-project authentication without legacy developer tokens and update onboarding instructions.

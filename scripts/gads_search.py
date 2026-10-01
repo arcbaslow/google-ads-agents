@@ -9,6 +9,20 @@ import gads_client
 import gads_query
 import gads_utils
 
+AI_MAX_QUERY = """
+    SELECT campaign.id, campaign.name, campaign.status,
+      campaign.ai_max_setting.enable_ai_max, campaign.ai_max_setting.bundling_required
+    FROM campaign
+    WHERE campaign.advertising_channel_type = 'SEARCH' AND campaign.status != 'REMOVED'
+"""
+
+
+def ai_max_settings(customer_id: str) -> dict:
+    customer_id = gads_utils.normalize_customer_id(customer_id)
+    return {"customer_id": customer_id,
+            "campaigns": gads_client.search_stream(customer_id, AI_MAX_QUERY),
+            "limitations": ["Current Search AI Max settings; not migration timing or measured impact."]}
+
 # Default thresholds for the negative-candidate miner. Tunable per call.
 NEGATIVE_DEFAULTS = {
     "min_clicks": 5,         # at least this many clicks
@@ -116,10 +130,13 @@ def main() -> int:
     p.add_argument("--max-conversions", type=float,
                    default=NEGATIVE_DEFAULTS["max_conversions"])
     p.add_argument("--json", action="store_true")
+    p.add_argument("--ai-max-settings", action="store_true")
     args = p.parse_args()
 
     cid = gads_utils.normalize_customer_id(args.customer)
-    if args.negative_candidates:
+    if args.ai_max_settings:
+        data = ai_max_settings(cid)
+    elif args.negative_candidates:
         data = negative_candidates(
             cid, args.days, args.min_clicks, args.min_cost, args.max_conversions
         )
