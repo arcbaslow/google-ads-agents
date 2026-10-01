@@ -296,6 +296,9 @@ Rejected directions remain rejected; the original open questions remain open.
   Cloud-project onboarding. Tokenless client construction is tested offline;
   Cloud approval and account access remain external checks. The session cap is unchanged.
 
+- Completed: PMax channels, placement impressions, asset metrics and branding
+  reads. See REPORTING.md for sources and aggregation limits; no account writes.
+
 ## Next
 
 | Item | Account benefit and evidence | Effort | Risk / reason not built now |

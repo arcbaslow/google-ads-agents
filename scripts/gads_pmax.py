@@ -9,6 +9,57 @@ import gads_client
 import gads_query
 import gads_utils
 
+CHANNELS_QUERY = """
+    SELECT campaign.id, campaign.name, segments.ad_network_type,
+      segments.ad_using_product_data, segments.ad_using_video,
+      metrics.impressions, metrics.clicks, metrics.cost_micros, metrics.conversions
+    FROM campaign
+    WHERE campaign.advertising_channel_type = 'PERFORMANCE_MAX'
+      AND segments.date BETWEEN '{start}' AND '{end}'
+"""
+PLACEMENTS_QUERY = """
+    SELECT campaign.id, performance_max_placement_view.display_name,
+      performance_max_placement_view.placement, performance_max_placement_view.placement_type,
+      performance_max_placement_view.target_url, segments.ad_network_type, metrics.impressions
+    FROM performance_max_placement_view
+    WHERE campaign.advertising_channel_type = 'PERFORMANCE_MAX'
+      AND segments.date BETWEEN '{start}' AND '{end}'
+"""
+ASSETS_QUERY = """
+    SELECT campaign.id, asset_group.id, asset_group_asset.asset,
+      asset_group_asset.field_type, asset_group_asset.status,
+      metrics.impressions, metrics.clicks, metrics.cost_micros, metrics.conversions
+    FROM asset_group_asset
+    WHERE campaign.advertising_channel_type = 'PERFORMANCE_MAX'
+      AND asset_group_asset.status != 'REMOVED'
+      AND segments.date BETWEEN '{start}' AND '{end}'
+"""
+BRANDING_QUERY = """
+    SELECT campaign.id, campaign_asset.asset, campaign_asset.field_type, campaign_asset.status
+    FROM campaign_asset
+    WHERE campaign.advertising_channel_type = 'PERFORMANCE_MAX'
+      AND campaign_asset.field_type IN ('BUSINESS_NAME', 'LOGO', 'LANDSCAPE_LOGO')
+      AND campaign_asset.status != 'REMOVED'
+"""
+
+
+def report(customer_id: str, days: int = 28, kind: str = "channels") -> dict:
+    queries = {"channels": CHANNELS_QUERY, "placements": PLACEMENTS_QUERY,
+               "assets": ASSETS_QUERY, "branding": BRANDING_QUERY}
+    if days < 1 or kind not in queries:
+        raise ValueError("Choose a supported report and positive days")
+    customer_id = gads_utils.normalize_customer_id(customer_id)
+    start, end = gads_utils.date_range(days)
+    rows = gads_client.search_stream(customer_id, queries[kind].format(start=start, end=end))
+    return {
+        "customer_id": customer_id, "report": kind, "rows": rows,
+        "date_range": None if kind == "branding" else {"start": start, "end": end},
+        "limitations": [
+            "Placement reporting exposes impressions; it is not placement spend or conversion attribution.",
+            "Assets can serve together; never sum asset rows into campaign totals.",
+            "Branding is current campaign-link inventory, not proof of serving or complete asset coverage.",
+        ],
+    }
 
 def asset_groups(customer_id: str, days: int = 28) -> dict:
     start, end = gads_utils.date_range(days)
@@ -25,9 +76,12 @@ def main() -> int:
     p.add_argument("--customer", required=True)
     p.add_argument("--days", type=int, default=28)
     p.add_argument("--json", action="store_true")
+    p.add_argument("--report", choices=["groups", "channels", "placements", "assets", "branding"],
+                   default="groups")
     args = p.parse_args()
     cid = gads_utils.normalize_customer_id(args.customer)
-    gads_utils.emit(asset_groups(cid, args.days), args.json)
+    data = asset_groups(cid, args.days) if args.report == "groups" else report(cid, args.days, args.report)
+    gads_utils.emit(data, args.json)
     return 0
 
 
