@@ -49,3 +49,36 @@ def test_google_ads_error_details_are_not_returned():
     result = gads_errors.describe(GoogleAdsException(None, None, failure, "PRIVATE"))
     assert result["error_code"] == "permission_denied"
     assert "PRIVATE" not in json.dumps(result)
+
+
+@pytest.mark.parametrize("method", ["gcloud_adc", "oauth_client"])
+def test_local_auth_check_does_not_echo_backend_text(monkeypatch, capsys, method):
+    from unittest.mock import Mock
+
+    import gads_auth
+    import gads_authflow
+
+    monkeypatch.setattr(gads_auth, "enforce_session", lambda: None)
+    monkeypatch.setattr(gads_auth, "active_profile_name", lambda: "example")
+    monkeypatch.setattr(gads_auth, "active_profile", lambda: {"auth_method": method})
+    backend = Mock()
+    backend.credentials.side_effect = RefreshError("PRIVATE provider body")
+    monkeypatch.setattr(gads_authflow, "select_backend", lambda *args: backend)
+    assert gads_auth.cmd_check(None) == 1
+    result = capsys.readouterr().out
+    assert "PRIVATE" not in result
+    assert "gcloud" in result if method == "gcloud_adc" else "--oauth-login" in result
+
+
+def test_history_cli_does_not_echo_provider_text(monkeypatch, capsys):
+    from unittest.mock import Mock
+
+    import gads_client
+    import gads_history
+
+    monkeypatch.setattr(gads_client, "search_stream", Mock(side_effect=exceptions.Forbidden("PRIVATE")))
+    monkeypatch.setattr("sys.argv", ["history", "--customer", "123", "--changes", "--json"])
+    assert gads_history.main() == 3
+    output = capsys.readouterr().out
+    assert "PRIVATE" not in output
+    assert json.loads(output)["error_code"] == "permission_denied"

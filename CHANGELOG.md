@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Redact local authentication backend diagnostics and history-query CLI failures while retaining reconnect commands.
+
 - Expose API-reported AI Max migration dates and PMax asset-group URL tracking settings without inferring rollout dates or measurement health.
 
 - Add offline agent safety task fixtures with executable mocked adapter contracts and a transcript evaluation rubric.
