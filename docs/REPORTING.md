@@ -41,3 +41,18 @@ reports inaccessible branches as partial. Traversal is capped at 1000 manager
 visits. This is a CLI feature; the hosted service still exposes no audit endpoint.
 
 Reference: [account hierarchy](https://developers.google.com/google-ads/api/docs/account-management/get-account-hierarchy).
+
+## Read failures
+
+Read CLI commands return exit code 3 and a JSON object with `status: failed`,
+`error_code`, a fixed message and `retryable`. Provider exception text and
+tracebacks are omitted. Permission failure, removed resources and unavailable
+services are distinct from a successful empty report. Python adapter functions
+still raise; the audit driver records a failed block per adapter. No automatic
+retry is added. Site-scan and notification errors use the same redacted form.
+
+`test_gads_read_boundaries.py` covers the previously untested thin channel
+wrappers and geo suggestions using real v25 messages with mocked services,
+including empty rows, permissions, missing resources and malformed transport.
+Other adapter tests cover transformations and write boundaries; this is not a
+claim of complete branch coverage or server-side field compatibility.

@@ -12,6 +12,7 @@ import urllib.error
 import urllib.request
 
 import gads_client
+import gads_errors
 import gads_utils
 
 GTAG_PATTERNS = [
@@ -32,7 +33,7 @@ def scan_site(url: str) -> dict:
         with urllib.request.urlopen(req, timeout=10) as r:
             html = r.read(500_000).decode("utf-8", errors="ignore")
     except (urllib.error.URLError, TimeoutError, ValueError) as e:
-        out["error"] = str(e)
+        out.update(gads_errors.describe(e))
         return out
     out["reachable"] = True
     for pat in GTAG_PATTERNS:
@@ -62,6 +63,7 @@ def linked_accounts(customer_id: str) -> dict:
     return {"customer": rows[0] if rows else {}}
 
 
+@gads_errors.cli
 def main() -> int:
     p = argparse.ArgumentParser()
     p.add_argument("--customer", required=True)

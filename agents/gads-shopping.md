@@ -17,3 +17,6 @@ label. A feed label is not necessarily a country code. Output contains
 customer_id, date_range and campaigns. There are no product-level metrics,
 feed diagnostics or PMax-with-feed results in this adapter. Do not infer
 Merchant Center health from campaign totals.
+
+Treat redacted failures as unavailable evidence, not an empty or healthy result.
+See docs/REPORTING.md for error categories. Never retry a write automatically.

@@ -1,5 +1,9 @@
 """Public error categories without provider messages or request contents."""
 
+import json
+import urllib.error
+from functools import wraps
+
 from google.api_core import exceptions as api_errors
 from google.auth.exceptions import RefreshError
 
@@ -18,8 +22,11 @@ def describe(exc: Exception) -> dict:
             code, message = "authentication_required", "Reconnect the Google account."
     elif isinstance(exc, (AuthRequiredError, SessionExpiredError, api_errors.Unauthorized)):
         code, message = "authentication_required", "Sign in again; check the session and credentials."
-    elif isinstance(exc, api_errors.Forbidden):
+    elif isinstance(exc, api_errors.Forbidden) or isinstance(exc, urllib.error.HTTPError) and exc.code == 403:
         code, message = "permission_denied", "Check account permissions and Cloud project access."
+    elif isinstance(exc, urllib.error.HTTPError):
+        code, message = "http_error", "HTTP request failed."
+        retryable = exc.code == 429 or exc.code >= 500
     elif isinstance(exc, (api_errors.ServiceUnavailable, api_errors.DeadlineExceeded,
                           api_errors.TooManyRequests, TimeoutError, ConnectionError)):
         code, message, retryable = "temporarily_unavailable", "Service temporarily unavailable; retry the read later.", True
@@ -41,3 +48,15 @@ def describe(exc: Exception) -> dict:
             else:
                 code, message = "api_rejected", "Google Ads rejected the request; check supported fields and inputs."
     return {"status": "failed", "error_code": code, "error": message, "retryable": retryable}
+
+
+def cli(entrypoint):
+    """Keep unexpected provider text and tracebacks out of read-command output."""
+    @wraps(entrypoint)
+    def run():
+        try:
+            return entrypoint()
+        except Exception as exc:
+            print(json.dumps(describe(exc)))
+            return 3
+    return run

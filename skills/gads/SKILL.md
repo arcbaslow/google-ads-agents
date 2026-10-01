@@ -115,3 +115,11 @@ guide the user through:
 
 New profiles do not require developer tokens. API access is approved for the
 Cloud project owning the OAuth client. Use docs/SETUP.md; preserve session checks.
+
+## Read failures
+
+Read CLI failures return exit code 3 with a redacted JSON error. Explain
+`authentication_required`, `permission_denied`, `not_found` or
+`temporarily_unavailable`; never interpret a failed report as zero spend or
+healthy tracking. Python calls still raise, and audits keep per-agent failed
+blocks. See docs/REPORTING.md. Do not retry writes based on a retryability hint.

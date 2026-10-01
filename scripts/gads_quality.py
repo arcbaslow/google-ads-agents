@@ -16,6 +16,7 @@ import argparse
 import sys
 
 import gads_client
+import gads_errors
 import gads_utils
 
 QUERY = """
@@ -148,6 +149,7 @@ def _finding(item: dict) -> dict | None:
     }
 
 
+@gads_errors.cli
 def main() -> int:
     p = argparse.ArgumentParser()
     p.add_argument("--customer", required=True)

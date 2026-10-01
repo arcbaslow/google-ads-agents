@@ -15,6 +15,7 @@ import argparse
 import sys
 
 import gads_client
+import gads_errors
 import gads_utils
 
 QUERY = """
@@ -77,6 +78,7 @@ def _summarize(by_type: dict[str, list[dict]]) -> list[str]:
     return out
 
 
+@gads_errors.cli
 def main() -> int:
     p = argparse.ArgumentParser()
     p.add_argument("--customer", required=True)

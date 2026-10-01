@@ -137,6 +137,7 @@ def run_many(customer_ids: list[str], days: int, site: str | None,
     return {"accounts": results, "summary": f"audited {len(results)} accounts"}
 
 
+@gads_errors.cli
 def main() -> int:
     p = argparse.ArgumentParser()
     g = p.add_mutually_exclusive_group(required=True)

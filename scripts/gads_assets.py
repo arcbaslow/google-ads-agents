@@ -16,6 +16,7 @@ import argparse
 import sys
 
 import gads_client
+import gads_errors
 import gads_utils
 
 RSA_QUERY = """
@@ -131,6 +132,7 @@ def pmax_assets(customer_id: str) -> dict:
     }
 
 
+@gads_errors.cli
 def main() -> int:
     p = argparse.ArgumentParser()
     p.add_argument("--customer", required=True)

@@ -21,3 +21,6 @@ Setup flow:
    lists every chat that has spoken to the bot.
 4. `python scripts/gads_notify.py --setup --token <TOKEN> --chat-id <ID>`
 5. `python scripts/gads_notify.py --test` to confirm.
+
+Treat redacted failures as unavailable evidence, not an empty or healthy result.
+See docs/REPORTING.md for error categories. Never retry a write automatically.
