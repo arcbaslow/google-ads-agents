@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Expose API-reported AI Max migration dates and PMax asset-group URL tracking settings without inferring rollout dates or measurement health.
+
 - Add offline agent safety task fixtures with executable mocked adapter contracts and a transcript evaluation rubric.
 
 - Add session-gated bounded GAQL exports and local multi-account audit exports in JSON, spreadsheet-safe CSV and Prometheus text.

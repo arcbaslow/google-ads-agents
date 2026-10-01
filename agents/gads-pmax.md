@@ -19,3 +19,6 @@ channels|placements|assets|branding --json` (choose one report). Channels
 include network, product-data and video segments. Placement rows contain
 impressions only. Asset rows overlap; never add them to campaign totals.
 Branding is current campaign-level link inventory, separate from group assets.
+
+Use `--report tracking` for current group tracking templates, custom parameters
+and final URL suffixes. Do not infer resolved URLs or measurement health.

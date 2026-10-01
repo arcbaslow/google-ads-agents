@@ -12,7 +12,8 @@ import gads_utils
 
 AI_MAX_QUERY = """
     SELECT campaign.id, campaign.name, campaign.status,
-      campaign.ai_max_setting.enable_ai_max, campaign.ai_max_setting.bundling_required
+      campaign.ai_max_setting.enable_ai_max, campaign.ai_max_setting.bundling_required,
+      campaign.aca_migration_date_time, campaign.broad_match_migration_date_time
     FROM campaign
     WHERE campaign.advertising_channel_type = 'SEARCH' AND campaign.status != 'REMOVED'
 """
@@ -22,7 +23,7 @@ def ai_max_settings(customer_id: str) -> dict:
     customer_id = gads_utils.normalize_customer_id(customer_id)
     return {"customer_id": customer_id,
             "campaigns": gads_client.search_stream(customer_id, AI_MAX_QUERY),
-            "limitations": ["Current Search AI Max settings; not migration timing or measured impact."]}
+            "limitations": ["Current Search settings and API-reported migration dates; absent dates are unknown, not a forecast or measured impact."]}
 
 # Default thresholds for the negative-candidate miner. Tunable per call.
 NEGATIVE_DEFAULTS = {

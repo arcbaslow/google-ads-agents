@@ -25,3 +25,6 @@ pipe approval or substitute a direct API call. stdout remains the JSON result.
 Use `gads_search.py --customer <id> --ai-max-settings --json` for current Search
 AI Max enablement and bundling requirements. This read does not opt in, predict
 migration timing or measure the impact of AI Max.
+
+AI Max settings also include API-reported ACA and broad-match migration dates.
+Missing dates are unknown; do not manufacture a schedule or forecast impact.

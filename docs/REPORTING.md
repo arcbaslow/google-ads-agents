@@ -4,7 +4,7 @@
 
 `python scripts/gads_pmax.py --customer <id> --report channels --days 28 --json`
 returns channel segments. Other report choices are `placements`, `assets`,
-`branding`, and the existing default `groups`. Reports keep raw API rows.
+`branding`, `tracking`, and the existing default `groups`. Reports keep raw API rows.
 Placement impressions do not establish placement spend or conversions.
 Asset metrics overlap because assets can serve together. Branding is current
 campaign-level link inventory, not historical metrics or proof of serving.
@@ -16,7 +16,8 @@ Sources: [campaign reporting](https://developers.google.com/google-ads/api/perfo
 ## Demand Gen and AI Max settings
 
 Demand Gen `--channel-controls` reads current ad-group channel controls;
-Search `--ai-max-settings` reads current enablement and bundling requirements.
+Search `--ai-max-settings` reads current enablement, bundling requirements and
+API-reported ACA/broad-match migration dates. Absent dates remain unknown.
 Missing optional fields remain absent. Neither command changes settings.
 These are configuration reads, not historical delivery or migration forecasts.
 
@@ -115,3 +116,9 @@ See the [official GAQL structure](https://developers.google.com/google-ads/api/d
 The export scope addresses the local reporting gap compared with
 [Ads API Report Fetcher](https://github.com/google/ads-api-report-fetcher);
 warehouse connectors and hosted reporting remain outside this toolkit.
+
+PMax `--report tracking` reads asset-group tracking templates, custom parameters
+and final URL suffixes. These are current settings, not resolved click URLs or
+proof that tags fire. Field references: [AssetGroup](https://developers.google.com/google-ads/api/reference/rpc/v25/AssetGroup)
+and [Campaign migration dates](https://developers.google.com/google-ads/api/reference/rpc/v25/Campaign).
+These additions cover the v25.1/v25.2 configuration gaps listed in the roadmap.

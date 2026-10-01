@@ -66,7 +66,7 @@ Relevant changes in the past year:
   reports asset-group totals only; it cannot explain a shift between channels.
   [Google announcement](https://ads-developers.googleblog.com/2026/01/introducing-channel-level-reporting-for.html)
 - v25.1 added AI Max migration dates; v25.2 added asset-group URL tracking
-  settings. Neither has a read surface here.
+  settings. Both now have explicit read surfaces; see REPORTING.md.
   [release notes](https://developers.google.com/google-ads/api/docs/release-notes)
 - Demand Gen has its own campaign reporting and channel controls. The existing
   Display and YouTube filters do not cover Demand Gen. Click reporting has a
@@ -300,8 +300,8 @@ Rejected directions remain rejected; the original open questions remain open.
   reads. See REPORTING.md for sources and aggregation limits; no account writes.
 
 - Completed: Demand Gen channel-control and Search AI Max settings reads.
-  The bounded scope is current configuration; migration forecasts and channel
-  attribution remain outside these commands. Sources and limits: REPORTING.md.
+  The bounded scope is current configuration and API-reported migration dates;
+  impact forecasts and channel attribution remain outside these commands. Sources and limits: REPORTING.md.
 
 - Completed: offline upload diagnostics and static consent-signal evidence.
   REPORTING.md distinguishes these from runtime consent and browser delivery.

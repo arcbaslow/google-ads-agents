@@ -43,10 +43,19 @@ BRANDING_QUERY = """
       AND campaign_asset.status != 'REMOVED'
 """
 
+TRACKING_QUERY = """
+    SELECT campaign.id, asset_group.id, asset_group.name,
+      asset_group.tracking_url_template, asset_group.url_custom_parameters,
+      asset_group.final_url_suffix
+    FROM asset_group
+    WHERE campaign.advertising_channel_type = 'PERFORMANCE_MAX'
+      AND asset_group.status != 'REMOVED'
+"""
+
 
 def report(customer_id: str, days: int = 28, kind: str = "channels") -> dict:
     queries = {"channels": CHANNELS_QUERY, "placements": PLACEMENTS_QUERY,
-               "assets": ASSETS_QUERY, "branding": BRANDING_QUERY}
+               "assets": ASSETS_QUERY, "branding": BRANDING_QUERY, "tracking": TRACKING_QUERY}
     if days < 1 or kind not in queries:
         raise ValueError("Choose a supported report and positive days")
     customer_id = gads_utils.normalize_customer_id(customer_id)
@@ -54,11 +63,12 @@ def report(customer_id: str, days: int = 28, kind: str = "channels") -> dict:
     rows = gads_client.search_stream(customer_id, queries[kind].format(start=start, end=end))
     return {
         "customer_id": customer_id, "report": kind, "rows": rows,
-        "date_range": None if kind == "branding" else {"start": start, "end": end},
+        "date_range": None if kind in {"branding", "tracking"} else {"start": start, "end": end},
         "limitations": [
             "Placement reporting exposes impressions; it is not placement spend or conversion attribution.",
             "Assets can serve together; never sum asset rows into campaign totals.",
             "Branding is current campaign-link inventory, not proof of serving or complete asset coverage.",
+            "Tracking fields describe group configuration, not resolved URLs or successful measurement.",
         ],
     }
 
@@ -78,7 +88,7 @@ def main() -> int:
     p.add_argument("--customer", required=True)
     p.add_argument("--days", type=int, default=28)
     p.add_argument("--json", action="store_true")
-    p.add_argument("--report", choices=["groups", "channels", "placements", "assets", "branding"],
+    p.add_argument("--report", choices=["groups", "channels", "placements", "assets", "branding", "tracking"],
                    default="groups")
     args = p.parse_args()
     cid = gads_utils.normalize_customer_id(args.customer)
