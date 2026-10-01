@@ -19,6 +19,7 @@ import sys
 from contextvars import copy_context
 from typing import Any, Callable
 
+import gads_accounts
 import gads_bidstrategy
 import gads_client
 import gads_competitors
@@ -32,6 +33,7 @@ import gads_history
 import gads_pacing
 import gads_placements
 import gads_pmax
+import gads_provider
 import gads_quality
 import gads_recommendations
 import gads_search
@@ -111,12 +113,23 @@ def list_all_customers() -> list[str]:
 
 
 def run_many(customer_ids: list[str], days: int, site: str | None,
-             account_workers: int = 3, agent_workers: int = 6) -> dict:
+             account_workers: int = 3, agent_workers: int = 6,
+             login_customer_ids: dict[str, str] | None = None) -> dict:
     """Run audits across multiple customers, capping concurrent accounts."""
     results: dict[str, Any] = {}
+
+    def run_account(cid):
+        if login_customer_ids is None:
+            return run(cid, days, site, agent_workers)
+        provider = gads_accounts.LoginProvider(
+            gads_provider.get_active_provider(), login_customer_ids[cid],
+        )
+        with gads_provider.bind_provider(provider):
+            return run(cid, days, site, agent_workers)
+
     with concurrent.futures.ThreadPoolExecutor(max_workers=account_workers) as pool:
         futures = {
-            pool.submit(copy_context().run, run, cid, days, site, agent_workers): cid
+            pool.submit(copy_context().run, run_account, cid): cid
             for cid in customer_ids
         }
         for fut in concurrent.futures.as_completed(futures):
@@ -131,6 +144,8 @@ def main() -> int:
     g.add_argument("--all-customers", action="store_true",
                    help="Fan out across every accessible customer in parallel")
     p.add_argument("--days", type=int, default=28)
+    p.add_argument("--include-managed", action="store_true",
+                   help="Expand manager hierarchies for --all-customers")
     p.add_argument("--site", help="Site URL for the gtag scan")
     p.add_argument("--output", help="Path to write merged JSON (default: stdout)")
     p.add_argument("--save-history", action="store_true",
@@ -140,11 +155,17 @@ def main() -> int:
     p.add_argument("--account-workers", type=int, default=3,
                    help="Concurrent accounts when --all-customers (default 3)")
     args = p.parse_args()
+    if args.include_managed and not args.all_customers:
+        p.error("--include-managed requires --all-customers")
 
     if args.all_customers:
         customer_ids = list_all_customers()
-        data = run_many(customer_ids, args.days, args.site,
-                        args.account_workers, args.workers)
+        discovery = gads_accounts.discover(customer_ids) if args.include_managed else None
+        targets = discovery["targets"] if discovery else None
+        data = run_many(list(targets) if targets is not None else customer_ids,
+                        args.days, args.site, args.account_workers, args.workers, targets)
+        if discovery:
+            data["discovery"] = discovery
     else:
         data = run(args.customer, args.days, args.site, args.workers)
 

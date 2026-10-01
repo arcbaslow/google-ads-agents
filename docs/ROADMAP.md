@@ -306,6 +306,11 @@ Rejected directions remain rejected; the original open questions remain open.
 - Completed: offline upload diagnostics and static consent-signal evidence.
   REPORTING.md distinguishes these from runtime consent and browser delivery.
 
+- Completed: explicit CLI manager-tree discovery and per-root login routing,
+  with nested-manager, duplicate, inaccessible-root and account-worker tests.
+  Hosted audit remains unexposed, so database-backed providers are not shared
+  across audit workers. Reference and limits: REPORTING.md.
+
 ## Next
 
 | Item | Account benefit and evidence | Effort | Risk / reason not built now |

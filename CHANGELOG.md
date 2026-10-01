@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Add explicit manager-tree audit discovery with deduplication, partial-failure reporting and per-account manager login routing.
+
 - Add offline conversion-upload diagnostics and explicitly limited static consent-signal evidence.
 
 - Add read-only Demand Gen channel controls and Search AI Max settings commands.
