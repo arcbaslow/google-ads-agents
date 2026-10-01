@@ -235,3 +235,7 @@ markets needs explicit constant resolution rather than a fallback.
 Read-result JSON preserves snake_case field names and uses the API spelling
 for Python reserved words (`type`, not `type_`). This keeps demographic and
 recommendation enum labels intact.
+
+Hosted OAuth callbacks consume state with one database DELETE RETURNING before
+code exchange. State remains bound to its purpose and owner or initiating browser.
+Concurrent callbacks cannot reuse it; failures require starting a new flow.

@@ -14,6 +14,7 @@ from app.crypto import Crypto
 from app.db import get_session
 from app.identity import get_current_user
 from app.models import Connection, OAuthState, User
+from app.oauth_state import consume_state
 from app.tokenstore_db import DbTokenStore
 
 router = APIRouter()
@@ -75,19 +76,9 @@ def oauth_callback(
     settings: Settings = Depends(get_settings),
     session: Session = Depends(get_session),
 ):
-    row = session.get(OAuthState, state)
-    if row is None or row.user_id != user.id or row.purpose != "connect":
+    verifier = consume_state(session, state, "connect", user.id)
+    if verifier is None:
         raise HTTPException(status_code=400, detail="invalid or expired state")
-    expires = row.expires_at
-    if expires.tzinfo is None:
-        expires = expires.replace(tzinfo=timezone.utc)
-    if expires < datetime.now(timezone.utc):
-        session.delete(row)
-        session.commit()
-        raise HTTPException(status_code=400, detail="invalid or expired state")
-    verifier = row.code_verifier
-    session.delete(row)          # single-use
-    session.commit()
 
     if error:
         raise HTTPException(status_code=400, detail=f"authorization failed: {error}")
