@@ -118,7 +118,10 @@ with patch('socket.socket.connect', blocked), patch('socket.create_connection', 
     raise SystemExit(pytest.main(sys.argv[1:], plugins=[Isolation()]))
 ```
 
-## Scope and remaining uncertainty
+## Scope after the initial Now pass (historical)
+
+The following records the initial boundary. The continuation section below
+supersedes the unavailable-writer, onboarding and concurrency statements.
 
 - Regression tests use mocked services and real local message types where
   schema fidelity matters. Resource/field checks are offline and cannot prove
@@ -160,3 +163,66 @@ Keyword tests reproduced silent locale substitution before the fix. They
 cover invalid codes before client construction, supported constant mappings,
 case normalization, empty results and real v25 response messages with mocked
 services. No live keyword request was made.
+
+## Bounded roadmap continuation (2026-10-01)
+
+The prior follow-up was pushed and merged into `master` at the owner's request.
+This continuation started from `65ec5a6` on `roadmap-work`: Ruff passed,
+292 adapter tests passed and 65 web tests passed. The same Python 3.12
+virtual environment and isolated pytest wrapper were used throughout.
+
+Every commit below had all three required checks pass before committing.
+Counts include descriptor checks generated from query literals, so changes
+in query literals can also change the test count.
+
+| Commit | Change | Ruff | Adapter tests | Web tests |
+| --- | --- | --- | --- | --- |
+| `e1a8a7d` | Preserve nested and per-entity findings | Pass | 295 | 65 |
+| `996c33b` | Consume OAuth state atomically | Pass | 295 | 69 |
+| `5f0c3cc` | Redact audit and write provider errors | Pass | 303 | 69 |
+| `0c59bc7` | Support Cloud project access without legacy tokens | Pass | 306 | 70 |
+| `8515d89` | Add scoped PMax reporting | Pass | 315 | 70 |
+| `6b72ab7` | Read Demand Gen and AI Max configuration | Pass | 319 | 70 |
+| `0b597a3` | Read upload diagnostics and static consent evidence | Pass | 324 | 70 |
+| `0db99d6` | Discover managed accounts with login routing | Pass | 327 | 70 |
+| `528725d` | Create PAUSED Search shells atomically | Pass | 342 | 70 |
+| `a90e7a0` | Create/reuse and attach PMax brand lists | Pass | 357 | 70 |
+| `1cc356e` | Redact read errors and cover remaining baseline adapters | Pass | 387 | 70 |
+| `e964993` | Export bounded queries and saved audit snapshots | Pass | 401 | 70 |
+| `92e96ef` | Add offline agent safety fixtures | Pass | 406 | 70 |
+| `5343a92` | Read migration dates and asset-group tracking settings | Pass | 410 | 70 |
+| `5701336` | Redact local auth and history-query failures | Pass | 413 | 70 |
+| Completion documentation | Record bounded scope and interoperability | Pass | 413 | 70 |
+
+Final checks are Ruff passing, 413 adapter tests passing and 70 web tests
+passing. The existing Starlette httpx integration deprecation warning remains.
+An additional coverage run passed all 410 adapter tests: no production
+`gads_*.py` module had zero executed lines. Example line coverage: campaign
+creation 93%, brands 81%, export 90%, thin channel wrappers 91%, geos 58%.
+This is not complete branch coverage or proof of live API compatibility.
+
+The following boundaries were checked separately:
+
+- `enforce_session()` has an identical AST to `65ec5a6`; the session gate hook
+  has no diff. Version metadata remains 0.6.1. Other auth code changed for
+  optional legacy tokens and redacted authentication diagnostics.
+- New modules are registered in `pyproject.toml`. `git diff --check` passes.
+- Tests used mocked services, local v25 protobufs and synthetic fixture data.
+  No live Ads calls, OAuth exchanges or notification messages were sent.
+  Protected credential/session/secret filenames were neither read nor created
+  nor staged; test paths were redirected by the isolation wrapper.
+- OAuth replay tests use separate SQLite connections. PostgreSQL concurrency,
+  deployed browser OAuth, new-project approval and real account permissions
+  remain unverified.
+- Server-side GAQL combinations, catalogue eligibility, campaign creation and
+  mutate validation have not been tested against live accounts. Local checks
+  confirm request shape and call sequencing only. Unknown apply outcomes
+  require account inspection, not automatic retries.
+- Static HTML consent evidence does not verify runtime consent or delivery.
+  Monitoring exports describe saved snapshots and need external freshness
+  checks. Agent task fixtures verify adapter contracts; no language-model
+  runtime or upstream MCP server was evaluated.
+- The work stays in the existing flat adapters. No hosted audit endpoint,
+  dashboard, new MCP service, paid dependency, version bump or release was added.
+  Continuation commits are local on `roadmap-work`; no continuation push or
+  merge was performed.
