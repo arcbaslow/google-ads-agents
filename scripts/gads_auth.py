@@ -6,9 +6,8 @@ account, no per-user OAuth client registration): the gcloud CLI is itself a
 registered Google application, so this is a real SSO browser flow. Restricted
 Workspaces can instead use their own OAuth client via --oauth-login.
 
-A developer token is still required by the Google Ads API. It is one-time
-account setup, not OAuth, so users paste it once. login-customer-id (MCC)
-is optional.
+Google Ads access belongs to the OAuth Cloud project. A developer token is
+optional legacy configuration. login-customer-id (MCC) is optional.
 
 A 24-hour session cap is enforced locally on top of whatever token expiry
 Google issues. After 24h the scripts refuse to run until the user signs in
@@ -33,6 +32,8 @@ import tempfile
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
+
+import gads_errors
 
 ADWORDS = "https://www.googleapis.com/auth/adwords"
 CLOUD_PLATFORM = "https://www.googleapis.com/auth/cloud-platform"
@@ -172,11 +173,11 @@ def get_credentials():
         if method == "oauth_client":
             hint = (
                 f"OAuth client credentials for profile '{name}' failed to refresh "
-                f"({e}). Re-run:\n  python scripts/gads_auth.py --oauth-login "
+                "during authentication. Re-run:\n  python scripts/gads_auth.py --oauth-login "
                 f"--client-secrets client_secret.json"
             )
         else:
-            hint = f"No application default credentials found ({e}).\nRun:\n  {adc_command()}"
+            hint = f"Application default credentials are unavailable.\nRun:\n  {adc_command()}"
         raise AuthRequiredError(hint) from e
 
 
@@ -480,6 +481,7 @@ def cmd_set_oauth(args) -> int:
     return 0
 
 
+@gads_errors.cli
 def main() -> int:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--check", action="store_true")

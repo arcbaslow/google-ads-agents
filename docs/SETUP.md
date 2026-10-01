@@ -238,3 +238,7 @@ Concurrent callbacks cannot reuse it; failures require starting a new flow.
 Audit and write failures use safe error categories, without provider exception
 text or tracebacks. Retry hints do not trigger retries; inspect account state
 before retrying a write whose result is unknown.
+
+Auth checks retain the reconnect command but omit raw backend error details.
+Uncaught auth CLI failures use redacted JSON and exit code 3. An expired-session
+check keeps its existing exit code and sign-in instructions.

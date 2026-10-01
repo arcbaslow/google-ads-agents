@@ -24,3 +24,6 @@ Reports, history and notification formatting include nested findings. New demogr
 findings carry campaign, dimension and bucket identity. History uses entity metadata
 when present; legacy findings without it use their full message, so changed text
 can appear as a resolved and new finding.
+
+History-query failures return a redacted JSON error and exit code 3. Treat a
+failed history read as missing evidence, not proof that nothing changed.

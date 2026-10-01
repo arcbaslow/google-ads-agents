@@ -20,6 +20,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import gads_client
+import gads_errors
 import gads_findings
 import gads_utils
 
@@ -126,6 +127,7 @@ def _key(f: dict) -> tuple:
 
 # ---------- CLI ----------
 
+@gads_errors.cli
 def main() -> int:
     p = argparse.ArgumentParser()
     p.add_argument("--customer", help="for --changes and --list")
