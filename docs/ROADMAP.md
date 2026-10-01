@@ -303,6 +303,9 @@ Rejected directions remain rejected; the original open questions remain open.
   The bounded scope is current configuration; migration forecasts and channel
   attribution remain outside these commands. Sources and limits: REPORTING.md.
 
+- Completed: offline upload diagnostics and static consent-signal evidence.
+  REPORTING.md distinguishes these from runtime consent and browser delivery.
+
 ## Next
 
 | Item | Account benefit and evidence | Effort | Risk / reason not built now |

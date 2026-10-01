@@ -26,3 +26,7 @@ Surface as critical:
 
 Output shape: summary, findings (with severity), metrics. Findings drive
 the action plan in the audit report.
+
+`gads_conversions.py --customer <id> --diagnostics --json` returns recent offline
+import status, alerts and counts by uploading client. Empty results are unknown,
+not healthy. This does not verify browser or enhanced-conversions-for-leads delivery.
