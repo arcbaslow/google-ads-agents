@@ -29,3 +29,7 @@ The supported write adapters display the exact operation JSON and prompt for
 `y/N` in Python, including for validation. `--apply` validates before sending
 the same operations. Let the operator review and answer the prompt; do not
 pipe approval or substitute a direct API call. stdout remains the JSON result.
+
+Structured failure output uses `error_code`, a safe `error` message and a
+`retryable` hint. No automatic retries are performed. For a failed write,
+check account state before retrying; a timeout does not prove it was unapplied.

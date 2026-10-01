@@ -50,4 +50,4 @@ def test_audit_dispatches_demand_gen_and_preserves_failures(monkeypatch):
     monkeypatch.setattr(gads_demandgen.gads_client, "search_stream", search)
     result = gads_audit.run("123", max_workers=1)
     assert result["agents"]["gads-demandgen"]["status"] == "failed"
-    assert "permission denied" in result["agents"]["gads-demandgen"]["error"]
+    assert result["agents"]["gads-demandgen"]["error_code"] == "unexpected_error"

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Redact audit and write-command provider failures into stable error categories with retryability hints; omit raw tracebacks from audits.
+
 - Consume hosted OAuth state atomically before code exchange, preventing concurrent callback replay.
 
 - Include nested findings in reports, history and notification formatting; distinguish campaign and demographic entities in history comparisons.

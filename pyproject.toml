@@ -48,7 +48,7 @@ py-modules = [
   "gads_authflow", "gads_bidstrategy", "gads_brands", "gads_client",
   "gads_competitors", "gads_conversions", "gads_creation", "gads_creative",
   "gads_demandgen", "gads_demographics", "gads_display", "gads_geos", "gads_gtag",
-  "gads_findings", "gads_history", "gads_keywords", "gads_mutate", "gads_notify", "gads_pacing",
+  "gads_errors", "gads_findings", "gads_history", "gads_keywords", "gads_mutate", "gads_notify", "gads_pacing",
   "gads_placements", "gads_pmax", "gads_provider", "gads_quality",
   "gads_query", "gads_recommendations", "gads_report", "gads_search",
   "gads_shopping", "gads_tokenstore", "gads_uac", "gads_utils",
