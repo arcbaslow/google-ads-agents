@@ -39,3 +39,7 @@ Reports, history and notification formatting include nested findings. New demogr
 findings carry campaign, dimension and bucket identity. History uses entity metadata
 when present; legacy findings without it use their full message, so changed text
 can appear as a resolved and new finding.
+
+Structured failure output uses `error_code`, a safe `error` message and a
+`retryable` hint. No automatic retries are performed. For a failed write,
+check account state before retrying; a timeout does not prove it was unapplied.

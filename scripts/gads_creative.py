@@ -31,6 +31,7 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
+import gads_errors
 import gads_utils
 from gads_mutate import reviewed_mutate
 
@@ -365,7 +366,7 @@ def main() -> int:
             result = upload_image_asset(args.customer, Path(args.image), args.name,
                                         validate_only=not args.apply)
         except Exception as e:
-            gads_utils.emit({"status": "api_error", "error": str(e)}, json_mode)
+            gads_utils.emit({**gads_errors.describe(e), "status": "api_error"}, json_mode)
             return 3
         gads_utils.emit({"status": "validated" if not args.apply else "applied",
                          **result}, json_mode)
@@ -388,7 +389,7 @@ def main() -> int:
                     args.field_type, validate_only=not args.apply,
                 )
         except (ValueError, Exception) as e:
-            gads_utils.emit({"status": "api_error", "error": str(e)}, json_mode)
+            gads_utils.emit({**gads_errors.describe(e), "status": "api_error"}, json_mode)
             return 3
         gads_utils.emit({"status": "validated" if not args.apply else "applied",
                          **result}, json_mode)

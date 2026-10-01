@@ -20,6 +20,7 @@ import argparse
 import json
 import sys
 
+import gads_errors
 import gads_utils
 from gads_mutate import reviewed_mutate
 
@@ -154,7 +155,7 @@ def main() -> int:
         gads_utils.emit({
             "status": "api_error",
             "action": args.action,
-            "error": str(e),
+            **gads_errors.describe(e),
         }, args.json)
         return 3
 

@@ -288,6 +288,10 @@ Rejected directions remain rejected; the original open questions remain open.
   Both callbacks use this boundary. PostgreSQL behavior is not live-tested;
   the statement uses [SQLAlchemy DELETE RETURNING](https://docs.sqlalchemy.org/en/20/core/dml.html#sqlalchemy.sql.expression.Delete.returning).
 
+- Completed: redacted structured audit and write-command errors (`gads_errors.py`).
+  Mocked permission, refresh, transient, unexpected and Ads errors retain no raw
+  provider messages. No retries were added to writes.
+
 ## Next
 
 | Item | Account benefit and evidence | Effort | Risk / reason not built now |

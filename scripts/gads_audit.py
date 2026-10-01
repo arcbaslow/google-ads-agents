@@ -16,7 +16,6 @@ import argparse
 import concurrent.futures
 import json
 import sys
-import traceback
 from contextvars import copy_context
 from typing import Any, Callable
 
@@ -27,6 +26,7 @@ import gads_conversions
 import gads_demandgen
 import gads_demographics
 import gads_display
+import gads_errors
 import gads_gtag
 import gads_history
 import gads_pacing
@@ -101,11 +101,7 @@ def _safe(thunk: Callable[[], Any]) -> dict:
         out.setdefault("status", "ok")
         return out
     except Exception as e:
-        return {
-            "status": "failed",
-            "error": str(e),
-            "traceback": traceback.format_exc(limit=2),
-        }
+        return gads_errors.describe(e)
 
 
 def list_all_customers() -> list[str]:
