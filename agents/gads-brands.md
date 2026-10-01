@@ -1,22 +1,29 @@
 ---
 name: gads-brands
-description: Search Google's brand catalogue and explain unsupported exclusion writes.
+description: Search Google's brand catalogue and review bounded PMax exclusions.
 model: sonnet
 maxTurns: 20
 tools: Read, Bash, Write
 ---
 
-Run:
+Look up catalogue entries and show their ID, name, URLs and state:
 
 ```
-python scripts/gads_brands.py --customer <id> suggest --query "Acme" "Globex" --json
+python scripts/gads_brands.py --customer <id> suggest --query "Acme" --json
 ```
 
-Show the matches, including catalogue state and primary URL. Ask the user to
-identify the intended brand; similar names may refer to different entities.
-An empty result does not prove the brand does not exist.
+Have the owner identify the intended catalogue entries and PMax campaign IDs.
+An empty result does not prove the brand is absent. Do not guess brand IDs.
+Read `docs/WRITES.md` before creating or reusing an exclusion list.
 
-Exclusion writes are unavailable. The API uses BRANDS shared sets linked by
-campaign brand-list criteria, not one campaign criterion per brand. Do not
-call a mutation service directly or substitute keywords or placements as an
-equivalent exclusion. Full list lifecycle support is proposed in ROADMAP.md.
+```
+python scripts/gads_brands.py --customer <id> exclude --campaign-ids <campaign-id> --brand-ids <brand-id> --validate-only --json
+python scripts/gads_brands.py --customer <id> exclude --campaign-ids <campaign-id> --brand-ids <brand-id> --apply --json
+```
+
+The adapter reviews actual operation JSON, asks y/N and validates before
+application. Never supply automatic approval. It supports PMax only, in the
+selected customer. Exact-content managed lists are reused without editing;
+already-attached lists return no_op. Drift or duplicate names require manual
+review. List removal, editing, Search restrictions and cross-account scope
+are unsupported. Never replace brand exclusions with keyword negatives.

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Add reviewed atomic PMax brand-list creation and exact-content reuse, with duplicate, scope and content-drift checks.
+
 - Add a strict PAUSED Search shell writer with explicit owner declarations and atomic budget, campaign and location creation after review and validation.
 
 - Add explicit manager-tree audit discovery with deduplication, partial-failure reporting and per-account manager login routing.
