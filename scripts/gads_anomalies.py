@@ -17,6 +17,7 @@ import statistics
 import sys
 
 import gads_client
+import gads_errors
 import gads_utils
 
 METRICS = ("cost_micros", "conversions", "clicks", "impressions")
@@ -100,6 +101,7 @@ def _scan_campaign(name: str, cid: str, series: list[dict],
     return out
 
 
+@gads_errors.cli
 def main() -> int:
     p = argparse.ArgumentParser()
     p.add_argument("--customer", required=True)

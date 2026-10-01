@@ -33,6 +33,7 @@ import urllib.request
 from typing import Any
 
 import gads_auth
+import gads_errors
 import gads_findings
 import gads_utils
 
@@ -78,15 +79,13 @@ def send_message(text: str, *, parse_mode: str = "HTML",
     }).encode()
     try:
         with urllib.request.urlopen(url, data=payload, timeout=timeout) as r:
-            return json.loads(r.read().decode("utf-8"))
-    except urllib.error.HTTPError as e:
-        try:
-            body = e.read().decode("utf-8")
-        except Exception:
-            body = ""
-        return {"ok": False, "error": f"HTTP {e.code}: {body}"}
-    except (urllib.error.URLError, TimeoutError) as e:
-        return {"ok": False, "error": str(e)}
+            data = json.loads(r.read().decode("utf-8"))
+            if not data.get("ok"):
+                return {"ok": False, **gads_errors.describe(ValueError())}
+            return data
+    except (urllib.error.URLError, TimeoutError, ValueError) as e:
+        return {"ok": False, **gads_errors.describe(e)}
+
 
 
 def discover_chat_id(token: str, timeout: float = 5.0) -> dict[str, Any]:
@@ -95,10 +94,10 @@ def discover_chat_id(token: str, timeout: float = 5.0) -> dict[str, Any]:
     try:
         with urllib.request.urlopen(url, timeout=timeout) as r:
             data = json.loads(r.read().decode("utf-8"))
-    except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError) as e:
-        return {"ok": False, "error": str(e)}
+    except (urllib.error.URLError, TimeoutError, ValueError) as e:
+        return {"ok": False, **gads_errors.describe(e)}
     if not data.get("ok"):
-        return data
+        return {"ok": False, **gads_errors.describe(ValueError())}
     chats: dict[str, dict] = {}
     for update in data.get("result", []):
         msg = update.get("message") or update.get("channel_post") or {}

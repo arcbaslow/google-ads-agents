@@ -318,6 +318,9 @@ Rejected directions remain rejected; the original open questions remain open.
 - Completed: bounded PMax brand-list creation, reuse and attachment, with no
   edits to shared content. WRITES.md records ownership, retry and scope limits.
 
+- Completed: remaining baseline read adapters have mocked row, empty and
+  failure coverage. CLI and network errors are redacted; see REPORTING.md.
+
 ## Next
 
 | Item | Account benefit and evidence | Effort | Risk / reason not built now |

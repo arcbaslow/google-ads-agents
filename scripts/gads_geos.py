@@ -13,6 +13,7 @@ from __future__ import annotations
 import argparse
 import sys
 
+import gads_errors
 import gads_utils
 
 
@@ -51,6 +52,7 @@ def suggest(customer_id: str, queries: list[str], locale: str = "en",
     }
 
 
+@gads_errors.cli
 def main() -> int:
     p = argparse.ArgumentParser()
     p.add_argument("--customer", required=True)
@@ -64,7 +66,7 @@ def main() -> int:
     try:
         data = suggest(cid, args.query, args.locale, args.country)
     except Exception as ex:
-        gads_utils.emit({"status": "api_error", "error": str(ex)}, args.json)
+        gads_utils.emit(gads_errors.describe(ex), args.json)
         return 3
     gads_utils.emit(data, args.json)
     return 0

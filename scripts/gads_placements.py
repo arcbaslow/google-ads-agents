@@ -16,6 +16,7 @@ import sys
 from pathlib import Path
 
 import gads_client
+import gads_errors
 import gads_query
 import gads_utils
 
@@ -79,6 +80,7 @@ def scan(customer_id: str, days: int = 28, rules_path: Path = DEFAULT_RULES) -> 
     }
 
 
+@gads_errors.cli
 def main() -> int:
     p = argparse.ArgumentParser()
     p.add_argument("--customer", required=True)

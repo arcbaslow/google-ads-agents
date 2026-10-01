@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Return redacted JSON failures from read commands and remove provider exception bodies from site scans, creative fetches and Telegram errors. Add mocked coverage for the remaining baseline read adapters.
+
 - Add reviewed atomic PMax brand-list creation and exact-content reuse, with duplicate, scope and content-drift checks.
 
 - Add a strict PAUSED Search shell writer with explicit owner declarations and atomic budget, campaign and location creation after review and validation.

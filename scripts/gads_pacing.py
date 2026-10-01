@@ -19,6 +19,7 @@ import sys
 from datetime import date
 
 import gads_client
+import gads_errors
 import gads_utils
 
 QUERY = """
@@ -124,6 +125,7 @@ def analyze(customer_id: str) -> dict:
     }
 
 
+@gads_errors.cli
 def main() -> int:
     p = argparse.ArgumentParser()
     p.add_argument("--customer", required=True)

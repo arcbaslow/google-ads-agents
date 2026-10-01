@@ -24,3 +24,6 @@ conversion metric or placement detail in this query. Use the placements
 adapter for its separate placement audit.
 
 Output contains customer_id, date_range and campaigns.
+
+Treat redacted failures as unavailable evidence, not an empty or healthy result.
+See docs/REPORTING.md for error categories. Never retry a write automatically.

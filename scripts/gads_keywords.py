@@ -6,6 +6,7 @@ import argparse
 import sys
 
 import gads_client
+import gads_errors
 import gads_utils
 
 LANGUAGE_IDS = {"en": "1000", "es": "1003", "de": "1001", "fr": "1002"}
@@ -49,6 +50,7 @@ def keyword_ideas(customer_id: str, seeds: list[str], language: str = "en", geo:
     return {"seeds": seeds, "language": language, "geo": geo, "ideas": ideas}
 
 
+@gads_errors.cli
 def main() -> int:
     p = argparse.ArgumentParser()
     p.add_argument("--customer", required=True)

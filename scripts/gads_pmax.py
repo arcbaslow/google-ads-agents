@@ -6,6 +6,7 @@ import argparse
 import sys
 
 import gads_client
+import gads_errors
 import gads_query
 import gads_utils
 
@@ -71,6 +72,7 @@ def asset_groups(customer_id: str, days: int = 28) -> dict:
     }
 
 
+@gads_errors.cli
 def main() -> int:
     p = argparse.ArgumentParser()
     p.add_argument("--customer", required=True)

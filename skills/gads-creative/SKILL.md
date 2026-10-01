@@ -33,3 +33,6 @@ pipe approval or substitute a direct API call. stdout remains the JSON result.
 Structured failure output uses `error_code`, a safe `error` message and a
 `retryable` hint. No automatic retries are performed. For a failed write,
 check account state before retrying; a timeout does not prove it was unapplied.
+
+Treat redacted failures as unavailable evidence, not an empty or healthy result.
+See docs/REPORTING.md for error categories. Never retry a write automatically.

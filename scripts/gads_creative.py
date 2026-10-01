@@ -51,7 +51,7 @@ def _fetch_site(url: str) -> tuple[bool, str, str]:
             body = r.read(SITE_FETCH_LIMIT_BYTES).decode("utf-8", errors="ignore")
             return True, body, ""
     except (urllib.error.URLError, TimeoutError, ValueError) as e:
-        return False, "", str(e)
+        return False, "", gads_errors.describe(e)["error"]
 
 
 def _strip_tags(s: str) -> str:

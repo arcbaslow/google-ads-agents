@@ -17,3 +17,6 @@ signals or real conversion events. Do not certify measurement health from it.
 `consent_evidence` lists consent signal names mentioned in fetched HTML, including
 comments. It always marks runtime verification false. A CMP may inject settings
 after load; neither presence nor absence proves consent behavior or compliance.
+
+Treat redacted failures as unavailable evidence, not an empty or healthy result.
+See docs/REPORTING.md for error categories. Never retry a write automatically.
