@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Add offline agent safety task fixtures with executable mocked adapter contracts and a transcript evaluation rubric.
+
 - Add session-gated bounded GAQL exports and local multi-account audit exports in JSON, spreadsheet-safe CSV and Prometheus text.
 
 - Return redacted JSON failures from read commands and remove provider exception bodies from site scans, creative fetches and Telegram errors. Add mocked coverage for the remaining baseline read adapters.
