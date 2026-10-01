@@ -33,3 +33,11 @@ executes scripts or verifies runtime consent, event delivery or compliance.
 
 Sources: [upload summaries](https://developers.google.com/google-ads/api/docs/conversions/upload-summaries),
 [consent concepts](https://developers.google.com/tag-platform/security/concepts/consent-mode).
+
+Use `gads_audit.py --all-customers --include-managed` to explicitly traverse
+manager trees and audit enabled client accounts once. Direct-access behavior
+remains the default. Discovery carries a root login ID into each audit and
+reports inaccessible branches as partial. Traversal is capped at 1000 manager
+visits. This is a CLI feature; the hosted service still exposes no audit endpoint.
+
+Reference: [account hierarchy](https://developers.google.com/google-ads/api/docs/account-management/get-account-hierarchy).

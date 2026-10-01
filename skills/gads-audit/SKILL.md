@@ -43,3 +43,11 @@ can appear as a resolved and new finding.
 Structured failure output uses `error_code`, a safe `error` message and a
 `retryable` hint. No automatic retries are performed. For a failed write,
 check account state before retrying; a timeout does not prove it was unapplied.
+
+Use `gads_audit.py --all-customers --include-managed` to explicitly traverse
+manager trees and audit enabled client accounts once. Direct-access behavior
+remains the default. Discovery carries a root login ID into each audit and
+reports inaccessible branches as partial. Traversal is capped at 1000 manager
+visits. This is a CLI feature; the hosted service still exposes no audit endpoint.
+
+Reference: [account hierarchy](https://developers.google.com/google-ads/api/docs/account-management/get-account-hierarchy).
