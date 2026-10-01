@@ -15,6 +15,7 @@ from app.config import Settings, get_settings
 from app.db import get_session
 from app.identity import SESSION_COOKIE, get_current_user
 from app.models import OAuthState, User
+from app.oauth_state import consume_state
 
 router = APIRouter()
 
@@ -88,19 +89,9 @@ def signin_callback(
 ):
     if not browser_state or not secrets.compare_digest(browser_state.encode(), state.encode()):
         raise HTTPException(status_code=400, detail="invalid or expired state")
-    row = db.get(OAuthState, state)
-    if row is None or row.purpose != "signin":
+    verifier = consume_state(db, state, "signin", None)
+    if verifier is None:
         raise HTTPException(status_code=400, detail="invalid or expired state")
-    expires = row.expires_at
-    if expires.tzinfo is None:
-        expires = expires.replace(tzinfo=timezone.utc)
-    if expires < datetime.now(timezone.utc):
-        db.delete(row)
-        db.commit()
-        raise HTTPException(status_code=400, detail="invalid or expired state")
-    verifier = row.code_verifier
-    db.delete(row)          # single-use
-    db.commit()
 
     if error:
         raise HTTPException(status_code=400, detail=f"authorization failed: {error}")

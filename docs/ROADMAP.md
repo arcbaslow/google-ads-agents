@@ -283,6 +283,11 @@ Rejected directions remain rejected; the original open questions remain open.
   `gads_findings.py`, `test_gads_findings.py`; legacy message-only findings can
   show churn when text changes. No notification was sent during verification.
 
+- Completed: atomic hosted OAuth state consumption (`app/oauth_state.py`).
+  Concurrent independent SQLite sessions return a verifier to only one caller.
+  Both callbacks use this boundary. PostgreSQL behavior is not live-tested;
+  the statement uses [SQLAlchemy DELETE RETURNING](https://docs.sqlalchemy.org/en/20/core/dml.html#sqlalchemy.sql.expression.Delete.returning).
+
 ## Next
 
 | Item | Account benefit and evidence | Effort | Risk / reason not built now |

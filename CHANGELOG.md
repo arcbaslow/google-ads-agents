@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Consume hosted OAuth state atomically before code exchange, preventing concurrent callback replay.
+
 - Include nested findings in reports, history and notification formatting; distinguish campaign and demographic entities in history comparisons.
 
 - Reject unsupported keyword research locales before API access, accept case-insensitive supported codes and report the actual requested market.
