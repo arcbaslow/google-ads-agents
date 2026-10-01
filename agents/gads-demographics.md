@@ -40,3 +40,8 @@ buckets. It reports observed performance, not a complete audience inventory.
 
 Read results expose API field names such as `type`, not Python
 protobuf attribute names such as `type_`. Preserve the returned enum labels.
+
+Reports, history and notification formatting include nested findings. New demographic
+findings carry campaign, dimension and bucket identity. History uses entity metadata
+when present; legacy findings without it use their full message, so changed text
+can appear as a resolved and new finding.
