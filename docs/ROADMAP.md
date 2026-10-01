@@ -325,6 +325,9 @@ Rejected directions remain rejected; the original open questions remain open.
   monitoring text. REPORTING.md documents truncation, failures and snapshot
   freshness limits. No reporting service or background account access was added.
 
+- Completed: five offline agent task fixtures and executable adapter contracts.
+  EVALUATION.md separates those checks from unperformed model-runtime evaluation.
+
 ## Next
 
 | Item | Account benefit and evidence | Effort | Risk / reason not built now |

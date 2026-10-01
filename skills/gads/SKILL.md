@@ -129,3 +129,6 @@ For an occasional read missing from a dedicated adapter, use
 --limit 1000 --format json --output report.json` on one line. Review the GAQL
 against the selected API reference first. This command preserves the session
 gate, accepts only reads and reports truncation; see docs/REPORTING.md.
+
+For offline safety task fixtures and the transcript rubric, see docs/EVALUATION.md.
+Passing adapter tests does not establish that a language-model runtime follows the rubric.
