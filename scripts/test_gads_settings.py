@@ -22,3 +22,14 @@ def test_configuration_reads_preserve_scope_and_absent_values(monkeypatch, funct
     assert "segments.date" not in query
     assert result[key] == rows
     assert result["limitations"]
+
+
+def test_ai_max_migration_dates_preserved(monkeypatch):
+    rows = [{"campaign": {"aca_migration_date_time": "2026-10-15 00:00:00",
+                           "broad_match_migration_date_time": "2026-10-20 00:00:00"}}]
+    search = Mock(return_value=rows)
+    monkeypatch.setattr(gads_search.gads_client, "search_stream", search)
+    assert gads_search.ai_max_settings("123")["campaigns"] == rows
+    query = search.call_args.args[1]
+    assert "campaign.aca_migration_date_time" in query
+    assert "campaign.broad_match_migration_date_time" in query
