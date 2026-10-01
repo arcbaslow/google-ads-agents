@@ -19,3 +19,8 @@ python scripts/gads_history.py --customer <id> --diff <ts-a> <ts-b> --json
 Audit history is auto-populated when `gads_audit.py` is invoked with
 `--save-history`. The diff output groups findings into `resolved`,
 `new`, and `unchanged`.
+
+Reports, history and notification formatting include nested findings. New demographic
+findings carry campaign, dimension and bucket identity. History uses entity metadata
+when present; legacy findings without it use their full message, so changed text
+can appear as a resolved and new finding.

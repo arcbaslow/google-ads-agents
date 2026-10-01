@@ -34,3 +34,8 @@ there is no audit `--seeds` option.
 Worker threads retain the caller's bound credential provider at both account
 and adapter levels. This does not add a hosted audit endpoint or manager-tree
 discovery. Providers used in parallel must support concurrent reads.
+
+Reports, history and notification formatting include nested findings. New demographic
+findings carry campaign, dimension and bucket identity. History uses entity metadata
+when present; legacy findings without it use their full message, so changed text
+can appear as a resolved and new finding.

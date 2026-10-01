@@ -135,6 +135,8 @@ def _breakdown(customer_id: str, days: int, query_template: str,
             findings.append({
                 "severity": "high" if multiplier >= 3 else "medium",
                 "code": f"{dimension}_cpa_outlier",
+                "entity": {"campaign_id": str(entry["campaign_id"]),
+                           "dimension": dimension, "bucket": str(entry["bucket"])},
                 "message": (
                     f"{entry['bucket']} in {entry['campaign_name']!r} has CPA "
                     f"${cpa:.2f} vs campaign CPA ${campaign_cpa:.2f} "

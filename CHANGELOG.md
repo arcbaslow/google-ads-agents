@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Include nested findings in reports, history and notification formatting; distinguish campaign and demographic entities in history comparisons.
+
 - Reject unsupported keyword research locales before API access, accept case-insensitive supported codes and report the actual requested market.
 
 - Clear hosted credentials on disconnect even when the stored token cannot be decrypted; report remote revocation as unconfirmed.

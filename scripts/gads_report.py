@@ -7,6 +7,8 @@ import html
 import json
 import sys
 
+import gads_findings
+
 
 def render_markdown(audit: dict) -> str:
     parts: list[str] = []
@@ -71,11 +73,7 @@ def render_html(audit: dict) -> str:
 
 
 def _collect_findings(audit: dict) -> list[dict]:
-    findings: list[dict] = []
-    for agent, out in audit.get("agents", {}).items():
-        for f in out.get("findings", []) or []:
-            findings.append({"agent": agent, **f})
-    return findings
+    return gads_findings.collect(audit)
 
 
 def main() -> int:

@@ -20,6 +20,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import gads_client
+import gads_findings
 import gads_utils
 
 HISTORY_ROOT = Path.home() / ".claude" / "gads-audit-history"
@@ -116,15 +117,11 @@ def diff_audits(a: Path, b: Path) -> dict:
 
 
 def _findings(audit: dict) -> list[dict]:
-    out: list[dict] = []
-    for agent, agent_out in audit.get("agents", {}).items():
-        for f in agent_out.get("findings", []) or []:
-            out.append({"agent": agent, **f})
-    return out
+    return gads_findings.collect(audit)
 
 
 def _key(f: dict) -> tuple:
-    return (f.get("agent"), f.get("code") or f.get("message", ""))
+    return gads_findings.identity(f)
 
 
 # ---------- CLI ----------

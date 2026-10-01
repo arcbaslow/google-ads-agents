@@ -33,6 +33,7 @@ import urllib.request
 from typing import Any
 
 import gads_auth
+import gads_findings
 import gads_utils
 
 API_BASE = "https://api.telegram.org"
@@ -122,13 +123,7 @@ def format_critical_audit(audit: dict, limit: int = 10) -> str | None:
     Returns None when there's nothing worth pinging about.
     """
     cid = audit.get("customer_id", "?")
-    findings: list[dict] = []
-    for agent, out in (audit.get("agents") or {}).items():
-        if not isinstance(out, dict):
-            continue
-        for f in out.get("findings") or []:
-            if f.get("severity") == "critical":
-                findings.append({"agent": agent, **f})
+    findings = [f for f in gads_findings.collect(audit) if f.get("severity") == "critical"]
 
     if not findings:
         return None

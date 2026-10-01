@@ -271,6 +271,18 @@ See VERIFICATION.md for checks and commit records.
   input contract and targetability checks against
   [geo target data](https://developers.google.com/google-ads/api/data/geotargets).
 
+## Implementation continuation (2026-10-01)
+
+The owner authorised bounded versions of the campaign writer and brand-list
+lifecycle. Remaining Next items are being implemented in separate commits.
+Later items will use local exports, offline fixtures and interoperability
+instructions where a new service would change the project architecture.
+Rejected directions remain rejected; the original open questions remain open.
+
+- Completed: nested findings collection and entity-aware history. Evidence:
+  `gads_findings.py`, `test_gads_findings.py`; legacy message-only findings can
+  show churn when text changes. No notification was sent during verification.
+
 ## Next
 
 | Item | Account benefit and evidence | Effort | Risk / reason not built now |
