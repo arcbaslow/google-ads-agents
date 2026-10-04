@@ -60,9 +60,11 @@ _SECRET_TEXT = re.compile(
 
 _GAQL_STRING = re.compile(r"'(?:[^'\\]|\\.)*'|\"(?:[^\"\\]|\\.)*\"")
 _GAQL_CHARS = re.compile(r"[A-Za-z0-9_\s.,()=!<>'\"-]*")
+_GAQL_LIMIT = re.compile(r"\s+LIMIT\s+([1-9][0-9]*)\s*$", re.IGNORECASE)
 _GAQL_HINT = (
-    "Pass one GAQL statement: SELECT <fields> FROM <resource>, optionally WHERE and ORDER BY, "
-    "with no LIMIT, PARAMETERS, comments or semicolons; bound rows with the limit argument."
+    "Pass one GAQL statement: SELECT <fields> FROM <resource>, optionally WHERE, ORDER BY and "
+    "one trailing LIMIT n, with no PARAMETERS, comments or semicolons; rows are also bounded "
+    "by the limit argument."
 )
 
 _FIELD_NAME = re.compile(r"[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)*")
@@ -105,7 +107,8 @@ def _customer_id(value: str) -> str:
 
 
 def _bounded(name: str, value, low, high):
-    if isinstance(value, bool) or not low <= value <= high:
+    numeric = int if isinstance(low, int) and isinstance(high, int) else (int, float)
+    if isinstance(value, bool) or not isinstance(value, numeric) or not low <= value <= high:
         raise _Failure("invalid_argument", f"{name} must be between {low} and {high}.")
     return value
 
@@ -155,16 +158,24 @@ def run_gaql(
     customer_id: str, query: str, limit: int = 100, profile: str | None = None
 ) -> dict[str, Any]:
     """Run one read-only Google Ads Query Language (GAQL) SELECT query for a customer ID and
-    return the rows. Pass a single `SELECT <fields> FROM <resource> [WHERE ...] [ORDER BY ...]`
-    statement without LIMIT, PARAMETERS, comments or semicolons; bound rows with `limit`
-    (default 100, maximum 500). Use resource_metadata to discover fields.
+    return the rows. Pass a single
+    `SELECT <fields> FROM <resource> [WHERE ...] [ORDER BY ...] [LIMIT n]` statement without
+    PARAMETERS, comments or semicolons. Rows are bounded by the smaller of the query's LIMIT and
+    `limit` (default 100, maximum 500). Use resource_metadata to discover fields.
     """
     import gads_export
 
     cid = _customer_id(customer_id)
     limit = _bounded("limit", limit, 1, 500)
-    if not _GAQL_CHARS.fullmatch(_GAQL_STRING.sub("''", query)):
+    # Same-length masking keeps match positions valid in the original query.
+    masked = _GAQL_STRING.sub(lambda m: "'" + " " * (len(m.group()) - 2) + "'", query)
+    if not _GAQL_CHARS.fullmatch(masked):
         raise _Failure("invalid_argument", "The query contains characters outside GAQL. " + _GAQL_HINT)
+    trailing = _GAQL_LIMIT.search(masked)
+    if trailing:
+        # query_rows appends its own LIMIT, so the caller's clause becomes the row bound.
+        query = query[:trailing.start()]
+        limit = min(limit, int(trailing.group(1)))
     try:
         result = gads_export.query_rows(cid, query, limit)
     except ValueError as exc:
@@ -300,34 +311,41 @@ def anomalies_and_pacing(
     customer_id: str,
     check: Literal["both", "anomalies", "pacing"] = "both",
     days: int = 30,
-    baseline_days: int = 14,
+    baseline_days: int | None = None,
     z_threshold: float = 2.0,
     limit: int = 50,
     profile: str | None = None,
 ) -> dict[str, Any]:
     """Detect day-level anomalies in campaign cost, clicks, impressions and conversions, and
     check month-to-date budget pacing (projected over- or under-spend) for enabled campaigns.
-    `check` picks "anomalies", "pacing" or "both". Anomalies compare each day of the last
-    `days` (2-90) with the trailing `baseline_days` (1-60) and flag |z| >= `z_threshold`
-    (0.5-10), strongest first. Each list returns at most `limit` items (default 50, maximum 200).
+    `check` picks "anomalies", "pacing" or "both". Anomalies read the last `days` (2-90): the
+    first `baseline_days` of that window (default min(14, days - 1), maximum 60) are warm-up
+    only, and each later day is scored against the `baseline_days` before it, flagging
+    |z| >= `z_threshold` (0.5-10), strongest first. Pacing ignores those three arguments. Each
+    list returns at most `limit` items (default 50, maximum 200).
     """
     import gads_anomalies
     import gads_pacing
 
     cid = _customer_id(customer_id)
-    days = _bounded("days", days, 2, 90)
-    baseline_days = _bounded("baseline_days", baseline_days, 1, min(60, days - 1))
-    z_threshold = _bounded("z_threshold", z_threshold, 0.5, 10)
     limit = _bounded("limit", limit, 1, 200)
+    if check not in ("both", "anomalies", "pacing"):
+        raise _Failure("invalid_argument", 'check must be "anomalies", "pacing" or "both".')
 
     out: dict[str, Any] = {"customer_id": cid, "check": check}
     totals: list[int] = []
     returned = 0
     if check in ("both", "anomalies"):
+        days = _bounded("days", days, 2, 90)
+        if baseline_days is None:
+            baseline_days = min(14, days - 1)
+        baseline_days = _bounded("baseline_days", baseline_days, 1, min(60, days - 1))
+        z_threshold = _bounded("z_threshold", z_threshold, 0.5, 10)
         result = gads_anomalies.detect(cid, days, z_threshold, baseline_days)
         items = sorted(result["anomalies"], key=lambda a: -abs(a["z_score"]))
         out["anomalies"] = {
             "date_range": result["date_range"],
+            "baseline_days": baseline_days,
             "summary": result["summary"],
             "total": len(items),
             "items": items[:limit],

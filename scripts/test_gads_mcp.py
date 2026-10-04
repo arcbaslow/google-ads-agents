@@ -492,6 +492,21 @@ def test_argument_bounds_are_invalid_argument(ads, args, hint):
     assert ads.requests == []
 
 
+@pytest.mark.parametrize("name,args", [
+    ("list_accounts", {"limit": None}),
+    ("change_history", {"customer_id": CUSTOMER, "limit": "50"}),
+    ("account_audit", {"customer_id": CUSTOMER, "days": 2.5}),
+    ("resource_metadata", {"limit": [5]}),
+    ("anomalies_and_pacing", {"customer_id": CUSTOMER, "z_threshold": "2"}),
+    ("anomalies_and_pacing", {"customer_id": CUSTOMER, "check": "everything"}),
+])
+def test_wrong_types_on_direct_calls_are_invalid_argument(ads, name, args):
+    tool = gads_mcp._guarded(getattr(gads_mcp, name), lambda profile: FakeProvider())
+    out = tool(**args)
+    assert out["error"] == "invalid_argument"
+    assert ads.requests == []
+
+
 def test_no_secret_reaches_output_or_logs(monkeypatch, caplog):
     caplog.set_level(logging.DEBUG)
     leak = " ".join(SECRETS) + " owner@private.example"
@@ -677,6 +692,20 @@ def test_run_gaql_accepts_separators_inside_string_literals(ads):
     query = "SELECT campaign.id FROM campaign WHERE campaign.name = 'a; LIMIT 5 -- b'"
     out = call(build(), "run_gaql", customer_id=CUSTOMER, query=query)
     assert "error" not in out and len(ads.requests) == 1
+    assert ads.queries() == [query + " LIMIT 101"]
+
+
+@pytest.mark.parametrize("suffix", [" LIMIT 3", "\nlimit 3\n"])
+def test_run_gaql_trailing_limit_bounds_rows(ads, suffix):
+    out = call(build(), "run_gaql", customer_id=CUSTOMER, query=GAQL + suffix)
+    assert ads.queries() == [GAQL + " LIMIT 4"]
+    assert out["rows_returned"] == 3 and out["complete"] is False
+
+
+def test_run_gaql_limit_argument_caps_a_larger_trailing_limit(ads):
+    out = call(build(), "run_gaql", customer_id=CUSTOMER, query=GAQL + " LIMIT 1000", limit=5)
+    assert ads.queries() == [GAQL + " LIMIT 6"]
+    assert out["rows_returned"] == 5
 
 
 @pytest.mark.parametrize("query", [
@@ -688,7 +717,10 @@ def test_run_gaql_accepts_separators_inside_string_literals(ads):
     "SELECT campaign.id FROM campaign WHERE campaign.id = 1 SELECT ad_group.id FROM ad_group",
     "SELECT campaign.id FROM campaign -- comment",
     "SELECT campaign.id FROM campaign /* comment */",
-    "SELECT campaign.id FROM campaign LIMIT 5",
+    "SELECT campaign.id FROM campaign LIMIT 5 LIMIT 6",
+    "SELECT campaign.id FROM campaign LIMIT x",
+    "SELECT campaign.id FROM campaign LIMIT 0",
+    "SELECT campaign.id FROM campaign LIMIT 5 PARAMETERS include_drafts=true",
     "SELECT campaign.id FROM campaign PARAMETERS include_drafts=true",
     "SELECT campaign.id FROM campaign WHERE campaign.name = 'unterminated",
     "SELECT campaign.id FROM campaign WHERE campaign.id = 1 {",
@@ -777,9 +809,28 @@ def test_anomalies_and_pacing(ads):
     assert len(paced["pacing"]["campaigns"]) == 1
 
 
-def test_anomalies_need_a_longer_window_than_the_baseline(ads):
-    out = call(build(), "anomalies_and_pacing", customer_id=CUSTOMER, days=10, baseline_days=10)
+@pytest.mark.parametrize("args", [{"days": 7}, {"days": 1, "baseline_days": 30, "z_threshold": 0}])
+def test_pacing_alone_ignores_anomaly_arguments(ads, args):
+    out = call(build(), "anomalies_and_pacing", customer_id=CUSTOMER, check="pacing", **args)
+    assert "error" not in out and "anomalies" not in out
+    assert len(ads.requests) == 1 and "campaign_budget.period" in ads.queries()[0]
+
+
+def test_anomalies_default_baseline_fits_a_short_window(ads):
+    out = call(build(), "anomalies_and_pacing", customer_id=CUSTOMER, check="anomalies", days=7)
+    assert "error" not in out and "pacing" not in out
+    assert out["anomalies"]["baseline_days"] == 6
+    assert call(build(), "anomalies_and_pacing", customer_id=CUSTOMER)["anomalies"][
+        "baseline_days"] == 14
+
+
+@pytest.mark.parametrize("check", ["anomalies", "both"])
+@pytest.mark.parametrize("days,baseline_days", [(7, 7), (10, 10), (90, 61)])
+def test_anomalies_explicit_baseline_must_fit_the_window(ads, check, days, baseline_days):
+    out = call(build(), "anomalies_and_pacing", customer_id=CUSTOMER, check=check, days=days,
+               baseline_days=baseline_days)
     assert out["error"] == "invalid_argument" and "baseline_days" in out["hint"]
+    assert ads.requests == []
 
 
 def test_change_history_reduces_actors_to_domains(ads):

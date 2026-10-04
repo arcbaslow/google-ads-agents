@@ -141,7 +141,7 @@ gads-mcp
 | Tool | Returns | `limit` default / max |
 | --- | --- | --- |
 | `list_accounts` | Accounts under the profile's manager account: ID, name, level, currency, time zone and status. Without a manager account, the customer IDs the credentials can access directly. | 200 / 500 |
-| `run_gaql` | Rows for one GAQL `SELECT` against a customer ID. Only a single statement is accepted, without `LIMIT`, `PARAMETERS`, comments or semicolons. | 100 / 500 |
+| `run_gaql` | Rows for one GAQL `SELECT` against a customer ID. Only a single statement is accepted, optionally ending in one `LIMIT n`, without `PARAMETERS`, comments or semicolons. Rows are bounded by the smaller of that `LIMIT` and `limit`. | 100 / 500 |
 | `resource_metadata` | GAQL resources, or the fields under a resource or prefix, with selectable, filterable and sortable flags. `detail=true` adds enum values and the resources, metrics and segments a name can be selected with. | 200 / 500 |
 | `account_audit` | Status and summary of every read-only audit agent, plus the top findings by severity. Raw agent data, the website tag scan and saved snapshots are not included. | 50 / 200 |
 | `anomalies_and_pacing` | Day-level metric anomalies and month-to-date budget pacing, together or separately. | 50 / 200 per list |
