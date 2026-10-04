@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Add a read-only MCP tool set (`gads_mcp.py`, `gads-mcp` console script, optional `mcp` extra) with six bounded tools: accounts, GAQL, field metadata, audit summary, anomalies and pacing, and change history. Hosts can register it under a prefix and inject per-profile credential providers. Failures return stable error categories without provider text.
+
 - Document read-only interoperability, completed bounded roadmap scope and continuation verification results.
 
 - Redact local authentication backend diagnostics and history-query CLI failures while retaining reconnect commands.
