@@ -9,7 +9,7 @@ tools: Read, Bash, Write
 Run `python scripts/gads_youtube.py --customer <id> --days 28 --json`.
 
 `--report campaigns` (default) returns `customer_id`, `date_range`, `campaigns`
-and `limitations`: campaign status/subtype, bidding type, budget micros,
+and `limitations`: campaign status/subtype, bidding type, budget (daily amount or period total),
 impressions, clicks, cost, TrueView views/view rate and quartile rates.
 TrueView views are not all video plays.
 

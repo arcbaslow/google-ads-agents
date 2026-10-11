@@ -149,6 +149,17 @@ def set_channel_rows(service, types, rows):
 
 
 @pytest.mark.parametrize("module,channel,key,kinds", CHANNEL_ADAPTERS)
+def test_channel_campaign_total_budget(transport, module, channel, key, kinds):
+    service, types = transport
+    adapter = importlib.import_module("gads_" + module)
+    row = channel_row(types)
+    row.campaign_budget = {"period": "CUSTOM_PERIOD", "total_amount_micros": 1500000000}
+    set_channel_rows(service, types, [row])
+    budget = adapter.report("123")[key][0]["campaign_budget"]
+    assert budget == {"period": "CUSTOM_PERIOD", "total_amount_micros": "1500000000"}
+
+
+@pytest.mark.parametrize("module,channel,key,kinds", CHANNEL_ADAPTERS)
 def test_channel_campaign_fields_and_grouping(transport, module, channel, key, kinds):
     service, types = transport
     adapter = importlib.import_module("gads_" + module)
@@ -166,7 +177,8 @@ def test_channel_campaign_fields_and_grouping(transport, module, channel, key, k
     assert first["metrics"]["conversions_value"] == 12.5
     query = service.search_stream.call_args.kwargs["query"]
     for field in ["campaign.status", "campaign.advertising_channel_sub_type",
-                  "campaign.bidding_strategy_type", "campaign_budget.amount_micros"]:
+                  "campaign.bidding_strategy_type", "campaign_budget.amount_micros",
+                  "campaign_budget.period", "campaign_budget.total_amount_micros"]:
         assert field in query
     assert "campaign.status != 'REMOVED'" in query
     assert f"= '{channel}'" in query
