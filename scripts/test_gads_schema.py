@@ -15,7 +15,12 @@ from google.auth.credentials import AnonymousCredentials
 QUERIES = {
     name: fn() if not inspect.signature(fn).parameters else fn("2026-09-01", "2026-09-28")
     for name, fn in inspect.getmembers(gads_query, inspect.isfunction)
+    if name not in {"channel_ads", "channel_assets"}
 }
+for channel in ("DEMAND_GEN", "MULTI_CHANNEL", "DISPLAY", "VIDEO"):
+    QUERIES[f"channel_ads:{channel}"] = gads_query.channel_ads(channel)
+for channel in ("DEMAND_GEN", "MULTI_CHANNEL"):
+    QUERIES[f"channel_assets:{channel}"] = gads_query.channel_assets("2026-09-01", "2026-09-28", channel)
 QUERIES.update(rsa=gads_assets.RSA_QUERY, pmax_inventory=gads_assets.PMAX_ASSET_QUERY)
 for path in sorted(Path(__file__).parent.glob("gads_*.py")):
     for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
@@ -47,3 +52,13 @@ def test_video_and_shopping_queries_use_current_reporting_names():
     assert "metrics.video_trueview_view_rate" in QUERIES["youtube_campaigns"]
     assert "campaign.shopping_setting.feed_label" in QUERIES["shopping_campaigns"]
     assert "sales_country" not in QUERIES["shopping_campaigns"]
+
+
+@pytest.mark.parametrize("build", [
+    lambda: gads_query.channel_ads("SEARCH"),
+    lambda: gads_query.channel_assets("2026-09-01", "2026-09-28", "DISPLAY"),
+    lambda: gads_query.channel_assets("2026-09-01", "2026-09-28", "VIDEO"),
+])
+def test_channel_builders_reject_unsupported_channels(build):
+    with pytest.raises(ValueError, match="Unsupported"):
+        build()

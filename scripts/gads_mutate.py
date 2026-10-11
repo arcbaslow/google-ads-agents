@@ -13,6 +13,17 @@ class MutationCancelled(RuntimeError):
     """The operator did not explicitly approve the displayed request."""
 
 
+def review_request(preview: dict, action: str) -> None:
+    print(json.dumps(preview, indent=2), file=sys.stderr)
+    print(f"{action} these operations? y/N", file=sys.stderr, flush=True)
+    try:
+        approved = input().strip().lower() == "y"
+    except (EOFError, OSError):
+        approved = False
+    if not approved:
+        raise MutationCancelled("Mutation cancelled; explicit y confirmation is required")
+
+
 def reviewed_mutate(mutation, *, customer_id: str, operations: list,
                     validate_only: bool):
     """Preview, confirm, validate, then optionally apply the same operations.
@@ -27,15 +38,8 @@ def reviewed_mutate(mutation, *, customer_id: str, operations: list,
                        for op in reviewed],
         "validate_only": validate_only,
     }
-    print(json.dumps(preview, indent=2), file=sys.stderr)
     action = "Validate only" if validate_only else "Validate, then apply"
-    print(f"{action} these operations? y/N", file=sys.stderr, flush=True)
-    try:
-        approved = input().strip().lower() == "y"
-    except (EOFError, OSError):
-        approved = False
-    if not approved:
-        raise MutationCancelled("Mutation cancelled; explicit y confirmation is required")
+    review_request(preview, action)
 
     response = mutation(customer_id=customer_id, operations=copy.deepcopy(reviewed),
                         validate_only=True)

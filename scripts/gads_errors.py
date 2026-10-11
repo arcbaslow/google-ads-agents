@@ -39,7 +39,15 @@ def describe(exc: Exception) -> dict:
         if isinstance(exc, GoogleAdsException):
             # Error messages and field paths may contain submitted private data.
             kinds = {e.error_code._pb.WhichOneof("error_code") for e in exc.failure.errors}
-            if "authentication_error" in kinds:
+            values = {getattr(e.error_code, kind).name for e in exc.failure.errors
+                      for kind in [e.error_code._pb.WhichOneof("error_code")] if kind}
+            if values & {"EU_POLITICAL_ADVERTISING_DECLARATION_REQUIRED",
+                         "MISSING_EU_POLITICAL_ADVERTISING_SELF_DECLARATION"}:
+                # Since 2026-04-01 one undeclared campaign blocks campaign mutates account-wide.
+                code, message = ("eu_political_declaration_required",
+                                 "Set contains_eu_political_advertising on every campaign in this "
+                                 "account; an undeclared campaign blocks campaign changes.")
+            elif "authentication_error" in kinds:
                 code, message = "authentication_required", "Reconnect the Google account."
             elif "authorization_error" in kinds:
                 code, message = "permission_denied", "Check account permissions and Cloud project access."
