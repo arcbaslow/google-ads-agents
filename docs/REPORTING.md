@@ -180,6 +180,16 @@ descriptors), so the asset query selects the whole `policy_summary` message;
 rows still contain `policy_summary.approval_status`. All other queries were
 accepted as written.
 
+A separate read-only check on 2026-10-12 found the recommendations read
+failing on the server: the eight impact metric subfields
+(`recommendation.impact.base_metrics.*` and `.potential_metrics.*` for
+impressions, clicks, cost_micros and conversions), and `impact.base_metrics` /
+`impact.potential_metrics` themselves, were rejected as unrecognized on two
+accounts.
+`gads_recommendations.py` now selects the whole `recommendation.impact`
+message, which returns the same `base_metrics` and `potential_metrics`.
+Conversions are absent from a row when Google reports none.
+
 Sources: installed v25 protobuf definitions above;
 [ad asset view](https://developers.google.com/google-ads/api/reference/rpc/v25/AdGroupAdAssetView),
 [ad policy](https://developers.google.com/google-ads/api/reference/rpc/v25/AdGroupAdPolicySummary),

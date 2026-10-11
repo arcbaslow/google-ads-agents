@@ -39,7 +39,8 @@ def describe(exc: Exception) -> dict:
         if isinstance(exc, GoogleAdsException):
             # Error messages and field paths may contain submitted private data.
             kinds = {e.error_code._pb.WhichOneof("error_code") for e in exc.failure.errors}
-            values = {getattr(e.error_code, kind).name for e in exc.failure.errors
+            # Enum values newer than the client library come back as plain ints without .name.
+            values = {getattr(getattr(e.error_code, kind), "name", None) for e in exc.failure.errors
                       for kind in [e.error_code._pb.WhichOneof("error_code")] if kind}
             if values & {"EU_POLITICAL_ADVERTISING_DECLARATION_REQUIRED",
                          "MISSING_EU_POLITICAL_ADVERTISING_SELF_DECLARATION"}:

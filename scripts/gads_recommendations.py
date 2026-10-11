@@ -18,18 +18,13 @@ import gads_client
 import gads_errors
 import gads_utils
 
+# The server rejects recommendation.impact subfields (selectable in the v25
+# descriptors); the whole message returns the same base and potential metrics.
 QUERY = """
     SELECT
       recommendation.resource_name,
       recommendation.type,
-      recommendation.impact.base_metrics.impressions,
-      recommendation.impact.base_metrics.clicks,
-      recommendation.impact.base_metrics.cost_micros,
-      recommendation.impact.base_metrics.conversions,
-      recommendation.impact.potential_metrics.impressions,
-      recommendation.impact.potential_metrics.clicks,
-      recommendation.impact.potential_metrics.cost_micros,
-      recommendation.impact.potential_metrics.conversions,
+      recommendation.impact,
       recommendation.dismissed,
       recommendation.campaign,
       recommendation.ad_group

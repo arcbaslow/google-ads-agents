@@ -66,6 +66,16 @@ def test_eu_political_declaration_errors_have_their_own_category(error_code):
     assert "PRIVATE" not in json.dumps(result)
 
 
+def test_unknown_error_enum_value_falls_back_to_api_rejected():
+    from google.ads.googleads.errors import GoogleAdsException
+    from google.ads.googleads.v25.errors.types.errors import GoogleAdsFailure
+
+    failure = GoogleAdsFailure(errors=[{"error_code": {"mutate_error": 999999}, "message": "PRIVATE"}])
+    result = gads_errors.describe(GoogleAdsException(None, None, failure, "PRIVATE"))
+    assert result["error_code"] == "api_rejected"
+    assert "PRIVATE" not in json.dumps(result)
+
+
 @pytest.mark.parametrize("method", ["gcloud_adc", "oauth_client"])
 def test_local_auth_check_does_not_echo_backend_text(monkeypatch, capsys, method):
     from unittest.mock import Mock
