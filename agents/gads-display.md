@@ -9,7 +9,7 @@ tools: Read, Bash, Write
 Run `python scripts/gads_display.py --customer <id> --days 28 --json`.
 
 `--report campaigns` (default) returns `customer_id`, `date_range`, `campaigns`
-and `limitations`: campaign status/subtype, bidding type, budget micros,
+and `limitations`: campaign status/subtype, bidding type, budget (daily amount or period total),
 impressions, clicks, cost, conversions and TrueView views. `--report ads`
 returns `rows` with campaign/ad-group/ad identity, ad type and status, policy
 approval/review status for all ads regardless of activity, plus report metadata.

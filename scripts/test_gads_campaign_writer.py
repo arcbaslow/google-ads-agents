@@ -136,7 +136,8 @@ def test_automation_contract_matches_installed_enum_docstrings():
     from google.ads.googleads.v25.enums.types.asset_automation_type import AssetAutomationTypeEnum
 
     doc = AssetAutomationTypeEnum.AssetAutomationType.__doc__
-    entries = re.findall(r"            ([A-Z_]+) \(\d+\):(.*?)(?=\n            [A-Z_]+ \(|\Z)", doc, re.S)
+    # Python 3.13 strips docstring indentation at compile time, so match any indent.
+    entries = re.findall(r"^[ \t]*([A-Z_]+) \(\d+\):(.*?)(?=^[ \t]*[A-Z_]+ \(\d+\):|\Z)", doc, re.S | re.M)
     derived = {
         ad_type: {name for name, description in entries if info_type in description}
         for ad_type, info_type in {

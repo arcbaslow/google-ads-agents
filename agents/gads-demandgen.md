@@ -9,7 +9,7 @@ tools: Read, Bash
 Run `python scripts/gads_demandgen.py --customer <id> --days 28 --json`.
 
 `--report campaigns` (default) returns `customer_id`, `date_range`, `campaigns`
-and `limitations`: campaign status/subtype, bidding type, budget micros,
+and `limitations`: campaign status/subtype, bidding type, budget (daily amount or period total),
 impressions, cost, conversions and conversion value. Cost remains in account
 currency micros; conversions can be fractional. Clicks are omitted because
 Demand Gen needs a separate click-type filter; do not infer CTR or CPC.

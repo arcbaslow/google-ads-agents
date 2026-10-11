@@ -10,7 +10,7 @@ Run `python scripts/gads_uac.py --customer <id> --days 28 --json`.
 
 `--report campaigns` (default) returns `customer_id`, `date_range`,
 `app_campaigns`, `by_sub_type` and `limitations`. Rows include app ID/store,
-bidding goal, campaign status/subtype, bidding type, budget micros, impressions,
+bidding goal, campaign status/subtype, bidding type, budget (daily amount or period total), impressions,
 clicks, cost, conversions, conversion value and all_conversions. `by_sub_type`
 groups the same rows by App, engagement and pre-registration subtype without
 summing conversions. Conversions are not necessarily installs.

@@ -136,7 +136,7 @@ reports return raw `rows` with report, customer, date range and limitations.
 
 | Query builder / report | Source and selected evidence |
 | --- | --- |
-| `app_campaigns`, `display_campaigns`, `demand_gen_campaigns`, `youtube_campaigns` | `campaign`: existing metrics plus status, advertising_channel_sub_type, bidding_strategy_type and campaign_budget.amount_micros. App also reads conversions_value. Removed campaigns are excluded. |
+| `app_campaigns`, `display_campaigns`, `demand_gen_campaigns`, `youtube_campaigns` | `campaign`: existing metrics plus status, advertising_channel_sub_type, bidding_strategy_type and campaign_budget amount_micros, period and total_amount_micros (a CUSTOM_PERIOD budget carries total_amount_micros for the whole flight instead of a daily amount_micros). App also reads conversions_value. Removed campaigns are excluded. |
 | `channel_ads(channel_type)` | `ad_group_ad`, filtered to MULTI_CHANNEL, DEMAND_GEN, DISPLAY or VIDEO: campaign/ad-group/ad identity, campaign status, ad type/status, policy_summary.approval_status and review_status. No metrics or date range, so ads that never served are included. Removed campaigns and ads are excluded. |
 | `channel_assets(start, end, channel_type)` | `ad_group_ad_asset_view`, App or Demand Gen only: campaign/ad-group IDs, link resource name, ad_group_ad, asset, field_type, performance_label, enabled, the whole policy_summary and impressions. Removed campaigns and ads are excluded; disabled links remain visible. |
 | `youtube_formats` | `campaign`, VIDEO only: campaign identity, segments.ad_sub_format_type, impressions, cost_micros and video_trueview_views; removed campaigns excluded. |
