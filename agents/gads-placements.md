@@ -36,7 +36,9 @@ Workflow:
    the JSON before sending.
 4. Use `gads_apply.py --customer <id> placements --input exclusions.json
    --apply --json`. This writes account-level CustomerNegativeCriterion
-   exclusions. A campaign- or ad-group-specific writer is not implemented.
+   exclusions. Add `--campaign-id <id>` to create negative CampaignCriterion
+   exclusions only for a DISPLAY campaign. The adapter reads and checks the
+   campaign before mutation. Ad-group-specific exclusions are not implemented.
 
 If the user wants to amend the rules, edit
 `scripts/placements_rules.json` and re-run. The rules file is plain
@@ -51,3 +53,18 @@ The supported write adapters display the exact operation JSON and prompt for
 `y/N` in Python, including for validation. `--apply` validates before sending
 the same operations. Let the operator review and answer the prompt; do not
 pipe approval or substitute a direct API call. stdout remains the JSON result.
+
+Both exclusion scopes route placement URLs, YouTube channel IDs/URLs and
+`mobileapp://` IDs through the same mapping. They create criteria without
+deduplication or removal. Missing campaigns return `not_found`; non-DISPLAY
+campaigns cannot use the campaign-level path.
+
+`gads_apply.py --customer <id> optimized-targeting --input targeting.json
+--validate-only --json` accepts exactly `{"ad_group_id": "123", "enabled": false}`
+(or `true`). It requires a DISPLAY campaign and previews the previous and new
+value before the reviewed AdGroup update, using only the
+`optimized_targeting_enabled` field mask. Use `--apply` to validate and apply.
+
+`gads_apply.py negatives` now rejects VIDEO campaigns because the API does not
+support Video campaign mutations. Every writer still returns `no_op` without
+`--validate-only` or `--apply`. See docs/WRITES.md for limits and input formats.

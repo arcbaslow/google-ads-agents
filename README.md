@@ -25,7 +25,7 @@ A Python toolkit for investigating Google Ads accounts and preparing changes for
 | Delivery | Budget pacing, anomalies, placement classification, demographic and geographic breakdowns |
 | Assets | RSA strength, PMax linked asset inventory, creative briefs and asset workflows |
 | Account operations | Per-MCC auth profiles, saved audit history and multi-account audits |
-| Reviewed changes | Negatives, placements and creative writes with JSON review, confirmation and validation |
+| Reviewed changes | PAUSED Search, Demand Gen and App campaigns, App targets, negatives, placements, Display targeting, image and YouTube video assets, and Video/Display ad edits with JSON review, confirmation and validation |
 
 ## Installation
 
@@ -123,7 +123,7 @@ python scripts/gads_creation.py --customer 1234567890 --context-file context.jso
 python scripts/gads_apply.py --customer 1234567890 negatives --input negatives.json --validate-only --json
 ```
 
-Campaign context produces a planning draft and does not verify measurement health. A separate strict `--search-spec` creates a PAUSED Search shell, dedicated budget and locations atomically after review and validation. See [bounded writes](docs/WRITES.md) for the required fields and limits.
+Campaign context produces a planning draft and does not verify measurement health. Separate strict `--search-spec`, `--demand-gen-spec` and `--app-spec` files create PAUSED campaigns atomically after review and validation; Video campaigns cannot be created through the API. See [bounded writes](docs/WRITES.md) for the required fields and limits.
 
 ### Optional hooks and sign-in service
 

@@ -51,6 +51,21 @@ def test_google_ads_error_details_are_not_returned():
     assert "PRIVATE" not in json.dumps(result)
 
 
+@pytest.mark.parametrize("error_code", [
+    {"mutate_error": "EU_POLITICAL_ADVERTISING_DECLARATION_REQUIRED"},
+    {"criterion_error": "MISSING_EU_POLITICAL_ADVERTISING_SELF_DECLARATION"},
+])
+def test_eu_political_declaration_errors_have_their_own_category(error_code):
+    from google.ads.googleads.errors import GoogleAdsException
+    from google.ads.googleads.v25.errors.types.errors import GoogleAdsFailure
+
+    failure = GoogleAdsFailure(errors=[{"error_code": error_code, "message": "PRIVATE"}])
+    result = gads_errors.describe(GoogleAdsException(None, None, failure, "PRIVATE"))
+    assert result["error_code"] == "eu_political_declaration_required"
+    assert result["retryable"] is False
+    assert "PRIVATE" not in json.dumps(result)
+
+
 @pytest.mark.parametrize("method", ["gcloud_adc", "oauth_client"])
 def test_local_auth_check_does_not_echo_backend_text(monkeypatch, capsys, method):
     from unittest.mock import Mock
