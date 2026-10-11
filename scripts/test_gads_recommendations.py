@@ -64,3 +64,8 @@ def test_impact_metrics_flattened(monkeypatch):
     assert rec["base"]["cost"] == 10.0
     assert rec["potential"]["cost"] == 20.0
     assert rec["potential"]["conversions"] == 5
+
+
+def test_query_selects_whole_impact_message():
+    assert "recommendation.impact," in gads_recommendations.QUERY
+    assert "recommendation.impact." not in gads_recommendations.QUERY
