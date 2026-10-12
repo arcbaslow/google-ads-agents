@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 import pytest
@@ -19,3 +20,5 @@ def _isolate_paths(tmp_path: Path, monkeypatch) -> None:
     # Avoid leaking host env into tests
     for k in ("GOOGLE_ADS_DEVELOPER_TOKEN", "GOOGLE_ADS_LOGIN_CUSTOMER_ID"):
         monkeypatch.delenv(k, raising=False)
+    # Hook tests swap sys.stdin for a stub without isatty and leave it in place.
+    monkeypatch.setattr(sys.stdin, "isatty", lambda: True, raising=False)

@@ -30,6 +30,8 @@ def reviewed_mutate(mutation, *, customer_id: str, operations: list,
     print(json.dumps(preview, indent=2), file=sys.stderr)
     action = "Validate only" if validate_only else "Validate, then apply"
     print(f"{action} these operations? y/N", file=sys.stderr, flush=True)
+    if not sys.stdin.isatty():
+        raise MutationCancelled("Mutation cancelled; review it in an interactive terminal")
     try:
         approved = input().strip().lower() == "y"
     except (EOFError, OSError):

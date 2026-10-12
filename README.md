@@ -113,7 +113,7 @@ The repository includes [plugin metadata](.claude-plugin/plugin.json), specialis
 
 ### Changes to an account
 
-Supported write commands print the operation JSON to stderr and require an explicit `y` at a `y/N` prompt. `--apply` validates the same operations before applying them; `--validate-only` stops after validation. The flags are mutually exclusive. EOF or unavailable input cancels the request. Do not pipe an automatic approval into these commands.
+Supported write commands print the operation JSON to stderr and require an explicit `y` at a `y/N` prompt. `--apply` validates the same operations before applying them; `--validate-only` stops after validation. The flags are mutually exclusive. Piped stdin, EOF or unavailable input cancels the request.
 
 ```bash
 # Produce a campaign planning draft without calling the API.
