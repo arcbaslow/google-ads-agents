@@ -79,7 +79,8 @@ move on.
 
 ## Step 4 — upload
 
-For each approved image:
+For each approved image, give the operator these commands to run in their
+own terminal, validate-only first:
 
 ```
 python scripts/gads_creative.py upload --customer <CID> \
@@ -88,7 +89,7 @@ python scripts/gads_creative.py upload --customer <CID> \
     --validate-only --json
 ```
 
-Show the validate-only result. Then:
+Once the validate-only result is clean:
 
 ```
 python scripts/gads_creative.py upload --customer <CID> \
@@ -97,7 +98,8 @@ python scripts/gads_creative.py upload --customer <CID> \
     --apply --json
 ```
 
-Save the returned `asset_resource` for the next step.
+Ask the operator to paste back the JSON stdout and take `asset_resource`
+from it for the next step.
 
 ## Step 5 — attach
 
@@ -122,7 +124,8 @@ python scripts/gads_creative.py attach --customer <CID> \
     --validate-only --json
 ```
 
-Always validate-only first, show the result, then `--apply`.
+The operator runs these in their own terminal, validate-only first, then the
+same command with `--apply`, and pastes back the JSON stdout.
 
 ## Style for output
 
@@ -133,8 +136,9 @@ group it was attached to, and the field type.
 
 The supported write adapters display the exact operation JSON and prompt for
 `y/N` in Python, including for validation. `--apply` validates before sending
-the same operations. Let the operator review and answer the prompt; do not
-pipe approval or substitute a direct API call. stdout remains the JSON result.
+the same operations. The prompt needs an interactive terminal, so give the
+operator the command to run in their own terminal; do not pipe approval or
+substitute a direct API call. stdout remains the JSON result.
 
 Treat redacted failures as unavailable evidence, not an empty or healthy result.
 See docs/REPORTING.md for error categories. Never retry a write automatically.

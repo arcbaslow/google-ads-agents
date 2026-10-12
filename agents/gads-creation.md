@@ -21,6 +21,7 @@ python scripts/gads_creation.py --customer <id> --search-spec search-spec.json -
 ```
 
 The adapter prints actual operations, asks y/N, validates, then optionally
-applies atomically. Never supply automatic approval. New campaigns are PAUSED.
+applies atomically. The operator runs these commands in their own
+terminal; never supply automatic approval. New campaigns are PAUSED.
 No ads, keywords, activation or budget/status editor is included. After an
 uncertain apply response, inspect account state before proposing a retry.

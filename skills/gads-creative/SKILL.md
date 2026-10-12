@@ -8,8 +8,8 @@ metadata:
   version: "0.2.0"
 ---
 
-Routes to the `gads-creative` subagent. The agent runs the four-step
-flow:
+Routes to the `gads-creative` subagent. The agent runs `brief` and
+`prompts`; the operator runs `upload` and `attach` in their own terminal:
 
 ```
 python scripts/gads_creative.py brief --site <url> --output /tmp/brief.json
@@ -27,8 +27,9 @@ Search image extensions use the same `attach` subcommand with
 
 The supported write adapters display the exact operation JSON and prompt for
 `y/N` in Python, including for validation. `--apply` validates before sending
-the same operations. Let the operator review and answer the prompt; do not
-pipe approval or substitute a direct API call. stdout remains the JSON result.
+the same operations. The prompt needs an interactive terminal, so give the
+operator the command to run in their own terminal; do not pipe approval or
+substitute a direct API call. stdout remains the JSON result.
 
 Structured failure output uses `error_code`, a safe `error` message and a
 `retryable` hint. No automatic retries are performed. For a failed write,

@@ -22,7 +22,8 @@ python scripts/gads_brands.py --customer <id> exclude --campaign-ids <campaign-i
 ```
 
 The adapter reviews actual operation JSON, asks y/N and validates before
-application. Never supply automatic approval. It supports PMax only, in the
+application. The operator runs these commands in their own
+terminal; never supply automatic approval. It supports PMax only, in the
 selected customer. Exact-content managed lists are reused without editing;
 already-attached lists return no_op. Drift or duplicate names require manual
 review. List removal, editing, Search restrictions and cross-account scope
