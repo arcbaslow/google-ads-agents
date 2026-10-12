@@ -1,8 +1,8 @@
 # Bounded writes
 
 Every write prints operation JSON, requires an explicit `y` at a `y/N` prompt,
-and validates before application. EOF cancels. The local 24-hour session gate
-still applies. Never pipe approval into a writer.
+and validates before application. Piped stdin and EOF cancel. The local
+24-hour session gate still applies.
 
 ## Search campaign shells
 

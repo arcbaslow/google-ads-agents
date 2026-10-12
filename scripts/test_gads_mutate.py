@@ -1,6 +1,7 @@
 """Exercise every supported writer with real message types and mocked services."""
 
 import json
+import sys
 from functools import partial
 from types import SimpleNamespace
 from unittest.mock import Mock
@@ -56,6 +57,15 @@ def test_writer_rejects_without_explicit_y(writer, monkeypatch, answer):
     call, mutation = writer
     monkeypatch.setattr("builtins.input", Mock(
         side_effect=answer if isinstance(answer, Exception) else None, return_value=answer))
+    with pytest.raises(MutationCancelled):
+        call(False)
+    mutation.assert_not_called()
+
+
+def test_writer_rejects_piped_approval(writer, monkeypatch):
+    call, mutation = writer
+    monkeypatch.setattr(sys.stdin, "isatty", lambda: False)
+    monkeypatch.setattr("builtins.input", lambda: "y")
     with pytest.raises(MutationCancelled):
         call(False)
     mutation.assert_not_called()

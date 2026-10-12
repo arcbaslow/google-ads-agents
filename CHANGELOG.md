@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Refuse write approval from piped stdin; the y/N prompt needs an interactive terminal.
+
 - Document read-only interoperability, completed bounded roadmap scope and continuation verification results.
 
 - Redact local authentication backend diagnostics and history-query CLI failures while retaining reconnect commands.
