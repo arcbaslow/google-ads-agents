@@ -59,8 +59,9 @@ For every mutate:
 1. Build the operation JSON.
 2. Show it to the user.
 3. Ask `y/N`.
-4. On `y`, send. Use `validate_only=True` first when feasible.
-5. Show the response.
+4. On `y`, give the operator the command to run in their own terminal,
+   validate-only first when feasible. The script asks `y/N` again there.
+5. Show the response the operator pastes back.
 
 Skill bodies wire this in; don't bypass.
 

@@ -15,11 +15,12 @@ python scripts/gads_placements.py --customer <id> --days <N> --json
 ```
 
 Then walks the user through the proposed exclusions per category and
-asks `y/N` before writing.
+asks `y/N`, then gives the operator the write command.
 
 Rules file: `scripts/placements_rules.json`. Override with `--rules`.
 
 The supported write adapters display the exact operation JSON and prompt for
 `y/N` in Python, including for validation. `--apply` validates before sending
-the same operations. Let the operator review and answer the prompt; do not
-pipe approval or substitute a direct API call. stdout remains the JSON result.
+the same operations. The prompt needs an interactive terminal, so give the
+operator the command to run in their own terminal; do not pipe approval or
+substitute a direct API call. stdout remains the JSON result.

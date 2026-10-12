@@ -32,10 +32,10 @@ Workflow:
    of placements in each (5–10).
 2. Ask: "Exclude the full lists for [categories]? y/N — or pick a
    subset."
-3. On confirmation, build the negative-criterion mutate payload. Show
-   the JSON before sending.
-4. Use `gads_apply.py --customer <id> placements --input exclusions.json
-   --apply --json`. This writes account-level CustomerNegativeCriterion
+3. On confirmation, build the negative-criterion mutate payload and show
+   the JSON.
+4. Give the operator `gads_apply.py --customer <id> placements --input
+   exclusions.json --apply --json` to run in their own terminal. This writes account-level CustomerNegativeCriterion
    exclusions. A campaign- or ad-group-specific writer is not implemented.
 
 If the user wants to amend the rules, edit
@@ -49,5 +49,6 @@ ready-to-mutate JSON proposal when the user approves.
 
 The supported write adapters display the exact operation JSON and prompt for
 `y/N` in Python, including for validation. `--apply` validates before sending
-the same operations. Let the operator review and answer the prompt; do not
-pipe approval or substitute a direct API call. stdout remains the JSON result.
+the same operations. The prompt needs an interactive terminal, so give the
+operator the command to run in their own terminal; do not pipe approval or
+substitute a direct API call. stdout remains the JSON result.
