@@ -364,6 +364,158 @@ Completed through local adapters, fixtures and a guide, without new services.
 | Agent evaluation fixtures | [google-ads-api-agent](https://github.com/itallstartedwithaidea/google-ads-api-agent) documents campaign creation, experiments and ad-schedule managers, beyond this toolkit's reads. Compare those workflows using mocked tasks, especially confirmation and unsupported requests. Its advertised capabilities have not been executed or safety-audited here. | 3–5 days | Low for offline evaluation; no language-model runtime was scored. | Completed [fixtures and rubric](EVALUATION.md) plus executable mocked adapter contracts. |
 | Monitoring integrations | [Ads Monitor](https://github.com/google-marketing-solutions/ads-monitor) uses monitoring infrastructure for account signals. Exporting findings could help existing operations teams. | 3–5 days | Medium; snapshot freshness must be checked by the consuming monitor. | Completed local Prometheus text export of saved audit counts/failures; no scheduler, token renewal or push service. |
 
+## Demand Gen, App, Display and Video (2026-10-12)
+
+The owner approved all six items on 2026-10-12, and they are implemented within
+the bounds below. Items are ranked by the gap between what API v25 supports and
+what this repository reads or writes. API facts were checked against official
+documentation and the installed v25 descriptors on 2026-10-12. Tests use real
+v25 protobufs with mocked services; no live account was used. The table and
+line references describe the baseline `d052b4b`, before this work.
+
+| Type | API v25 | Reads here | Writes here |
+| --- | --- | --- | --- |
+| Demand Gen | Full creation and management: campaign, ad group, multi-asset, carousel, video responsive and product ads, ad-group channel controls. [Creation](https://developers.google.com/google-ads/api/docs/demand-gen/create-campaign) | Campaign totals and channel-control configuration: `scripts/gads_query.py:104`, `scripts/gads_demandgen.py:13` | None |
+| App | Creation of `MULTI_CHANNEL` campaigns in three sub-types, goal-specific bidding, App ads; asset links in `ad_group_ad_asset_view`. [Creation](https://developers.google.com/google-ads/api/docs/app-campaigns/create-campaign) | Campaign totals and app settings, no status or sub-type: `scripts/gads_query.py:69` | None |
+| Display | Standard Display creation with responsive display ads; Smart Display creation is blocked. Google is moving Display into Demand Gen and will later allow new Display campaigns only there; the migration tool started in June 2026, later steps are undated. [Responsive display ads](https://developers.google.com/google-ads/api/docs/responsive-display-ads/create-responsive-display-ads), [migration](https://support.google.com/google-ads/answer/17051545) | Campaign totals: `scripts/gads_query.py:88` | Image upload and campaign `AD_IMAGE` attachment without a channel check (`scripts/gads_creative.py:272`); account-level placement exclusions (`scripts/gads_apply.py:92`) |
+| Video | Campaigns cannot be created or mutated. Exceptions: `VideoResponsiveAdInfo` edits, video experiments and account-level brand suitability. Videos can be uploaded to YouTube from v23. [Video](https://developers.google.com/google-ads/api/docs/video/overview), [upload](https://developers.google.com/google-ads/api/docs/assets/upload-videos) | Campaign TrueView and quartile metrics: `scripts/gads_query.py:140` | None |
+
+At baseline the four adapters returned rows without `findings`, so audits listed
+them with no findings (`scripts/gads_audit.py:51`, `scripts/gads_findings.py:14`).
+
+Every write item keeps reviewed operation JSON and `y/N`. Google Ads
+operations also keep validation before application, one
+`GoogleAdsService.Mutate` with temporary resource names and partial failure
+off (`scripts/gads_mutate.py:48`), PAUSED creation and no activation. The
+YouTube upload in P4 is the exception described there. The owner supplies the EU political advertising
+declaration in each spec. Since 2026-04-01 a single undeclared campaign makes
+the API reject every campaign-management mutate in that account with
+`MutateError.EU_POLITICAL_ADVERTISING_DECLARATION_REQUIRED`; writers should
+report that error as its own category with the fix.
+[EU declaration](https://developers.google.com/google-ads/api/docs/api-policy/eu-par)
+
+### P1. Read depth for the four types
+
+- What: add status, sub-type, budget and bidding fields to the four campaign
+  queries; ad rows with ad type and policy summary; App and Demand Gen asset
+  rows from `ad_group_ad_asset_view` with `performance_label`; channel controls
+  in the audit; findings for disapproved or limited ads and for LOW App assets.
+  Split App rows by sub-type, since install, engagement and pre-registration
+  conversions are not comparable.
+- Why: every writer below needs a read-back check, and audits currently show
+  no findings for these channels.
+- Evidence: the table above; `skills/gads-uac/SKILL.md:16` and
+  `agents/gads-uac.md:12` document `campaigns`, while `scripts/gads_uac.py:20`
+  emits `app_campaigns`. The v25 `AdGroupAdAssetView` supports App ads, Demand
+  Gen and responsive search ads, not responsive display ads.
+- Effort: 3–4 days. Risk: low; mocked rows cannot prove field combinations.
+
+### P2. Demand Gen PAUSED campaign writer
+
+- What: a strict spec beside the Search shell in `scripts/gads_creation.py`:
+  an unshared daily or campaign-total budget; Maximize Clicks, Maximize
+  Conversions, Target CPA or Target ROAS; one ad group with locations,
+  languages and channel controls; one multi-asset or video responsive ad built
+  from existing asset resource names. Request order follows the guide: budget,
+  campaign, ad group, assets, ad.
+- Why: Demand Gen is the largest gap, and the Video guide names it as the API
+  route for YouTube campaigns. Video action campaigns were upgraded to Demand
+  Gen, and Display is moving there. [Upgrade](https://support.google.com/google-ads/answer/15110871)
+- Evidence: the guide requires an unshared budget and no sub-type. Video
+  responsive ads require `videos`, `logo_images` and `business_name` from v24.
+  `upgraded_targeting` (ad-group locations and languages) can only be set at
+  creation. Demand Gen asset automation defaults to opted in for new ads
+  (landing-page text from v24.2, animated images for multi-asset ads from v25),
+  so the spec must state each automation setting rather than inherit defaults.
+  [Release notes](https://developers.google.com/google-ads/api/docs/release-notes)
+- Not included: product and carousel ads, audience or lookalike creation,
+  edits after creation, activation.
+- Effort: 5–8 days. Risk: high; policy review runs after application, so a
+  validated request can still produce a disapproved ad.
+
+### P3. App campaign PAUSED writer and target edits
+
+- What: a strict spec for `APP_CAMPAIGN` and `APP_CAMPAIGN_FOR_ENGAGEMENT`:
+  app ID, store, goal type and the one bidding strategy that goal requires,
+  unshared budget, locations, languages, selected conversion actions where the
+  goal requires them, one ad group and one App ad from existing assets.
+  Engagement also takes one existing user list as the required ad-group
+  audience (the Firebase all-users list qualifies) and no deep link, so ads
+  open the app's main screen. A separate reviewed edit changes
+  target CPA or target ROAS on an existing App campaign and rejects a goal or
+  current bidding strategy that does not match.
+- Why: second-largest gap. App bidding is fixed by the goal type; an edit that
+  does not read the goal first can send an invalid or unintended change.
+- Evidence: the creation guide maps each `bidding_strategy_goal_type` to one
+  strategy, forbids shared budgets and portfolio strategies, requires the
+  strategy at creation and requires selected conversion actions for
+  engagement, in-app and ROAS goals.
+- Not included: deep links for engagement ads, audience creation,
+  pre-registration campaigns, sub-type or app changes.
+  [App ad groups](https://developers.google.com/google-ads/api/docs/app-campaigns/create-ad-group),
+  [engagement ads](https://support.google.com/google-ads/answer/6310747)
+- Effort: 5–7 days. Risk: high; a target edit changes live delivery as soon as
+  it is applied.
+
+### P4. YouTube video upload and video assets
+
+- What: a reviewed `YouTubeVideoUploadService` upload of a local file to the
+  Google-managed channel (unlisted) or an owned brand channel, then a
+  `YoutubeVideoAsset` from the processed `video_id`; also asset creation from an
+  existing video ID.
+- Why: the only API route for new video into Demand Gen, App and PMax ads, and
+  a prerequisite for video ads in P2 and P3. The owner still supplies the file.
+- Evidence: available from v23 in Python and REST; brand channels need user
+  authentication, not service accounts; PUBLIC is allowed only on brand
+  channels. `scripts/gads_creative.py:210` creates image assets only.
+- Effort: 2–3 days. Risk: medium; an upload publishes the file on YouTube, and
+  an unlisted video is viewable by anyone with the link. The upload request has
+  no `validate_only`, processing is asynchronous and asset creation is a
+  separate mutate, so the upload is reviewed on its own and a failed asset step
+  leaves the video uploaded. The command reports the upload resource name so
+  the owner can retry asset creation from the video ID or remove the upload
+  with `RemoveYouTubeVideoUpload`.
+  [Request](https://developers.google.com/google-ads/api/reference/rpc/v25/CreateYouTubeVideoUploadRequest)
+
+### P5. Video ad edits and channel guards
+
+- What: limit Video writes to reviewed `VideoResponsiveAdInfo` edits. Make
+  existing writers check the campaign channel before building operations:
+  `attach_to_search_campaign` accepts any campaign, and negative keywords take
+  any campaign ID (`scripts/gads_apply.py:56`). Route Video creation requests
+  to P2.
+- Why: the API rejects Video campaign mutations, and an unchecked writer
+  reports a provider error instead of the supported route.
+- Evidence: the Video guide; `scripts/gads_creative.py:272`.
+- Effort: 1–2 days. Risk: low.
+
+### P6. Display edits without a Display creation writer
+
+- What: reviewed responsive display ad asset edits, the ad-group
+  `optimized_targeting_enabled` setting and campaign-level placement
+  exclusions. New Display requests go to P2.
+- Why: owners who need manual CPC, viewable CPM, portfolio bidding or combined
+  audiences, which Demand Gen does not support, keep existing Display
+  campaigns. A Display creation writer would stop being usable once new Display
+  campaigns move into Demand Gen.
+- Evidence: the migration page; placement exclusions are account-level only
+  (`scripts/gads_apply.py:92`).
+- Effort: 3–4 days. Risk: medium; an undated migration may strand this work.
+
+Results: P1 in `gads_uac.py`, `gads_display.py`, `gads_demandgen.py`,
+`gads_youtube.py` (`--report`, `audit`) and `gads_findings.ad_policy_findings`;
+P2 and P3 in `gads_creation.py` (`--demand-gen-spec`, `--app-spec`,
+`--app-target`); P4 and P5 in `gads_creative.py` (`upload-video`,
+`create-video-asset`, `edit-ad`) with guards in `gads_creative.py` and
+`gads_apply.py`; P6 in `gads_apply.py` (`optimized-targeting`,
+`placements --campaign-id`) and `edit-ad`. The EU declaration error is
+reported as `eu_political_declaration_required` by `gads_errors.py`.
+Contracts: [WRITES.md](WRITES.md) and [REPORTING.md](REPORTING.md).
+
+Not proposed: Video campaign creation (unsupported by the API; Google Ads
+scripts are the documented route), a Display creation writer (P6), paid
+creative generation (rejected below) and activation from any new writer.
+
 ## Open questions and rejected directions
 
 - Leave session behavior unchanged. `scripts/gads_auth.py:432` (`cmd_use_profile`) writes a new

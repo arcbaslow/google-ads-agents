@@ -106,3 +106,93 @@ def test_cli_labels_draft_as_planning_only(monkeypatch, tmp_path, capsys):
     result = json.loads(capsys.readouterr().out)
     assert result["status"] == "planning_only"
     assert result["campaign_plan"]["campaign"]["status"] == "PAUSED"
+
+
+STRICT_SOURCES = [
+    ("--search-spec", "create_search_campaign"),
+    ("--demand-gen-spec", "create_demand_gen_campaign"),
+    ("--app-spec", "create_app_campaign"),
+    ("--app-target", "update_app_target"),
+]
+
+
+@pytest.mark.parametrize("flag,writer_name", STRICT_SOURCES)
+def test_strict_cli_no_op_without_reading_or_building(monkeypatch, capsys, flag, writer_name):
+    import json
+    from unittest.mock import Mock
+
+    import gads_client
+
+    build = Mock()
+    writer = Mock()
+    monkeypatch.setattr(gads_client, "build_client", build)
+    monkeypatch.setattr(gads_creation, writer_name, writer)
+    monkeypatch.setattr("sys.argv", ["gads_creation", "--customer", "123", flag, "missing.json", "--json"])
+    assert gads_creation.main() == 0
+    assert json.loads(capsys.readouterr().out)["status"] == "no_op"
+    writer.assert_not_called()
+    build.assert_not_called()
+
+
+@pytest.mark.parametrize("flag,writer_name", STRICT_SOURCES)
+@pytest.mark.parametrize("mode", ["--validate-only", "--apply"])
+def test_strict_cli_dispatches_review_mode(monkeypatch, tmp_path, capsys, flag, writer_name, mode):
+    import json
+    from unittest.mock import Mock
+
+    spec = {"sentinel": "owner input"}
+    path = tmp_path / "spec.json"
+    path.write_text(json.dumps(spec), encoding="utf-8")
+    writer = Mock(return_value={"status": "validated" if mode == "--validate-only" else "applied"})
+    monkeypatch.setattr(gads_creation, writer_name, writer)
+    monkeypatch.setattr("sys.argv", ["gads_creation", "--customer", "1-23", flag, str(path), mode, "--json"])
+    assert gads_creation.main() == 0
+    writer.assert_called_once_with("123", spec, validate_only=mode == "--validate-only")
+    assert json.loads(capsys.readouterr().out) == writer.return_value
+
+
+@pytest.mark.parametrize("flag,writer_name", STRICT_SOURCES)
+@pytest.mark.parametrize("contents", ["not JSON", "{}"])
+def test_strict_cli_errors_before_client(monkeypatch, tmp_path, capsys, flag, writer_name, contents):
+    import json
+    from unittest.mock import Mock
+
+    import gads_client
+    import gads_errors
+
+    build = Mock()
+    monkeypatch.setattr(gads_client, "build_client", build)
+    describe = Mock(wraps=gads_errors.describe)
+    monkeypatch.setattr(gads_errors, "describe", describe)
+    path = tmp_path / "spec.json"
+    path.write_text(contents, encoding="utf-8")
+    monkeypatch.setattr("sys.argv", ["gads_creation", "--customer", "123", flag, str(path), "--apply", "--json"])
+    assert gads_creation.main() == 3
+    describe.assert_called_once()
+    out = json.loads(capsys.readouterr().out)
+    expected = gads_errors.describe(describe.call_args.args[0])
+    if contents == "{}":
+        # Spec validation names the offending input instead of the generic message.
+        assert "documented fields" in out.pop("error")
+        expected.pop("error")
+    assert out == expected
+    build.assert_not_called()
+
+
+@pytest.mark.parametrize("first,second", [
+    (first, second) for first in ["--context-file"] + [flag for flag, _ in STRICT_SOURCES]
+    for second in ["--context-file"] + [flag for flag, _ in STRICT_SOURCES] if first != second
+])
+def test_creation_sources_mutually_exclusive(monkeypatch, first, second):
+    monkeypatch.setattr("sys.argv", ["gads_creation", "--customer", "123", first, "a.json", second, "b.json"])
+    with pytest.raises(SystemExit) as exc:
+        gads_creation.main()
+    assert exc.value.code == 2
+
+
+@pytest.mark.parametrize("flag,writer_name", STRICT_SOURCES)
+def test_creation_modes_mutually_exclusive(monkeypatch, flag, writer_name):
+    monkeypatch.setattr("sys.argv", ["gads_creation", "--customer", "123", flag, "spec.json", "--apply", "--validate-only"])
+    with pytest.raises(SystemExit) as exc:
+        gads_creation.main()
+    assert exc.value.code == 2

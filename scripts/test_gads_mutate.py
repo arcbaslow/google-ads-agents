@@ -18,8 +18,11 @@ from google.auth.credentials import AnonymousCredentials
 @pytest.fixture(params=["negatives", "placements", "upload", "pmax", "search"])
 def writer(request, monkeypatch, tmp_path):
     types = GoogleAdsClient(credentials=AnonymousCredentials(), developer_token="test",
-                           use_proto_plus=True)
+                           use_proto_plus=True, version="v25")
     service = Mock()
+    row = types.get_type("GoogleAdsRow")
+    row.campaign.advertising_channel_type = "SEARCH"
+    service.search.return_value = [row]
     service.campaign_path.side_effect = lambda c, i: f"customers/{c}/campaigns/{i}"
     service.asset_group_path.side_effect = lambda c, i: f"customers/{c}/assetGroups/{i}"
     client = Mock(get_type=types.get_type, enums=types.enums)
@@ -109,6 +112,9 @@ def test_validation_failure_never_applies(writer, monkeypatch):
 @pytest.mark.parametrize("module,args", [
     (gads_apply, ["--customer", "123", "negatives", "--input", "unused.json"]),
     (gads_apply, ["--customer", "123", "placements", "--input", "unused.json"]),
+    (gads_apply, ["--customer", "123", "optimized-targeting", "--input", "unused.json"]),
+    (gads_creative, ["create-video-asset", "--customer", "123", "--video-id", "Abc_def-123", "--name", "Video"]),
+    (gads_creative, ["edit-ad", "--customer", "123", "--ad-id", "99", "--input", "unused.json"]),
     (gads_creative, ["upload", "--customer", "123", "--image", "unused.png"]),
     (gads_creative, ["attach", "--customer", "123", "--asset-resource", "a",
                      "--asset-group-id", "9", "--field-type", "MARKETING_IMAGE"]),

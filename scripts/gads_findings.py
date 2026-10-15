@@ -26,6 +26,33 @@ def collect(audit: dict) -> list[dict]:
     return found
 
 
+def ad_policy_findings(rows: list[dict]) -> list[dict]:
+    findings = []
+    seen = set()
+    for row in rows:
+        campaign = row.get("campaign", {})
+        ad = row.get("ad_group_ad", {})
+        approval = ad.get("policy_summary", {}).get("approval_status")
+        if (campaign.get("status") not in {"ENABLED", "PAUSED"}
+                or ad.get("status") != "ENABLED"
+                or approval not in {"DISAPPROVED", "APPROVED_LIMITED"}):
+            continue
+        entity = {"campaign_id": campaign.get("id"),
+                  "ad_group_id": row.get("ad_group", {}).get("id"),
+                  "ad_id": ad.get("ad", {}).get("id")}
+        identity_key = tuple(entity.values())
+        if identity_key in seen:
+            continue
+        seen.add(identity_key)
+        findings.append({
+            "severity": "high" if approval == "DISAPPROVED" else "medium",
+            "code": "ad_" + approval.lower(),
+            "entity": entity,
+            "message": f"Enabled ad {entity['ad_id']} has policy approval status {approval}.",
+        })
+    return findings
+
+
 def identity(finding: dict) -> tuple:
     entity = finding.get("entity") or {
         key: finding[key] for key in ("campaign_id", "ad_group_id", "resource_name", "bucket")
