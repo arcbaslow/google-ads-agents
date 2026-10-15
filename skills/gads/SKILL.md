@@ -22,11 +22,11 @@ Top-level entry point. `/gads <command> <args>`.
 | `/gads audit <customer-id>` | Collect configured read adapters in parallel |
 | `/gads search <customer-id>` | Search campaigns |
 | `/gads pmax <customer-id>` | Performance Max |
-| `/gads uac <customer-id>` | App campaigns |
-| `/gads display <customer-id>` | Display |
-| `/gads demandgen <customer-id>` | Demand Gen campaign totals |
+| `/gads uac <customer-id>` | App campaigns, ads and asset links |
+| `/gads display <customer-id>` | Display campaigns and ads |
+| `/gads demandgen <customer-id>` | Demand Gen campaigns, ads, assets and channel controls |
 | `/gads shopping <customer-id>` | Shopping |
-| `/gads youtube <customer-id>` | YouTube / Video |
+| `/gads youtube <customer-id>` | YouTube / Video campaigns, ads, formats and brand suitability |
 | `/gads conversions <customer-id>` | Conversion tracking |
 | `/gads gtag <customer-id> --site <url>` | Static tag detection and tracking IDs |
 | `/gads keywords <customer-id> --seeds w1 w2` | Keyword ideas |
@@ -41,11 +41,11 @@ Top-level entry point. `/gads <command> <args>`.
 | `/gads geos <customer-id> --query NAME [...]` | Resolve names to GeoTargetConstant IDs |
 | `/gads quality <customer-id>` | Per-keyword Quality Score with deficient-component grouping |
 | `/gads demographics <customer-id> age\|gender\|device\|location\|all` | Demographic and geographic outliers |
-| `/gads creative <customer-id> <site-url>` | Draft creative briefs/prompts, upload supplied images and attach |
+| `/gads creative <customer-id> <site-url>` | Draft creative briefs/prompts, upload supplied images and videos, attach, edit Video and Display ads |
 | `/gads notify --setup\|--test\|--send TEXT` | Telegram bot setup and manual sends |
 | `/gads history <customer-id>` | Change-event log; list and diff saved audits |
-| `/gads apply <customer-id>` | Write paths: negative keywords and placement exclusions |
-| `/gads create <customer-id>` | Campaign planning and reviewed PAUSED Search shells |
+| `/gads apply <customer-id>` | Write paths: negative keywords, placement exclusions and Display optimized targeting |
+| `/gads create <customer-id>` | Campaign planning and reviewed PAUSED Search, Demand Gen and App campaigns |
 | `/gads audit --all-customers` | Audit directly accessible customers in parallel |
 
 ## Routing

@@ -122,3 +122,76 @@ and final URL suffixes. These are current settings, not resolved click URLs or
 proof that tags fire. Field references: [AssetGroup](https://developers.google.com/google-ads/api/reference/rpc/v25/AssetGroup)
 and [Campaign migration dates](https://developers.google.com/google-ads/api/reference/rpc/v25/Campaign).
 These additions cover the v25.1/v25.2 configuration gaps listed in the roadmap.
+
+
+## App, Demand Gen, Display and Video reads
+
+The four adapters default to `--report campaigns` and also accept `--report ads`.
+App and Demand Gen support `--report assets`; Video supports `--report formats`
+and `--report brand-safety`. Demand Gen retains `--channel-controls` (which takes
+precedence over `--report`). All reads use v25 through the existing client/session
+gate. Campaign outputs retain their existing keys; App uses `app_campaigns` and
+adds `by_sub_type` lists without aggregating conversions across subtypes. Other
+reports return raw `rows` with report, customer, date range and limitations.
+
+| Query builder / report | Source and selected evidence |
+| --- | --- |
+| `app_campaigns`, `display_campaigns`, `demand_gen_campaigns`, `youtube_campaigns` | `campaign`: existing metrics plus status, advertising_channel_sub_type, bidding_strategy_type and campaign_budget amount_micros, period and total_amount_micros (a CUSTOM_PERIOD budget carries total_amount_micros for the whole flight instead of a daily amount_micros). App also reads conversions_value. Removed campaigns are excluded. |
+| `channel_ads(channel_type)` | `ad_group_ad`, filtered to MULTI_CHANNEL, DEMAND_GEN, DISPLAY or VIDEO: campaign/ad-group/ad identity, campaign status, ad type/status, policy_summary.approval_status and review_status. No metrics or date range, so ads that never served are included. Removed campaigns and ads are excluded. |
+| `channel_assets(start, end, channel_type)` | `ad_group_ad_asset_view`, App or Demand Gen only: campaign/ad-group IDs, link resource name, ad_group_ad, asset, field_type, performance_label, enabled, the whole policy_summary and impressions. Removed campaigns and ads are excluded; disabled links remain visible. |
+| `youtube_formats` | `campaign`, VIDEO only: campaign identity, segments.ad_sub_format_type, impressions, cost_micros and video_trueview_views; removed campaigns excluded. |
+| `youtube_brand_safety` | `customer.video_brand_safety_suitability`, LIMIT 1, current account configuration without a date filter. |
+| Demand Gen `CONTROLS_QUERY` | `ad_group` current channel configuration, strategy and selected-channel flags; included in Demand Gen audits. |
+
+Metric reports use the shared inclusive date range ending yesterday. They can
+omit entities with no activity and therefore cannot establish complete inventory.
+The ads report has no date range or metrics, so it lists ads that never served.
+Policy/configuration fields are current state,
+not historical state. Frequency and unique-user metrics are not queried. Demand
+Gen clicks remain omitted; do not infer CTR/CPC. Asset labels are relative within
+the ad, and asset impressions overlap. Conversions are not necessarily installs.
+TrueView views are not all plays. Account suitability does not prove placement
+safety. Channel controls do not measure historical delivery or surface spend.
+
+The audit driver now calls each adapter's `audit(customer_id, days)`. Outputs
+retain campaign rows and add ad rows, summary and findings; App adds asset rows,
+and Demand Gen adds channel-control rows. Only enabled ads in enabled or paused
+campaigns with DISAPPROVED (high) or APPROVED_LIMITED (medium) approval generate
+ad findings, one per ad. Only App enabled asset links labeled LOW generate asset
+findings (low), one per link. Ad findings identify campaign, ad group and ad;
+asset findings identify the campaign/ad group, ad link, asset, role and link
+resource name. `gads_findings.collect` retains those identities. No additional
+findings are inferred from format, suitability or channel-control reports.
+
+Field paths were checked against the installed `google.ads.googleads.v25`
+protobuf descriptors and docstrings, including `AdGroupAdAssetView`,
+`AdGroupAdAssetPolicySummary`, `AdGroupAdPolicySummary`, `Campaign`, `Segments`
+and `Customer`. Responsive Display ads are explicitly unsupported by the asset
+view; suitability exists on Customer, not Campaign. The sub-format enum lists
+only non-skippable variants, UNSEGMENTED and unknown values, so this report is
+not a complete format taxonomy.
+
+On 2026-10-12 every query in this section, the App target read and the
+Demand Gen channel-control read and the campaign, ad group, ad and YouTube
+upload lookups that the write commands run first were also run read-only against a live account
+with App, Demand Gen, Display and Video campaigns. The server rejected
+`ad_group_ad_asset_view.policy_summary.approval_status` (selectable in the
+descriptors), so the asset query selects the whole `policy_summary` message;
+rows still contain `policy_summary.approval_status`. All other queries were
+accepted as written.
+
+A separate read-only check on 2026-10-12 found the recommendations read
+failing on the server: the eight impact metric subfields
+(`recommendation.impact.base_metrics.*` and `.potential_metrics.*` for
+impressions, clicks, cost_micros and conversions), and `impact.base_metrics` /
+`impact.potential_metrics` themselves, were rejected as unrecognized on two
+accounts.
+`gads_recommendations.py` now selects the whole `recommendation.impact`
+message, which returns the same `base_metrics` and `potential_metrics`.
+Conversions are absent from a row when Google reports none.
+
+Sources: installed v25 protobuf definitions above;
+[ad asset view](https://developers.google.com/google-ads/api/reference/rpc/v25/AdGroupAdAssetView),
+[ad policy](https://developers.google.com/google-ads/api/reference/rpc/v25/AdGroupAdPolicySummary),
+[segments](https://developers.google.com/google-ads/api/reference/rpc/v25/Segments),
+[customer](https://developers.google.com/google-ads/api/reference/rpc/v25/Customer).

@@ -25,7 +25,7 @@ A Python toolkit for investigating Google Ads accounts and preparing changes for
 | Delivery | Budget pacing, anomalies, placement classification, demographic and geographic breakdowns |
 | Assets | RSA strength, PMax linked asset inventory, creative briefs and asset workflows |
 | Account operations | Per-MCC auth profiles, saved audit history and multi-account audits |
-| Reviewed changes | Negatives, placements and creative writes with JSON review, confirmation and validation |
+| Reviewed changes | PAUSED Search, Demand Gen and App campaigns, App targets, negatives, placements, Display targeting, image and YouTube video assets, and Video/Display ad edits with JSON review, confirmation and validation |
 
 ## Installation
 
@@ -123,11 +123,35 @@ python scripts/gads_creation.py --customer 1234567890 --context-file context.jso
 python scripts/gads_apply.py --customer 1234567890 negatives --input negatives.json --validate-only --json
 ```
 
-Campaign context produces a planning draft and does not verify measurement health. A separate strict `--search-spec` creates a PAUSED Search shell, dedicated budget and locations atomically after review and validation. See [bounded writes](docs/WRITES.md) for the required fields and limits.
+Campaign context produces a planning draft and does not verify measurement health. Separate strict `--search-spec`, `--demand-gen-spec` and `--app-spec` files create PAUSED campaigns atomically after review and validation; Video campaigns cannot be created through the API. See [bounded writes](docs/WRITES.md) for the required fields and limits.
 
 ### Optional hooks and sign-in service
 
 The [hooks guide](docs/HOOKS.md) covers the session-expiry guard and opt-in Telegram notifications. The separate FastAPI service in [webapp/](webapp/) supports hosted sign-in; it is not required to run local audits.
+
+## MCP
+
+[`scripts/gads_mcp.py`](scripts/gads_mcp.py) exposes six read-only tools to an MCP client. Run it as a standalone stdio server, or import it in a host FastMCP server and call `register(server, prefix="", provider_factory=None)`, which returns the number of tools added.
+
+```bash
+python -m pip install -e ".[mcp]"
+gads-mcp
+```
+
+| Tool | Returns | `limit` default / max |
+| --- | --- | --- |
+| `list_accounts` | Accounts under the profile's manager account: ID, name, level, currency, time zone and status. Without a manager account, the customer IDs the credentials can access directly. | 200 / 500 |
+| `run_gaql` | Rows for one GAQL `SELECT` against a customer ID. Only a single statement is accepted, optionally ending in one `LIMIT n`, without `PARAMETERS`, comments or semicolons. Rows are bounded by the smaller of that `LIMIT` and `limit`. | 100 / 500 |
+| `resource_metadata` | GAQL resources, or the fields under a resource or prefix, with selectable, filterable and sortable flags. `detail=true` adds enum values and the resources, metrics and segments a name can be selected with. | 200 / 500 |
+| `account_audit` | Status and summary of every read-only audit agent, plus the top findings by severity. Raw agent data, the website tag scan and saved snapshots are not included. | 50 / 200 |
+| `anomalies_and_pacing` | Day-level metric anomalies and month-to-date budget pacing, together or separately. | 50 / 200 per list |
+| `change_history` | Recent `change_event` entries over up to 30 days. Actor emails are reduced to their domain. | 50 / 200 |
+
+Every tool is annotated read-only. The tools call only `GoogleAdsService` search, `CustomerService.ListAccessibleCustomers` and `GoogleAdsFieldService` search. They do not write to an account, save audit snapshots, send notifications or change local credential files. Bounded results include `rows_returned` and `complete`; `complete: false` means rows were cut by `limit`, or an audit agent failed. Failures return `{"error": "<category>", "hint": "..."}`, where the category is `auth_required`, `permission_denied`, `quota_exceeded`, `invalid_argument`, `not_found` or `upstream_error`. Provider error messages are not passed through.
+
+**Authentication.** Every tool accepts `profile`. The standalone server uses the active local profile from `gads_auth.py`, including the 24-hour session cap. It never switches profiles: naming a different profile returns `invalid_argument` with the `--use-profile` command to run locally. A host can pass `provider_factory(profile)`, which returns a `gads_provider.CredentialProvider`, to supply its own per-profile credentials. A developer token is optional. `credentials_present()` reports whether a local credentials file, a `GOOGLE_APPLICATION_CREDENTIALS` file or the gcloud application-default credentials file exists. It does not open these files or make a network call.
+
+**Quotas.** Each request counts against the Google Ads API quota of the OAuth Cloud project. `account_audit` sends 19 search requests. The other tools send one request, or two for `anomalies_and_pacing` with `check="both"`. When the API reports a quota or rate limit, the tool returns `quota_exceeded`; retry later or narrow the request.
 
 ## Tests
 

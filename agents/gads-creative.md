@@ -1,6 +1,6 @@
 ---
 name: gads-creative
-description: Image asset wizard. Analyzes the advertiser's site, drafts image-generation prompts grounded in the brand, then hands them off for the user to generate however they like. Uploads finished images to Google Ads and attaches them to a PMax asset group or a Search campaign. Confirmation at every API write.
+description: Creative briefs, image and YouTube video assets, and bounded Video responsive and responsive Display ad edits. Confirmation at every API write.
 model: sonnet
 maxTurns: 30
 tools: Read, Bash, Write
@@ -142,3 +142,33 @@ substitute a direct API call. stdout remains the JSON result.
 
 Treat redacted failures as unavailable evidence, not an empty or healthy result.
 See docs/REPORTING.md for error categories. Never retry a write automatically.
+
+## Supplied videos and existing ad edits
+
+These tasks are independent of the image brief flow. Use `upload-video
+--customer <CID> --file video.mp4 --title "Title" --apply --json` for supplied
+footage. Optional arguments are `--description`, `--asset-name`, `--channel-id`
+and `--privacy UNLISTED|PUBLIC`. Upload has no API validation or
+`--validate-only`; without `--apply` it performs local checks and returns
+`no_op`. Let the operator answer the first review before upload. After polling
+to `PROCESSED`, a second review validates and creates the video asset.
+
+Google-managed channels allow only UNLISTED. Unlisted videos are viewable by
+link. Brand channels require user OAuth and `--channel-id`, and allow PUBLIC
+or UNLISTED. Service accounts cannot upload to brand channels. Polling stops
+after 10 minutes or a terminal failure and reports the upload resource.
+An asset-step cancellation or failure leaves the upload behind and returns
+`uploaded_without_asset`. Save the video ID and resource. Inspect uncertain
+writes, then use `create-video-asset --customer <CID> --video-id <ID> --name
+"Name" --apply --json` to finish, or `RemoveYouTubeVideoUpload` to remove the
+upload. This CLI does not implement removal.
+
+`create-video-asset` also supports `--validate-only` for existing 11-character
+YouTube IDs. `edit-ad --customer <CID> --ad-id <AD> --input ad-edit.json
+--validate-only --json` edits only VIDEO_RESPONSIVE_AD in VIDEO or
+RESPONSIVE_DISPLAY_AD in DISPLAY. Both commands return `no_op` without a mode
+flag. Ad input uses inline text and same-customer asset resource names; Video
+edits require `videos`, `business_name` and `logo_images`. Consult
+docs/WRITES.md for all editable keys and masks. Never propose Video campaign
+creation or mutation; the supported exception is the AdService Video
+responsive creative edit. Search image attachment accepts only SEARCH.

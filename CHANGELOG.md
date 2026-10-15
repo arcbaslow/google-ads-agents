@@ -4,6 +4,16 @@
 
 - Refuse write approval from piped stdin; the y/N prompt needs an interactive terminal.
 
+- Add `--report` campaigns, ads and assets or formats and brand-safety reads to the App, Display, Demand Gen and YouTube adapters, with audit findings for disapproved or limited ads and LOW App asset links. Campaign rows now include status, sub-type, bidding type and budget; App rows are grouped by sub-type.
+
+- Add reviewed atomic PAUSED Demand Gen (daily or campaign-total budget) and App install or engagement campaign writers with one ad group and one ad from existing assets, explicit asset-automation choices, a user-list audience for engagement, and a goal- and strategy-checked App CPA or ROAS target edit.
+
+- Add reviewed YouTube video upload with asset creation, YouTube video asset creation, Video responsive and responsive Display ad edits, Display optimized targeting and campaign-level Display placement exclusions. Search image attachment and negative keywords now check the campaign channel.
+
+- Report the EU political advertising declaration block as its own error category.
+
+- Add a read-only MCP tool set (`gads_mcp.py`, `gads-mcp` console script, optional `mcp` extra) with six bounded tools: accounts, GAQL, field metadata, audit summary, anomalies and pacing, and change history. Hosts can register it under a prefix and inject per-profile credential providers. Failures return stable error categories without provider text.
+
 - Document read-only interoperability, completed bounded roadmap scope and continuation verification results.
 
 - Redact local authentication backend diagnostics and history-query CLI failures while retaining reconnect commands.
