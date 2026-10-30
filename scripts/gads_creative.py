@@ -323,7 +323,7 @@ def build_brief(url: str) -> dict:
 
 # ---------- prompts ----------
 #
-# We don't try to write prompt copy here — that's the agent's job, given
+# We don't try to write prompt copy here - that's the agent's job, given
 # the brief. We just hand back the format scaffolds the agent should
 # fill in. Sizes match Google Ads asset specs.
 

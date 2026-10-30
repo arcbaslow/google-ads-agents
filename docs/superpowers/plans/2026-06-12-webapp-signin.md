@@ -20,7 +20,7 @@
 - Modify: `webapp/tests/conftest.py` (settings fixture)
 - Modify: `webapp/tests/test_api.py` (`_settings` helper)
 
-- [ ] **Step 1: Write the failing test** — in `webapp/tests/test_config.py`, add `SIGNIN_REDIRECT_URI` to `_env` and assert the new fields:
+- [ ] **Step 1: Write the failing test** - in `webapp/tests/test_config.py`, add `SIGNIN_REDIRECT_URI` to `_env` and assert the new fields:
 
 ```python
 def _env(**over):
@@ -51,9 +51,9 @@ In `test_missing_required_raises`, add `"SIGNIN_REDIRECT_URI"` to the `delenv` t
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `python -m pytest webapp/tests/test_config.py -q`
-Expected: FAIL — `AttributeError: 'Settings' object has no attribute 'signin_redirect_uri'` (or pydantic ValidationError).
+Expected: FAIL - `AttributeError: 'Settings' object has no attribute 'signin_redirect_uri'` (or pydantic ValidationError).
 
-- [ ] **Step 3: Implement** — in `webapp/app/config.py`, add fields after `oauth_redirect_uri` (keep `dev_user_id` for now; it is removed in Task 9):
+- [ ] **Step 3: Implement** - in `webapp/app/config.py`, add fields after `oauth_redirect_uri` (keep `dev_user_id` for now; it is removed in Task 9):
 
 ```python
     oauth_redirect_uri: str
@@ -90,7 +90,7 @@ git commit -m "add sign-in settings"
 - Modify: `webapp/app/models.py`
 - Modify: `webapp/tests/test_models.py`
 
-- [ ] **Step 1: Write the failing tests** — replace the imports at the top of `webapp/tests/test_models.py` and append three tests:
+- [ ] **Step 1: Write the failing tests** - replace the imports at the top of `webapp/tests/test_models.py` and append three tests:
 
 ```python
 from datetime import datetime, timezone
@@ -134,9 +134,9 @@ def test_oauth_state_allows_null_user_and_defaults_purpose(session):
 - [ ] **Step 2: Run tests to verify they fail**
 
 Run: `python -m pytest webapp/tests/test_models.py -q`
-Expected: FAIL — `ImportError: cannot import name 'UserSession'`.
+Expected: FAIL - `ImportError: cannot import name 'UserSession'`.
 
-- [ ] **Step 3: Implement** — in `webapp/app/models.py`:
+- [ ] **Step 3: Implement** - in `webapp/app/models.py`:
 
 To `User`, after `email`:
 
@@ -186,7 +186,7 @@ git commit -m "add session model, google sub, and oauth state purpose"
 - Create: `webapp/app/sessions.py`
 - Create: `webapp/tests/test_sessions.py`
 
-- [ ] **Step 1: Write the failing tests** — create `webapp/tests/test_sessions.py`:
+- [ ] **Step 1: Write the failing tests** - create `webapp/tests/test_sessions.py`:
 
 ```python
 from datetime import datetime, timedelta, timezone
@@ -234,9 +234,9 @@ def test_delete_session(session):
 - [ ] **Step 2: Run tests to verify they fail**
 
 Run: `python -m pytest webapp/tests/test_sessions.py -q`
-Expected: FAIL — `ModuleNotFoundError: No module named 'app.sessions'`.
+Expected: FAIL - `ModuleNotFoundError: No module named 'app.sessions'`.
 
-- [ ] **Step 3: Implement** — create `webapp/app/sessions.py`:
+- [ ] **Step 3: Implement** - create `webapp/app/sessions.py`:
 
 ```python
 """DB-backed sessions: opaque tokens, sha256 at rest, absolute expiry."""
@@ -311,7 +311,7 @@ The token exchange must send the redirect URI the authorization used; sign-in us
 - Modify: `webapp/app/oauth.py` (`exchange_code`)
 - Modify: `webapp/tests/test_oauth.py`
 
-- [ ] **Step 1: Write the failing test** — in `webapp/tests/test_oauth.py`, extend the import and append:
+- [ ] **Step 1: Write the failing test** - in `webapp/tests/test_oauth.py`, extend the import and append:
 
 ```python
 from app.oauth import build_authorization_url, exchange_code, make_pkce, new_state
@@ -345,9 +345,9 @@ def test_exchange_code_redirect_uri_default_and_override(monkeypatch, settings):
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `python -m pytest webapp/tests/test_oauth.py -q`
-Expected: FAIL — `TypeError: exchange_code() got an unexpected keyword argument 'redirect_uri'`.
+Expected: FAIL - `TypeError: exchange_code() got an unexpected keyword argument 'redirect_uri'`.
 
-- [ ] **Step 3: Implement** — in `webapp/app/oauth.py`, change the signature and the posted field:
+- [ ] **Step 3: Implement** - in `webapp/app/oauth.py`, change the signature and the posted field:
 
 ```python
 def exchange_code(
@@ -364,7 +364,7 @@ and in the `data=` dict:
 - [ ] **Step 4: Run tests to verify they pass**
 
 Run: `python -m pytest webapp/tests -q`
-Expected: all pass (existing connect-callback tests are unaffected — their mocks are not called with the new kwarg).
+Expected: all pass (existing connect-callback tests are unaffected - their mocks are not called with the new kwarg).
 
 - [ ] **Step 5: Commit**
 
@@ -381,7 +381,7 @@ git commit -m "allow overriding the redirect uri in code exchange"
 - Create: `webapp/app/routes/signin_routes.py` (helpers + empty router; routes come in Tasks 6-7)
 - Create: `webapp/tests/test_signin.py`
 
-- [ ] **Step 1: Write the failing tests** — create `webapp/tests/test_signin.py`:
+- [ ] **Step 1: Write the failing tests** - create `webapp/tests/test_signin.py`:
 
 ```python
 from urllib.parse import parse_qs, urlparse
@@ -421,9 +421,9 @@ def test_signin_url_uses_identity_scopes_only(settings):
 - [ ] **Step 2: Run tests to verify they fail**
 
 Run: `python -m pytest webapp/tests/test_signin.py -q`
-Expected: FAIL — `ModuleNotFoundError: No module named 'app.routes.signin_routes'`.
+Expected: FAIL - `ModuleNotFoundError: No module named 'app.routes.signin_routes'`.
 
-- [ ] **Step 3: Implement** — create `webapp/app/routes/signin_routes.py`:
+- [ ] **Step 3: Implement** - create `webapp/app/routes/signin_routes.py`:
 
 ```python
 """Google sign-in: OIDC start + callback, logout, and the /me probe."""
@@ -495,7 +495,7 @@ git commit -m "add sign-in allowlist matcher and authorization url"
 - Modify: `webapp/app/routes/signin_routes.py`
 - Modify: `webapp/app/main.py`
 
-- [ ] **Step 1: Add the API fixtures** — in `webapp/tests/conftest.py`, extend imports and append (mirrors `test_api._client`, plus per-test settings overrides):
+- [ ] **Step 1: Add the API fixtures** - in `webapp/tests/conftest.py`, extend imports and append (mirrors `test_api._client`, plus per-test settings overrides):
 
 ```python
 from cryptography.fernet import Fernet
@@ -555,7 +555,7 @@ def api(make_api):
 
 Update the existing `settings` fixture body to `return _make_settings()`.
 
-- [ ] **Step 2: Write the failing test** — append to `webapp/tests/test_signin.py`:
+- [ ] **Step 2: Write the failing test** - append to `webapp/tests/test_signin.py`:
 
 ```python
 from app.models import OAuthState
@@ -575,9 +575,9 @@ def test_signin_start_redirects_with_signin_state(api):
 - [ ] **Step 3: Run test to verify it fails**
 
 Run: `python -m pytest webapp/tests/test_signin.py -q`
-Expected: FAIL — 404 (route does not exist).
+Expected: FAIL - 404 (route does not exist).
 
-- [ ] **Step 4: Implement** — in `webapp/app/routes/signin_routes.py`, extend imports:
+- [ ] **Step 4: Implement** - in `webapp/app/routes/signin_routes.py`, extend imports:
 
 ```python
 from datetime import datetime, timedelta, timezone
@@ -645,7 +645,7 @@ git commit -m "add google sign-in start route"
 - Modify: `webapp/app/routes/signin_routes.py`
 - Modify: `webapp/tests/test_signin.py`
 
-- [ ] **Step 1: Write the failing tests** — append to `webapp/tests/test_signin.py`:
+- [ ] **Step 1: Write the failing tests** - append to `webapp/tests/test_signin.py`:
 
 ```python
 import app.oauth as oauth_mod
@@ -728,7 +728,7 @@ def test_signin_callback_error_param_consumes_state(api):
 Run: `python -m pytest webapp/tests/test_signin.py -q`
 Expected: the four new tests FAIL with 404 (callback route does not exist).
 
-- [ ] **Step 3: Implement** — in `webapp/app/routes/signin_routes.py`, extend imports:
+- [ ] **Step 3: Implement** - in `webapp/app/routes/signin_routes.py`, extend imports:
 
 ```python
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -810,7 +810,7 @@ def signin_callback(
     return resp
 ```
 
-Note: `cookie_secure` defaults to `True` and the test client uses http. Reading the cookie off the response (`r.cookies`, `set-cookie` header) works regardless; just never rely on the client *re-sending* a flow-issued `Secure` cookie over http in tests — later tasks mint sessions and set the cookie on the client directly.
+Note: `cookie_secure` defaults to `True` and the test client uses http. Reading the cookie off the response (`r.cookies`, `set-cookie` header) works regardless; just never rely on the client *re-sending* a flow-issued `Secure` cookie over http in tests - later tasks mint sessions and set the cookie on the client directly.
 
 - [ ] **Step 4: Run tests to verify they pass**
 
@@ -832,7 +832,7 @@ git commit -m "add sign-in callback with session cookie"
 - Modify: `webapp/app/routes/signin_routes.py`
 - Modify: `webapp/tests/test_signin.py`
 
-- [ ] **Step 1: Write the failing tests** — append to `webapp/tests/test_signin.py`:
+- [ ] **Step 1: Write the failing tests** - append to `webapp/tests/test_signin.py`:
 
 ```python
 def test_signin_rejects_email_outside_allowlist(make_api, monkeypatch):
@@ -859,9 +859,9 @@ def test_signin_rejects_unverified_email(api, monkeypatch):
 - [ ] **Step 2: Run tests to verify they fail**
 
 Run: `python -m pytest webapp/tests/test_signin.py -q`
-Expected: the two new tests FAIL — 200 instead of 403.
+Expected: the two new tests FAIL - 200 instead of 403.
 
-- [ ] **Step 3: Implement** — in `signin_callback`, between the claims extraction and the user upsert, insert:
+- [ ] **Step 3: Implement** - in `signin_callback`, between the claims extraction and the user upsert, insert:
 
 ```python
     if not email or not claims.get("email_verified", False):
@@ -895,7 +895,7 @@ The big migration: cookie-based `get_current_user`, delete `X-Dev-User` and `dev
 - Modify: `webapp/tests/test_config.py` (drop the `dev_user_id` assert)
 - Modify: `webapp/tests/test_api.py` (session-based identity)
 
-- [ ] **Step 1: Write the failing test** — append to `webapp/tests/test_api.py`:
+- [ ] **Step 1: Write the failing test** - append to `webapp/tests/test_api.py`:
 
 ```python
 def test_accounts_requires_signin():
@@ -907,9 +907,9 @@ def test_accounts_requires_signin():
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `python -m pytest webapp/tests/test_api.py::test_accounts_requires_signin -q`
-Expected: FAIL — 200 (the stub auto-creates a user).
+Expected: FAIL - 200 (the stub auto-creates a user).
 
-- [ ] **Step 3: Rewrite identity** — replace the whole of `webapp/app/identity.py` with:
+- [ ] **Step 3: Rewrite identity** - replace the whole of `webapp/app/identity.py` with:
 
 ```python
 """Current-user resolution from the session cookie."""
@@ -955,7 +955,7 @@ Delete the stub test file:
 git rm webapp/tests/test_identity.py
 ```
 
-- [ ] **Step 4: Migrate `webapp/tests/test_api.py`** — add a sign-in helper after `_client()`:
+- [ ] **Step 4: Migrate `webapp/tests/test_api.py`** - add a sign-in helper after `_client()`:
 
 ```python
 def _signin(client, Session, settings, user_id="ua"):
@@ -1033,7 +1033,7 @@ Then update each test:
     assert r2.status_code == 404
 ```
 
-  (note: `cb_id` is no longer needed in the second request — the point is ub probing ua's connection; keep the seeding as is. The `ta` variable is unused; name it `_` instead.)
+  (note: `cb_id` is no longer needed in the second request - the point is ub probing ua's connection; keep the seeding as is. The `ta` variable is unused; name it `_` instead.)
 
 - [ ] **Step 5: Run the suite and fix leftovers**
 
@@ -1043,7 +1043,7 @@ Expected: all pass. If a test still returns 401, it is missing a `_signin` call;
 - [ ] **Step 6: Lint**
 
 Run: `python -m ruff check webapp`
-Expected: clean (watch for now-unused imports in `identity.py` and `test_api.py` — remove `Header`, `resolve_user` leftovers).
+Expected: clean (watch for now-unused imports in `identity.py` and `test_api.py` - remove `Header`, `resolve_user` leftovers).
 
 - [ ] **Step 7: Commit**
 
@@ -1060,7 +1060,7 @@ git commit -m "replace identity stub with cookie sessions"
 - Modify: `webapp/app/routes/signin_routes.py`
 - Modify: `webapp/tests/test_signin.py`
 
-- [ ] **Step 1: Write the failing tests** — append to `webapp/tests/test_signin.py`:
+- [ ] **Step 1: Write the failing tests** - append to `webapp/tests/test_signin.py`:
 
 ```python
 def _mint_session(client, Session, settings, user_id="u1"):
@@ -1103,7 +1103,7 @@ def test_logout_revokes_session(api):
 Run: `python -m pytest webapp/tests/test_signin.py -q`
 Expected: the three new tests FAIL with 404 (routes do not exist).
 
-- [ ] **Step 3: Implement** — in `webapp/app/routes/signin_routes.py`, extend imports:
+- [ ] **Step 3: Implement** - in `webapp/app/routes/signin_routes.py`, extend imports:
 
 ```python
 from fastapi import APIRouter, Cookie, Depends, HTTPException, Query
@@ -1151,7 +1151,7 @@ git commit -m "add logout and me endpoints"
 - Modify: `webapp/app/routes/auth_routes.py`
 - Modify: `webapp/tests/test_api.py`
 
-- [ ] **Step 1: Write the failing test** — append to `webapp/tests/test_api.py` (add `from datetime import datetime, timedelta, timezone` and `from app.models import OAuthState` to the imports if not present):
+- [ ] **Step 1: Write the failing test** - append to `webapp/tests/test_api.py` (add `from datetime import datetime, timedelta, timezone` and `from app.models import OAuthState` to the imports if not present):
 
 ```python
 def test_connect_callback_rejects_signin_state(monkeypatch):
@@ -1176,9 +1176,9 @@ def test_connect_callback_rejects_signin_state(monkeypatch):
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `python -m pytest webapp/tests/test_api.py::test_connect_callback_rejects_signin_state -q`
-Expected: FAIL — the callback proceeds past state validation into the exchange stub, returning 502 instead of 400.
+Expected: FAIL - the callback proceeds past state validation into the exchange stub, returning 502 instead of 400.
 
-- [ ] **Step 3: Implement** — in `webapp/app/routes/auth_routes.py`:
+- [ ] **Step 3: Implement** - in `webapp/app/routes/auth_routes.py`:
 
 In `oauth_callback`, extend the ownership check:
 
@@ -1220,7 +1220,7 @@ git commit -m "enforce state purpose on the connect callback"
 - Modify: `webapp/app/main.py`
 - Modify: `webapp/tests/test_signin.py`
 
-- [ ] **Step 1: Write the failing tests** — append to `webapp/tests/test_signin.py`:
+- [ ] **Step 1: Write the failing tests** - append to `webapp/tests/test_signin.py`:
 
 ```python
 def test_cross_origin_post_rejected(api):
@@ -1244,9 +1244,9 @@ def test_get_ignores_origin(api):
 - [ ] **Step 2: Run tests to verify they fail**
 
 Run: `python -m pytest webapp/tests/test_signin.py -q`
-Expected: `test_cross_origin_post_rejected` FAILS — 200 instead of 403; the other two pass already (they pin current behavior).
+Expected: `test_cross_origin_post_rejected` FAILS - 200 instead of 403; the other two pass already (they pin current behavior).
 
-- [ ] **Step 3: Implement** — create `webapp/app/csrf.py`:
+- [ ] **Step 3: Implement** - create `webapp/app/csrf.py`:
 
 ```python
 """Same-origin enforcement for unsafe methods, on top of SameSite=Lax."""

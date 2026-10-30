@@ -122,7 +122,7 @@ def _pretty(data: Any) -> str:
 
     lines: list[str] = []
 
-    # Header — pull the top-level identifiers
+    # Header - pull the top-level identifiers
     header_bits = []
     for k in ("customer_id", "active", "status", "action"):
         if data.get(k) is not None:
@@ -180,7 +180,7 @@ def _pretty(data: Any) -> str:
             break
 
     if not lines:
-        # Nothing matched a known shape — fall back to compact JSON.
+        # Nothing matched a known shape - fall back to compact JSON.
         return json.dumps(data, indent=2, default=str)
 
     return "\n".join(lines)

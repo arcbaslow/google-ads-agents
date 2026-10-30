@@ -13,7 +13,7 @@ Notes for Claude Code working in `google-ads-agents`.
 
 ## Skills and subagents
 
-Top-level router: `skills/gads/SKILL.md` — exposes `/gads <command>`.
+Top-level router: `skills/gads/SKILL.md` - exposes `/gads <command>`.
 
 The audit orchestrator runs `gads-conversions` and `gads-gtag` first as
 gates, then fans the rest out in parallel. Each agent returns JSON with

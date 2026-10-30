@@ -30,7 +30,7 @@ Workspace administrator policy can still require approval of the OAuth app.
 
 Two ways to authenticate. Pick one per profile.
 
-### Option A — gcloud (default)
+### Option A - gcloud (default)
 
 From the project directory:
 
@@ -41,7 +41,7 @@ python scripts/gads_auth.py --adc
 It prints the exact `gcloud auth application-default login --scopes=...`
 command. Run it. A browser opens, sign in, grant access.
 
-### Option B — your own OAuth client (restricted Google Workspace)
+### Option B - your own OAuth client (restricted Google Workspace)
 
 Use your own OAuth client to select the Cloud project with approved Ads API
 access. Your organisation may still require administrator approval.
@@ -91,7 +91,7 @@ python scripts/gads_auth.py --add-profile acme \
     --login-customer-id <MCC-id>
 ```
 
-If you only have one MCC, one profile is enough — it becomes active
+If you only have one MCC, one profile is enough - it becomes active
 automatically. For multiple MCCs, add a profile per account and switch
 with `--use-profile`:
 
@@ -138,14 +138,14 @@ script refuses to run and prints the gcloud command. Re-sign-in and the
 
 ## Troubleshooting
 
-- **`AuthRequiredError: No application default credentials found`** —
+- **`AuthRequiredError: No application default credentials found`** -
   you haven't run the `gcloud auth application-default login` command,
   or `~/.config/gcloud/application_default_credentials.json` was
   deleted.
 - A missing legacy developer token is allowed; verify the OAuth Cloud project has access.
-- **`CLOUD_PROJECT_NOT_APPROVED_FOR_PRODUCTION`** — request production access
+- **`CLOUD_PROJECT_NOT_APPROVED_FOR_PRODUCTION`** - request production access
   in the OAuth project's Google Ads API page in Cloud Console.
-- **`USER_PERMISSION_DENIED`** — the signed-in Google account doesn't
+- **`USER_PERMISSION_DENIED`** - the signed-in Google account doesn't
   have access to that Ads customer ID. Check via `--customers`.
 
 ## Reviewing writes

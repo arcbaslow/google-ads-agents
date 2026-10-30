@@ -33,7 +33,7 @@ For every low-QS keyword the script names the weakest component:
   `gads-search --negative-candidates`).
 
 The `weakest_component_counts` summary shows where most of the issues
-cluster — start there.
+cluster - start there.
 
 Output: summary, findings, top-15 low-QS keywords (ordered by QS asc,
 then cost desc).

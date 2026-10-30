@@ -14,7 +14,7 @@ Runs:
 python scripts/gads_geos.py --customer <id> --query "California" "New York City" --json
 ```
 
-Useful when building the creation wizard context — users say "US" or
+Useful when building the creation wizard context - users say "US" or
 "California," the wizard needs IDs like `2840` or `21137`.
 
 Treat redacted failures as unavailable evidence, not an empty or healthy result.

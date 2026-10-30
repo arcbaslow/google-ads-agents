@@ -3,9 +3,9 @@
 Two hooks ship with the project. Both are optional; the toolkit works
 without either.
 
-- `hooks/session_gate.py` — PreToolUse. Blocks `gads_*` invocations
+- `hooks/session_gate.py` - PreToolUse. Blocks `gads_*` invocations
   once the 24h local session is expired.
-- `hooks/notify_telegram.py` — PostToolUse. Sends critical audit
+- `hooks/notify_telegram.py` - PostToolUse. Sends critical audit
   findings to Telegram.
 
 Wire either or both in `~/.claude/settings.json` (or the project's
@@ -110,14 +110,14 @@ Claude Code pipes a JSON event to the hook's stdin:
 Every PostToolUse fires on every tool call, so the hook stays cheap
 and selective:
 
-1. **Tool gate** — `tool_name` must be `Bash`.
-2. **Command gate** — the Bash command string must contain
+1. **Tool gate** - `tool_name` must be `Bash`.
+2. **Command gate** - the Bash command string must contain
    `gads_audit`. Other `gads_*` scripts don't trigger a notification.
-3. **Config gate** — `gads_notify.is_configured()` reads
+3. **Config gate** - `gads_notify.is_configured()` reads
    `~/.claude/gads-credentials.json` for the `telegram` block (token
    + chat_id). No config → silent exit. This is why wiring the hook
    in before setting up Telegram is safe.
-4. **Format gate** — only valid JSON output is processed. The audit driver always emits JSON. Parsing findings
+4. **Format gate** - only valid JSON output is processed. The audit driver always emits JSON. Parsing findings
    from human-readable text would be unreliable.
 
 ### Multi-account audits

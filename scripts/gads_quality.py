@@ -121,7 +121,7 @@ def _weakest_component(components: dict) -> str | None:
     for i, key in enumerate(order):
         grade = components.get(key)
         if grade in GRADES:
-            # (grade, canonical_index, key) — ties break by canonical order, not alpha
+            # (grade, canonical_index, key) - ties break by canonical order, not alpha
             scored.append((GRADES[grade], i, key))
     if not scored:
         return None

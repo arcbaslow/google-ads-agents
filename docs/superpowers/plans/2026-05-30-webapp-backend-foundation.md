@@ -18,23 +18,23 @@
 
 Created/modified across the plan:
 
-- `scripts/gads_provider.py` (create) — `CredentialProvider` protocol, the `contextvar`, `get_active_provider()`, `bind_provider()`, `FileCredentialProvider`.
-- `scripts/gads_client.py` (modify) — `build_client()` routes through `get_active_provider()`.
-- `scripts/test_gads_provider.py` (create) — seam tests.
-- `webapp/requirements.txt` (create) — web deps.
-- `webapp/app/__init__.py`, `webapp/app/config.py` (create) — typed settings.
-- `webapp/app/crypto.py` (create) — Fernet versioned encrypt/decrypt.
-- `webapp/app/db.py`, `webapp/app/models.py` (create) — engine/session + ORM.
-- `webapp/app/tokenstore_db.py` (create) — `DbTokenStore`.
-- `webapp/app/providers.py` (create) — `WebCredentialProvider`, `ConnectionAuthError`.
-- `webapp/app/identity.py` (create) — current-user stub.
-- `webapp/app/oauth.py` (create) — PKCE + auth-URL + token-exchange helpers.
-- `webapp/app/routes/auth_routes.py`, `webapp/app/routes/account_routes.py` (create) — endpoints.
-- `webapp/app/main.py` (create) — app factory + wiring.
-- `webapp/alembic/*` + `webapp/alembic.ini` (create) — migrations.
-- `webapp/tests/conftest.py` + `webapp/tests/test_*.py` (create) — tests.
+- `scripts/gads_provider.py` (create) - `CredentialProvider` protocol, the `contextvar`, `get_active_provider()`, `bind_provider()`, `FileCredentialProvider`.
+- `scripts/gads_client.py` (modify) - `build_client()` routes through `get_active_provider()`.
+- `scripts/test_gads_provider.py` (create) - seam tests.
+- `webapp/requirements.txt` (create) - web deps.
+- `webapp/app/__init__.py`, `webapp/app/config.py` (create) - typed settings.
+- `webapp/app/crypto.py` (create) - Fernet versioned encrypt/decrypt.
+- `webapp/app/db.py`, `webapp/app/models.py` (create) - engine/session + ORM.
+- `webapp/app/tokenstore_db.py` (create) - `DbTokenStore`.
+- `webapp/app/providers.py` (create) - `WebCredentialProvider`, `ConnectionAuthError`.
+- `webapp/app/identity.py` (create) - current-user stub.
+- `webapp/app/oauth.py` (create) - PKCE + auth-URL + token-exchange helpers.
+- `webapp/app/routes/auth_routes.py`, `webapp/app/routes/account_routes.py` (create) - endpoints.
+- `webapp/app/main.py` (create) - app factory + wiring.
+- `webapp/alembic/*` + `webapp/alembic.ini` (create) - migrations.
+- `webapp/tests/conftest.py` + `webapp/tests/test_*.py` (create) - tests.
 
-Column-type portability (resolves the spec's open question): models use SQLAlchemy types that render correctly on both engines — `String(36)` for ids, `LargeBinary` for the encrypted token (bytea on PG, BLOB on SQLite), and `JSONB().with_variant(JSON(), "sqlite")` for the customer list. Tests build the schema with `Base.metadata.create_all()` on SQLite; prod uses Alembic against Postgres.
+Column-type portability (resolves the spec's open question): models use SQLAlchemy types that render correctly on both engines - `String(36)` for ids, `LargeBinary` for the encrypted token (bytea on PG, BLOB on SQLite), and `JSONB().with_variant(JSON(), "sqlite")` for the customer list. Tests build the schema with `Base.metadata.create_all()` on SQLite; prod uses Alembic against Postgres.
 
 ---
 
@@ -45,7 +45,7 @@ Column-type portability (resolves the spec's open question): models use SQLAlche
 - Modify: `scripts/gads_client.py`
 - Test: `scripts/test_gads_provider.py`
 
-This is pure toolkit work — no web deps. It must not change CLI behavior: the existing suite stays green.
+This is pure toolkit work - no web deps. It must not change CLI behavior: the existing suite stays green.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -220,7 +220,7 @@ Expected: PASS (3 passed).
 - [ ] **Step 6: Run the full CLI suite (regression)**
 
 Run: `cd scripts && python -m pytest -q`
-Expected: PASS — previously 154 passed, now 157 (the 3 new tests). No existing test changes behavior.
+Expected: PASS - previously 154 passed, now 157 (the 3 new tests). No existing test changes behavior.
 
 - [ ] **Step 7: Lint**
 
@@ -245,7 +245,7 @@ git commit -m "route build_client through a credential provider seam"
 - Create: `webapp/tests/__init__.py` (empty)
 - Test: `webapp/tests/test_config.py`
 
-Run all webapp commands from the repo root. Tests import as `from app.config import ...`, so pytest must run with `webapp/` on the path — Step 5 uses `cd webapp && python -m pytest`.
+Run all webapp commands from the repo root. Tests import as `from app.config import ...`, so pytest must run with `webapp/` on the path - Step 5 uses `cd webapp && python -m pytest`.
 
 - [ ] **Step 1: Create the requirements file**
 
@@ -1552,7 +1552,7 @@ Expected: PASS (4 passed).
 - [ ] **Step 7: Run the whole webapp suite**
 
 Run: `cd webapp && python -m pytest -q`
-Expected: PASS — all webapp tests green (config, crypto, models, tokenstore, providers, identity, oauth, api).
+Expected: PASS - all webapp tests green (config, crypto, models, tokenstore, providers, identity, oauth, api).
 
 - [ ] **Step 8: Commit**
 

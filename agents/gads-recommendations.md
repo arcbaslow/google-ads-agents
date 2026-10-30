@@ -16,13 +16,13 @@ python scripts/gads_recommendations.py --customer <id> --json
 
 For each type group, evaluate:
 
-- **Apply now** — Mechanical wins with no real downside: missing
+- **Apply now** - Mechanical wins with no real downside: missing
   sitelinks, missing callouts, missing structured snippets, expired
   promotion extensions, broken final URLs.
-- **Evaluate** — Bid / budget recommendations, keyword expansion,
+- **Evaluate** - Bid / budget recommendations, keyword expansion,
   Performance Max upgrades. Look at the projected impact and the user's
   context (margin, business model) before recommending.
-- **Ignore by default** — Recommendations to enable broad match across
+- **Ignore by default** - Recommendations to enable broad match across
   all keywords, or to switch off conversion modeling. These often shift
   spend in ways that don't align with goals.
 

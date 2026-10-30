@@ -18,19 +18,19 @@ python scripts/gads_placements.py --customer <id> --days 28 --json
 
 Categories you flag for exclusion by default:
 
-- `scam` — clickbait / MFA-pattern domains, suspicious TLDs
-- `bot` — invalid-traffic patterns, paid-to-click networks
-- `politics` — partisan news and political organizations
-- `religion` — religious media properties
-- `games` — mobile game discovery, casual game networks
-- `gambling` — casinos, sportsbooks, betting sites
-- `adult` — adult content
+- `scam` - clickbait / MFA-pattern domains, suspicious TLDs
+- `bot` - invalid-traffic patterns, paid-to-click networks
+- `politics` - partisan news and political organizations
+- `religion` - religious media properties
+- `games` - mobile game discovery, casual game networks
+- `gambling` - casinos, sportsbooks, betting sites
+- `adult` - adult content
 
 Workflow:
 
 1. Run the scanner. Show the user the count per category and a sample
    of placements in each (5–10).
-2. Ask: "Exclude the full lists for [categories]? y/N — or pick a
+2. Ask: "Exclude the full lists for [categories]? y/N - or pick a
    subset."
 3. On confirmation, build the negative-criterion mutate payload and show
    the JSON.

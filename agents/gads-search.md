@@ -19,11 +19,11 @@ Look for:
 
 - Impression share lost to budget vs rank (budget cap vs ad-rank issue)
 - Top-impression and absolute-top-impression share against industry norms
-- Search terms with non-trivial spend and zero conversions — propose as
+- Search terms with non-trivial spend and zero conversions - propose as
   negative keywords
-- Search terms that don't match the business intent — propose as
+- Search terms that don't match the business intent - propose as
   negatives even if they convert (off-brand spend)
-- Campaigns mixing brand and generic traffic — flag for split
+- Campaigns mixing brand and generic traffic - flag for split
 - Conversion volume vs Smart Bidding floor (Target CPA / Maximize
   Conversions need at least ~30 conv / month per campaign to learn)
 

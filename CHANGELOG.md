@@ -91,7 +91,7 @@
 ## 0.6.0 - 2026-08-14
 
 - Version metadata corrected. `pyproject.toml` and
-  `.claude-plugin/plugin.json` both still read `0.1.0` — they were never
+  `.claude-plugin/plugin.json` both still read `0.1.0` - they were never
   bumped across the 0.2.0 through 0.6.0 releases, so anything reading
   the package or plugin version got the wrong answer. Both now track
   the changelog.
@@ -140,16 +140,16 @@
 
 - Image-asset wizard: `scripts/gads_creative.py` plus the
   `gads-creative` agent and skill. Four subcommands:
-  1. `brief` — fetch the advertiser's site, parse title / meta /
+  1. `brief` - fetch the advertiser's site, parse title / meta /
      headings / og:image / hex colors into a structured creative
      brief.
-  2. `prompts` — emit prompt-template scaffolding for every PMax
+  2. `prompts` - emit prompt-template scaffolding for every PMax
      image format (MARKETING_IMAGE 1.91:1, SQUARE 1:1, PORTRAIT 4:5,
      LOGO 1:1, LANDSCAPE_LOGO 4:1) with brief snippets and a default
      negative prompt. The agent fills in copy.
-  3. `upload` — push a PNG to Google Ads as an `ImageAsset`. Behind
+  3. `upload` - push a PNG to Google Ads as an `ImageAsset`. Behind
      `--validate-only` / `--apply`.
-  4. `attach` — link an uploaded asset to a PMax asset group (any of
+  4. `attach` - link an uploaded asset to a PMax asset group (any of
      5 image field types) or a Search campaign (image extension).
 - No bundled image generator. Google Ads' free PMax generator is
   UI-only (not on the API); we don't ship a paid provider as the

@@ -381,7 +381,7 @@ git commit -m "add gcloud and oauth-client auth backends with selection"
 
 ---
 
-### Task 4: Profile schema — auth_method and OAuth setters
+### Task 4: Profile schema - auth_method and OAuth setters
 
 **Files:**
 - Modify: `scripts/gads_auth.py` (add `set_auth_method`, `set_oauth_credentials`; default `auth_method` on read)
@@ -530,7 +530,7 @@ def test_get_credentials_backend_failure_wraps_as_auth_required(monkeypatch):
 - [ ] **Step 2: Run tests to verify they fail**
 
 Run: `cd scripts && python -m pytest test_gads_auth.py -q -k "get_credentials"`
-Expected: FAIL — the current `get_credentials` calls `google.auth.default()` directly and ignores `select_backend`, so `test_get_credentials_uses_selected_backend` fails (returns real creds attempt / error, not the sentinel).
+Expected: FAIL - the current `get_credentials` calls `google.auth.default()` directly and ignores `select_backend`, so `test_get_credentials_uses_selected_backend` fails (returns real creds attempt / error, not the sentinel).
 
 - [ ] **Step 3: Write the implementation**
 
@@ -763,7 +763,7 @@ Expected: PASS (3 passed).
 - [ ] **Step 6: Run the full suite to confirm no regressions**
 
 Run: `cd scripts && python -m pytest -q`
-Expected: PASS — the full suite (previously 132 tests) plus the new cases, all green.
+Expected: PASS - the full suite (previously 132 tests) plus the new cases, all green.
 
 - [ ] **Step 7: Commit**
 
@@ -843,7 +843,7 @@ python scripts/gads_auth.py --set-oauth acme \
 ```
 
 (Note: in the real file, write the fenced code blocks with normal triple
-backticks — the `\``` above is only escaped for this plan document.)
+backticks - the `\``` above is only escaped for this plan document.)
 
 - [ ] **Step 2: Renumber the rest of SETUP.md if needed**
 

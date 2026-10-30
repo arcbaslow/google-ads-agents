@@ -1,4 +1,4 @@
-# google-ads-agents — design
+# google-ads-agents - design
 
 Multi-agent toolkit for Google Ads. Read, analyze, manage and create campaigns
 across all campaign types. End-user Google sign-in via the gcloud CLI; no
@@ -61,7 +61,7 @@ env var, or via `--login-customer-id` on each command.
 Every script reads the `session_started_at` timestamp from
 `~/.claude/gads-session.json`. If more than 24 hours have passed, the
 script refuses to run and prints the gcloud command to re-authenticate.
-This is independent of token expiry — it is a hard rotation on the local
+This is independent of token expiry - it is a hard rotation on the local
 session marker. `gads_auth.py --check` is the canonical way to see the
 remaining time.
 
@@ -102,10 +102,10 @@ Python is the source of truth. Agents read JSON. Skills route commands.
 `gads-placements` enumerates placements with non-trivial spend or impressions,
 then classifies each into safety buckets:
 
-- `scam` — known scammy / clickbait domains, made-for-ads (MFA) sites
-- `bot` — placements flagged for invalid traffic patterns
-- `politics`, `religion`, `gambling`, `adult` — sensitive verticals
-- `games` — game and game-discovery apps (mobile)
+- `scam` - known scammy / clickbait domains, made-for-ads (MFA) sites
+- `bot` - placements flagged for invalid traffic patterns
+- `politics`, `religion`, `gambling`, `adult` - sensitive verticals
+- `games` - game and game-discovery apps (mobile)
 
 Classification uses a bundled rules file
 (`scripts/placements_rules.json`) of domain patterns and app bundle

@@ -45,7 +45,7 @@ PR refs `(#NNN)` only when one exists.
 **Every mutate confirms first.** Build the operation JSON, show it, ask
 `y/N`, then send. Use `validate_only=True` first wherever the API
 supports it. New campaigns are created `PAUSED`. A write path that
-skips this will not be merged — this toolkit spends real money, and an
+skips this will not be merged - this toolkit spends real money, and an
 agent that can mutate without a human in the loop is a different and
 much worse product.
 
@@ -58,7 +58,7 @@ token outlives a working session. Don't add a flag to disable it.
 Google ships a new API version roughly every four months and sunsets
 old ones on a published schedule. Verify resource, field, and enum
 names against the current official reference before touching request
-code — not from memory. Version bumps are their own PR, with the
+code - not from memory. Version bumps are their own PR, with the
 suite run and a `CHANGELOG.md` note.
 
 ## What I'll accept
@@ -66,7 +66,7 @@ suite run and a `CHANGELOG.md` note.
 - Bug fixes with a regression test
 - New read surfaces backed by the official Google Ads API
 - Better heuristics in `placements_rules.json`, the anomaly z-score
-  rules, pacing thresholds, or bid-strategy fit — with a reason the
+  rules, pacing thresholds, or bid-strategy fit - with a reason the
   current one is wrong
 - Google Ads API version bumps
 - Documentation fixes
@@ -78,16 +78,16 @@ suite run and a `CHANGELOG.md` note.
 - Anything that weakens or bypasses the session cap or the session gate
   hook
 - Adding paid SaaS dependencies
-- Big rewrites without a discussion first — open an issue describing
+- Big rewrites without a discussion first - open an issue describing
   the shape before the work
 
 ## Local-only files
 
-- `gads-credentials.json` / `gads-session.json` — developer tokens,
+- `gads-credentials.json` / `gads-session.json` - developer tokens,
   per-MCC profiles, and local session state. Already gitignored.
-- `~/.config/gcloud/application_default_credentials.json` — gcloud ADC.
-- `client_secret.json` — own-OAuth-client mode.
-- `.env` — webapp settings, including the Fernet keys.
+- `~/.config/gcloud/application_default_credentials.json` - gcloud ADC.
+- `client_secret.json` - own-OAuth-client mode.
+- `.env` - webapp settings, including the Fernet keys.
 
 If you accidentally stage any of these, `git restore --staged <file>`
 before committing.

@@ -1,6 +1,6 @@
 ---
 name: gads-conversions
-description: Conversion action audit — primary-for-goal, attribution, lookback, double-count.
+description: Conversion action audit - primary-for-goal, attribution, lookback, double-count.
 user-invokable: true
 argument-hint: "<customer-id>"
 license: MIT

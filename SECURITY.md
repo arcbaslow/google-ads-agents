@@ -10,7 +10,7 @@ Please do not file public issues for security problems.
 ## What's in scope
 
 - Credential handling in `scripts/gads_auth.py`, `scripts/gads_authflow.py`,
-  and `scripts/gads_tokenstore.py` — anything touching the developer
+  and `scripts/gads_tokenstore.py` - anything touching the developer
   token, refresh tokens, or the per-MCC profile store
 - Bypasses of the 24-hour session cap in `gads_auth.enforce_session()`
 - Bypasses of the `PreToolUse` session gate in `hooks/session_gate.py`
@@ -21,7 +21,7 @@ Please do not file public issues for security problems.
   handling, session fixation, token encryption at rest
   (`app/crypto.py`), and the token store (`app/tokenstore_db.py`)
 - Telegram credential storage and the notification hook in
-  `hooks/notify_telegram.py` — a chat ID and bot token are a
+  `hooks/notify_telegram.py` - a chat ID and bot token are a
   send-anywhere capability
 - Dependency-chain vulnerabilities in the Google client libraries
   pinned in `scripts/requirements.txt` and `webapp/requirements.txt`
@@ -30,7 +30,7 @@ Please do not file public issues for security problems.
 
 - Misuse of the toolkit against an account you do not have legitimate
   access to
-- Bugs in the upstream Google Ads API itself — report those to Google
+- Bugs in the upstream Google Ads API itself - report those to Google
 - Issues that require an attacker with shell access to the user's
   machine (they already own `~/.claude/` and the gcloud config dir)
 - Spend caused by an approved mutate. The toolkit shows the operation

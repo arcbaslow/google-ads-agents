@@ -23,11 +23,11 @@ Apply Google's general guidance:
 
 Watch for two patterns:
 
-1. **Smart Bidding under volume floor** — TARGET_CPA / TARGET_ROAS
+1. **Smart Bidding under volume floor** - TARGET_CPA / TARGET_ROAS
    running on fewer than ~30 conv/30d. These are starving the model
    and likely producing erratic CPA. High severity.
 
-2. **Manual leaving value on the table** — MANUAL_CPC on a campaign
+2. **Manual leaving value on the table** - MANUAL_CPC on a campaign
    that has the volume to graduate. Medium severity.
 
 The script emits findings ready to merge into the audit. Output shape:

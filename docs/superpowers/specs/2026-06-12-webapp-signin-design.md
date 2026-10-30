@@ -1,9 +1,9 @@
-# Web app sign-in — design
+# Web app sign-in - design
 
 ## Problem
 
 The webapp resolves the current user from a client-supplied `X-Dev-User`
-header — the identity stub from the foundation slice. Anyone who can reach
+header - the identity stub from the foundation slice. Anyone who can reach
 the app can impersonate any user, list their connections, and run reads with
 their stored refresh tokens. Real sign-in replaces the stub. Until this slice
 ships, the app must only bind to localhost.
@@ -60,7 +60,7 @@ webapp/app/
 - `sessions` (new): `id` (uuid pk), `token_hash` (sha256 hex, unique),
   `user_id` FK, `created_at`, `expires_at`. Only the hash is stored, so a
   database dump cannot impersonate users.
-- `users`: add `google_sub` (unique, nullable) — the stable Google subject.
+- `users`: add `google_sub` (unique, nullable) - the stable Google subject.
   `email` is refreshed from the verified ID token at every sign-in.
 - `oauth_states`: add `purpose` (`'signin' | 'connect'`); `user_id` becomes
   nullable because sign-in starts with no user. Connect states stay
@@ -68,18 +68,18 @@ webapp/app/
 
 ### Settings
 
-- `allowed_signins: list[str] = []` — entries containing `@` match the
+- `allowed_signins: list[str] = []` - entries containing `@` match the
   full email; entries without `@` match the email's domain (the part after
   `@`) exactly, no subdomains. Case-insensitive. Empty list allows anyone.
-- `signin_redirect_uri: str` — registered for `/auth/google/callback`.
+- `signin_redirect_uri: str` - registered for `/auth/google/callback`.
 - `session_max_hours: int = 24`.
-- `cookie_secure: bool = True` — set `False` only for local http dev.
-- `dev_user_id` — removed.
+- `cookie_secure: bool = True` - set `False` only for local http dev.
+- `dev_user_id` - removed.
 
 ### Sign-in flow
 
 1. `GET /auth/google/start`: mint PKCE + state (`purpose='signin'`,
-   `user_id` NULL), redirect to Google. Scopes `openid email` only — no
+   `user_id` NULL), redirect to Google. Scopes `openid email` only - no
    `adwords`, no `access_type=offline`, no forced consent. Signing in
    never asks for Ads access; connecting an Ads account stays a separate,
    heavier consent.
@@ -110,13 +110,13 @@ keeps its user-bound state validation.
 On top, methods other than GET / HEAD / OPTIONS reject requests whose
 `Origin` header is present but does not match the app origin, derived from
 `signin_redirect_uri` (scheme + host + port). Requests without an `Origin`
-header (curl, server-to-server) pass — the cookie requirement still gates
+header (curl, server-to-server) pass - the cookie requirement still gates
 them.
 
 ### Logout
 
 `POST /auth/logout`: delete the session row (instant server-side
-revocation), clear the cookie, 200. Does not touch Ads connections —
+revocation), clear the cookie, 200. Does not touch Ads connections -
 revoking those is `/accounts/{id}/disconnect`.
 
 ### /me
@@ -126,9 +126,9 @@ future frontend a cheap session probe.
 
 ## Error handling
 
-- 401 `"not signed in"` — missing, unknown, or expired session cookie.
-- 403 `"email not allowed"` — allowlist rejection.
-- 403 `"email not verified"` — `email_verified` false in the ID token.
+- 401 `"not signed in"` - missing, unknown, or expired session cookie.
+- 403 `"email not allowed"` - allowlist rejection.
+- 403 `"email not verified"` - `email_verified` false in the ID token.
 - Callback taxonomy mirrors the connect flow: 400 invalid or expired
   state, 400 `authorization failed: <error>`, 400 missing code, 502 token
   exchange failed, 502 missing or invalid ID token.

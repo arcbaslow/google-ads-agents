@@ -1,4 +1,4 @@
-# Auth backends + bring-your-own OAuth client — design
+# Auth backends + bring-your-own OAuth client - design
 
 ## Problem
 
@@ -11,7 +11,7 @@ admin can block the "Google Cloud SDK" OAuth client used by gcloud, or
 restrict the `adwords` scope, at the org level via App Access Control. A
 non-admin user then has no way to sign in and no workaround.
 
-The project's founding decision — "no per-user OAuth client to register" —
+The project's founding decision, "no per-user OAuth client to register", 
 is exactly what fails here. It must become one option among several rather
 than the only path.
 
@@ -32,7 +32,7 @@ centralized developer token.
 
 Note on scopes: `adwords` is a restricted scope. A public web app needs
 Google OAuth verification for it. An **Internal** Workspace OAuth app does
-not — which is also why an Internal client unblocks the restricted-Workspace
+not - which is also why an Internal client unblocks the restricted-Workspace
 user today.
 
 ## Goals
@@ -40,7 +40,7 @@ user today.
 1. Add an auth backend that does not depend on the gcloud OAuth client, so a
    restricted-Workspace user can authenticate with their own OAuth client.
 2. Keep gcloud ADC as the default; existing setups are unaffected.
-3. Leave every downstream script unchanged — they call
+3. Leave every downstream script unchanged - they call
    `gads_client.build_client()`, which transparently supports both backends.
 4. Design the token store and refresh core as clean seams the future web app
    can extend without rewriting backend or client code.
@@ -55,7 +55,7 @@ user today.
 
 ## Architecture
 
-### Auth backends — `scripts/gads_authflow.py`
+### Auth backends - `scripts/gads_authflow.py`
 
 A small protocol:
 
@@ -67,9 +67,9 @@ class AuthBackend(Protocol):
 
 Two implementations:
 
-- `GcloudAdcBackend` — wraps the current
+- `GcloudAdcBackend` - wraps the current
   `google.auth.default(scopes=[ADWORDS])`. Default backend.
-- `OAuthClientBackend` — constructs
+- `OAuthClientBackend` - constructs
   `google.oauth2.credentials.Credentials(token=None, refresh_token=...,
   client_id=..., client_secret=..., token_uri="https://oauth2.googleapis.com/token",
   scopes=[ADWORDS])` and refreshes it via
@@ -115,7 +115,7 @@ Credentials file layout after this change:
 }
 ```
 
-### Token-store seam — `scripts/gads_tokenstore.py`
+### Token-store seam - `scripts/gads_tokenstore.py`
 
 A minimal interface:
 
@@ -138,7 +138,7 @@ Decision: refresh tokens stay inside the existing credentials file behind the
 store interface rather than a new file. Simpler, one fewer file to manage,
 still swappable.
 
-### Login command — loopback browser flow
+### Login command - loopback browser flow
 
 New subcommand on `gads_auth.py`:
 
@@ -176,7 +176,7 @@ installed-app flow) to `scripts/requirements.txt` and `pyproject.toml`.
 
 ## Documentation
 
-`docs/SETUP.md` gains "Option B — your own OAuth client (restricted Google
+`docs/SETUP.md` gains "Option B - your own OAuth client (restricted Google
 Workspace)":
 
 1. Create a Google Cloud project in your Workspace org.

@@ -30,7 +30,7 @@ device, use the campaign-level device bid adjustment. For location,
 either tighten geo targeting or set a bid modifier on the offending
 geo target.
 
-Don't recommend cuts purely on impressions or CTR — only on
+Don't recommend cuts purely on impressions or CTR - only on
 conversion economics. CTR is misleading on small samples.
 
 Output: summary, findings, per-bucket table per dimension.

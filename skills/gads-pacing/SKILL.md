@@ -1,6 +1,6 @@
 ---
 name: gads-pacing
-description: Budget pacing — MTD vs target with month-end projection.
+description: Budget pacing - MTD vs target with month-end projection.
 user-invokable: true
 argument-hint: "<customer-id>"
 license: MIT

@@ -1,4 +1,4 @@
-# Release verification — v0.6.1
+# Release verification - v0.6.1
 
 Date: 2026-09-08. Local environment: Windows, Python 3.12.14; Node.js 24 for GTM Diff.
 

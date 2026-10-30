@@ -17,7 +17,7 @@ Generate the images however you like (the Ads UI, Midjourney, Imagen
 on Vertex, a stock library, a designer), come back with PNGs, and
 keep going from `upload`.
 
-## Step 1 — brief
+## Step 1 - brief
 
 Ask the user for the destination URL and the campaign or asset group
 you'll target. Then:
@@ -27,10 +27,10 @@ python scripts/gads_creative.py brief --site <URL> --output /tmp/brief.json
 ```
 
 Show the brief to the user. Confirm the title, themes, and palette
-look correct. If the site didn't load, stop — there's nothing to
+look correct. If the site didn't load, stop - there's nothing to
 ground the prompts in.
 
-## Step 2 — prompt drafting
+## Step 2 - prompt drafting
 
 Get the scaffold:
 
@@ -51,7 +51,7 @@ Your job: fill in each `prompt` field using the brief. Guidelines:
   lifestyle / wordmark). The scaffold's `intent` field tells you what
   the format is meant to convey.
 - Carry one or two of the brief's hex colors into the prompt as
-  accents — never as backgrounds (Google Ads tends to letterbox
+  accents - never as backgrounds (Google Ads tends to letterbox
   saturated backgrounds).
 - Avoid text in the image itself. Google rejects assets with too much
   embedded text; we have headlines and descriptions as separate
@@ -63,7 +63,7 @@ Your job: fill in each `prompt` field using the brief. Guidelines:
 Save the filled scaffold and show every prompt to the user. Ask
 which formats they want to commit to before they generate anything.
 
-## Step 3 — generate (off-platform)
+## Step 3 - generate (off-platform)
 
 Hand the approved prompts to the user with a brief reminder of where
 to generate. Suggestions:
@@ -77,7 +77,7 @@ to generate. Suggestions:
 Wait for the user to come back with PNGs. Confirm the file paths and
 move on.
 
-## Step 4 — upload
+## Step 4 - upload
 
 For each approved image, give the operator these commands to run in their
 own terminal, validate-only first:
@@ -101,7 +101,7 @@ python scripts/gads_creative.py upload --customer <CID> \
 Ask the operator to paste back the JSON stdout and take `asset_resource`
 from it for the next step.
 
-## Step 5 — attach
+## Step 5 - attach
 
 For PMax, you need the asset group ID. Use `gads-pmax` to list them
 if the user can't remember.

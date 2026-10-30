@@ -68,7 +68,7 @@ def main() -> int:
     try:
         event = json.load(sys.stdin)
     except json.JSONDecodeError:
-        # If we can't parse the event, fall through and approve — the
+        # If we can't parse the event, fall through and approve - the
         # session check shouldn't break unrelated tool calls.
         print(json.dumps({"decision": "approve"}))
         return 0

@@ -1,11 +1,11 @@
-# Web app backend foundation — design
+# Web app backend foundation - design
 
 ## Problem
 
 The toolkit is single-user by construction. `gads_client.build_client()` resolves
 everything from one globally-active, file-backed profile via
 `gads_auth.get_credentials()`, `get_developer_token()`, and
-`get_login_customer_id()`. There is no notion of "which user" — the active
+`get_login_customer_id()`. There is no notion of "which user" - the active
 profile is process-global state read from `~/.claude/gads-credentials.json`.
 
 The product goal is a multi-tenant web app where a marketer signs in, connects
@@ -24,7 +24,7 @@ DB-backed multi-tenant store, and (c) add the web OAuth redirect flow.
 This is the **first sub-project** of the web-app trajectory: the backend
 multi-tenant foundation. It exposes a minimal internal HTTP API. It does **not**
 include real app sign-in UI, a dashboard, async jobs, or the broader read-path
-API — those are separate sub-projects (see "Out of scope").
+API - those are separate sub-projects (see "Out of scope").
 
 Chosen decisions (from brainstorming):
 
@@ -43,7 +43,7 @@ Chosen decisions (from brainstorming):
 - Async / background jobs and scheduled refreshes.
 - Multiple Google connections per user (one connection per user this slice;
   the token store is still keyed by `connection_id` to keep that door open).
-- Obtaining Google **standard access** for the app-owned developer token — an
+- Obtaining Google **standard access** for the app-owned developer token - an
   operational/policy task tracked separately.
 
 ## Architecture
@@ -103,10 +103,10 @@ class CredentialProvider(Protocol):
 
 Implementations:
 
-- **`FileCredentialProvider`** (in `scripts/`, CLI default) — wraps today's
+- **`FileCredentialProvider`** (in `scripts/`, CLI default) - wraps today's
   `gads_auth` functions verbatim. The **24-hour local session cap stays here**
   (it calls `enforce_session()`); CLI behavior is byte-for-byte unchanged.
-- **`WebCredentialProvider`** (in `webapp/`) — constructed per request from the
+- **`WebCredentialProvider`** (in `webapp/`) - constructed per request from the
   resolved connection. Wires `DbTokenStore` into the existing 0.6.0
   `OAuthClientBackend` (the same `select_backend(profile, store)` path) and reads
   the app-owned developer token from config. It does **not** call
@@ -179,7 +179,7 @@ the row and fills `client_id` / `client_secret` from config. This keeps the
 `TokenStore` contract identical to `LocalFileTokenStore` and leaves
 `OAuthClientBackend` untouched.
 
-### Encryption — `crypto.py`
+### Encryption - `crypto.py`
 
 Fernet with key versioning. Config holds an ordered keyring (current key first).
 `encrypt()` uses the current key and records its `token_version` on the row;
@@ -188,7 +188,7 @@ new current key; existing rows still decrypt under their stored version and can
 be lazily re-encrypted on next write. `cryptography.fernet.MultiFernet` provides
 this directly.
 
-### DbTokenStore — `tokenstore_db.py`
+### DbTokenStore - `tokenstore_db.py`
 
 Implements the same `TokenStore.get / set(key, record)` contract as
 `LocalFileTokenStore`, keyed by `connection_id`. `set()` encrypts the refresh
@@ -197,17 +197,17 @@ token (recording `token_version`); `get()` decrypts it and merges the config
 is untouched. The same contract tests that cover `LocalFileTokenStore` run
 against `DbTokenStore`.
 
-### Web OAuth redirect flow — `oauth.py` + `routes/auth_routes.py`
+### Web OAuth redirect flow - `oauth.py` + `routes/auth_routes.py`
 
 App-owned **Web** OAuth client.
 
-- `GET /oauth/google/start` — generate a PKCE `code_verifier` / `code_challenge`,
+- `GET /oauth/google/start` - generate a PKCE `code_verifier` / `code_challenge`,
   persist an `oauth_states` row (random `state`, bound to `user_id`, with the
   verifier and a short TTL), build the Google authorization URL from the config
   Web client with `redirect_uri = .../oauth/google/callback`, `scope=[adwords]`,
   `access_type=offline`, `prompt=consent` (forces a refresh token), `state`, and
   the PKCE challenge. Respond `302` to Google.
-- `GET /oauth/google/callback?code&state` — load the `oauth_states` row by
+- `GET /oauth/google/callback?code&state` - load the `oauth_states` row by
   `state`; reject if missing, expired, or not owned by the current user;
   **delete it (single-use)**; exchange `code` (with the PKCE verifier) via
   `google-auth-oauthlib` `Flow.fetch_token`; extract `refresh_token` and
@@ -219,7 +219,7 @@ App-owned **Web** OAuth client.
 State is verified with a constant-time comparison and is single-use: an
 `oauth-state` pattern hardened with PKCE and server-side persistence.
 
-### Identity stub — `identity.py`
+### Identity stub - `identity.py`
 
 A `get_current_user()` FastAPI dependency resolves the user from a trusted dev
 mechanism: a signed `X-Dev-User` header / API key mapping to a seeded `users`
@@ -227,14 +227,14 @@ row (a single seeded default user if unset). Returns the `User`. The OAuth
 `state` binds to this id. Real sign-in is the deferred sub-project; `identity.py`
 is the seam it will later replace.
 
-### API surface — `routes/account_routes.py`
+### API surface - `routes/account_routes.py`
 
 Deliberately minimal:
 
-- `GET /accounts` — current user's connection(s) + accessible customers.
-- `POST /accounts/{connection_id}/select` `{customer_id}` — set the active
+- `GET /accounts` - current user's connection(s) + accessible customers.
+- `POST /accounts/{connection_id}/select` `{customer_id}` - set the active
   customer for the connection.
-- `GET /accounts/{connection_id}/summary` — the **proof-of-life**. Binds a
+- `GET /accounts/{connection_id}/summary` - the **proof-of-life**. Binds a
   `WebCredentialProvider` to the `contextvar` and calls one existing read path (a
   small GAQL account summary via `gads_client`) for the selected customer,
   returning JSON. This single endpoint exercises the whole seam end-to-end:
@@ -244,17 +244,17 @@ Deliberately minimal:
 All connection-scoped routes enforce that `connection.user_id == current_user.id`
 before acting (IDOR protection), returning `404` on mismatch.
 
-## Config — `config.py`
+## Config - `config.py`
 
 Typed settings from env / secret manager; nothing secret in git. Fail fast at
 startup on missing required values.
 
 - `DATABASE_URL`
-- `FERNET_KEYS` — ordered keyring, current key first
-- `GOOGLE_OAUTH_CLIENT_ID` / `GOOGLE_OAUTH_CLIENT_SECRET` — app Web client
-- `GOOGLE_DEVELOPER_TOKEN` — app-owned
+- `FERNET_KEYS` - ordered keyring, current key first
+- `GOOGLE_OAUTH_CLIENT_ID` / `GOOGLE_OAUTH_CLIENT_SECRET` - app Web client
+- `GOOGLE_DEVELOPER_TOKEN` - app-owned
 - `OAUTH_REDIRECT_URI`
-- `DEV_USER` — identity-stub toggle / seeded user key
+- `DEV_USER` - identity-stub toggle / seeded user key
 
 ## Error handling
 
@@ -285,7 +285,7 @@ startup on missing required values.
   - **Cross-tenant isolation:** user B calling user A's `connection_id` gets
     `404`; concurrent requests resolve their own tokens (the `contextvar`
     isolation guarantee); the `contextvar` is reset after each request.
-- **CLI regression:** the existing 154-test suite stays green — `build_client()`
+- **CLI regression:** the existing 154-test suite stays green - `build_client()`
   going through the default provider must not change CLI behavior.
 
 ## Risks and open questions
@@ -301,7 +301,7 @@ startup on missing required values.
   (`concurrent.futures`). Confirm the bound provider propagates correctly (or is
   re-bound) when work crosses threads; covered by the isolation test.
 - **Google standard access.** The app-owned developer token needs standard access
-  to call many accounts at scale — an operational dependency, not code.
+  to call many accounts at scale - an operational dependency, not code.
 
 ## Forward context (not built here)
 
