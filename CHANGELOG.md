@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Tag brand campaigns (name rules in `scripts/brand_rules.json`) in pacing and recommendations. Brand underpacing gets its own finding and spend-expanding recommendations on brand campaigns are listed under `brand_hold`; agents do not propose scaling brand unless the user asks explicitly. The audit now sends 20 search requests.
+
 - Refuse write approval from piped stdin; the y/N prompt needs an interactive terminal.
 
 - Add `--report` campaigns, ads and assets or formats and brand-safety reads to the App, Display, Demand Gen and YouTube adapters, with audit findings for disapproved or limited ads and LOW App asset links. Campaign rows now include status, sub-type, bidding type and budget; App rows are grouped by sub-type.

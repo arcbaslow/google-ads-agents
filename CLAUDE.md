@@ -71,6 +71,17 @@ Skill bodies wire this in; don't bypass.
 user disagrees with a category match, edit the rules file rather than
 hard-coding an override in the agent.
 
+## Brand rules
+
+`scripts/brand_rules.json` names brand campaigns by campaign-name pattern
+and lists the recommendation types that put more spend behind a campaign.
+Pacing and recommendations tag the matches; agents hold any scale step on
+a brand campaign until the user asks for it explicitly, and the user's
+explicit instruction overrides the hold. Same rule as placements: fix a
+miss in the rules file, not in the agent. Any future writer that raises a
+budget or loosens a target must check `gads_brandguard.is_brand_campaign`
+and refuse without an explicit owner flag.
+
 ## Asset role (2026-08)
 
 Shipped and public. Maintenance mode: bugfixes, Google API version bumps,

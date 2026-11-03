@@ -5,6 +5,23 @@ and validates before application. Piped stdin and EOF cancel. The local
 24-hour session gate still applies. YouTube uploads are the one step the API
 cannot validate; see the upload section.
 
+## Brand campaigns
+
+No writer in this toolkit edits an existing Search budget or target, so
+there is nothing for a budget hook to gate. The brand guard lives in the
+reads that lead to such a change: `gads_pacing.py` tags brand campaigns and
+reports their underpacing as `brand_underpacing`; `gads_recommendations.py`
+lists spend-expanding recommendations on brand campaigns under `brand_hold`.
+Classification is by campaign name against `scripts/brand_rules.json`.
+
+Agents do not propose more spend on a brand campaign from its CPA, ROAS or
+unused budget, because on brand those metrics are mostly non-incremental.
+An explicit instruction from the owner to scale brand overrides the hold for
+that session. A future budget or target writer must call
+`gads_brandguard.is_brand_campaign` and refuse brand campaigns unless the
+owner passes an explicit flag; incrementality itself is measured with a geo
+or on/off holdout, not inferred from reported conversions.
+
 Since 2026-04-01 the API rejects campaign mutates in an account that has any
 campaign without an EU political advertising declaration. Writers report this
 as `eu_political_declaration_required`; declare every campaign, then retry.

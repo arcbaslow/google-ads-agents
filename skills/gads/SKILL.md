@@ -113,6 +113,21 @@ guide the user through:
 - Output: markdown (no emoji)
 - Mutate: always `PAUSED` first, never auto-unpause
 
+## Brand campaigns
+
+Campaigns whose name matches `scripts/brand_rules.json` are brand. Their
+CPA and ROAS are mostly non-incremental: the clicks would largely have
+arrived through organic brand results. So these numbers never justify
+more spend on their own. Do not propose, and do not build an operation
+for, a budget raise, a higher target CPA, a lower target ROAS, a cap
+removal, broad match or reach expansion on a brand campaign unless the
+user has asked to scale brand explicitly in this session. Pacing tags
+these campaigns and recommendations lists the affected items under
+`brand_hold`. When the user does ask, their instruction wins: proceed
+through the normal review flow and state that the campaign is
+brand-classified. If a brand campaign is missed by the rules, edit the
+rules file; do not hard-code names in an agent.
+
 New profiles do not require developer tokens. API access is approved for the
 Cloud project owning the OAuth client. Use docs/SETUP.md; preserve session checks.
 

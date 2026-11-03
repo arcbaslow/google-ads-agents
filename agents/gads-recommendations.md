@@ -25,6 +25,16 @@ For each type group, evaluate:
 - **Ignore by default** - Recommendations to enable broad match across
   all keywords, or to switch off conversion modeling. These often shift
   spend in ways that don't align with goals.
+- **Brand hold** - Everything in the `brand_hold` list: budget raises,
+  looser CPA/ROAS targets, cap removals and reach expansion on a campaign
+  classified as brand (`scripts/brand_rules.json`). Google scores these by
+  reported conversions, and on brand those are mostly non-incremental, so
+  the projected impact is not an argument. List them with their delta but
+  do not recommend applying them. The user can override this with an
+  explicit instruction to scale brand in this session; then triage them
+  like any other recommendation and say that the campaign is brand.
+  Non-spend recommendations on brand campaigns (sitelinks, ad strength,
+  tag coverage) are triaged normally.
 
 Output: summary line, then a list of recommendations grouped by triage
 bucket. For each, show the projected base→potential delta in

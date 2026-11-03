@@ -54,6 +54,32 @@ def test_underpacing(monkeypatch):
     assert findings
 
 
+def test_brand_underpacing_gets_its_own_finding(monkeypatch):
+    rows = _mtd_rows("1", "Search - Brand", daily_budget_dollars=100.0, daily_cost_dollars=20.0)
+    monkeypatch.setattr(gads_pacing.gads_client, "search_stream", lambda c, q: rows)
+    out = gads_pacing.analyze("123")
+    assert out["campaigns"][0]["brand"] is True
+    codes = [f["code"] for f in out["findings"]]
+    assert codes == ["brand_underpacing"]
+    assert out["findings"][0]["severity"] == "low"
+    assert out["findings"][0]["brand"] is True
+    assert "(1 brand)" in out["summary"]
+
+
+def test_brand_overpacing_is_reported_normally(monkeypatch):
+    rows = _mtd_rows("1", "Search - Brand", daily_budget_dollars=50.0, daily_cost_dollars=80.0)
+    monkeypatch.setattr(gads_pacing.gads_client, "search_stream", lambda c, q: rows)
+    out = gads_pacing.analyze("123")
+    assert [f["code"] for f in out["findings"]] == ["overpacing"]
+
+
+def test_non_brand_campaigns_tagged_false(monkeypatch):
+    rows = _mtd_rows("1", "Search - Generic", daily_budget_dollars=50.0, daily_cost_dollars=50.0)
+    monkeypatch.setattr(gads_pacing.gads_client, "search_stream", lambda c, q: rows)
+    out = gads_pacing.analyze("123")
+    assert out["campaigns"][0]["brand"] is False
+
+
 def test_zero_budget_campaigns_skipped(monkeypatch):
     rows = _mtd_rows("1", "No budget", daily_budget_dollars=0.0, daily_cost_dollars=0.0)
     monkeypatch.setattr(gads_pacing.gads_client, "search_stream", lambda c, q: rows)

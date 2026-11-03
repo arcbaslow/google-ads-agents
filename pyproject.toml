@@ -49,7 +49,7 @@ Issues = "https://github.com/arcbaslow/google-ads-agents/issues"
 package-dir = { "" = "scripts" }
 py-modules = [
   "gads_accounts", "gads_anomalies", "gads_apply", "gads_assets", "gads_audit", "gads_auth",
-  "gads_authflow", "gads_bidstrategy", "gads_brands", "gads_client",
+  "gads_authflow", "gads_bidstrategy", "gads_brandguard", "gads_brands", "gads_client",
   "gads_competitors", "gads_conversions", "gads_creation", "gads_creative",
   "gads_demandgen", "gads_demographics", "gads_display", "gads_geos", "gads_gtag",
   "gads_errors", "gads_export", "gads_findings", "gads_history", "gads_keywords", "gads_mcp", "gads_mutate", "gads_notify", "gads_pacing",

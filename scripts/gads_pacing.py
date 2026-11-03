@@ -9,6 +9,10 @@ For each enabled campaign:
     or fall short by more than 10% (underpace)
 
 Daily over/under-pacing is normal; MTD projections smooth that noise.
+
+Brand campaigns (see brand_rules.json) are tagged. Their underpacing gets its
+own finding because the usual fix, raising bids or budget, mostly buys clicks
+the brand would have received organically.
 """
 
 from __future__ import annotations
@@ -18,6 +22,7 @@ import calendar
 import sys
 from datetime import date
 
+import gads_brandguard
 import gads_client
 import gads_errors
 import gads_utils
@@ -48,6 +53,7 @@ def analyze(customer_id: str) -> dict:
     days_elapsed = today.day  # includes today
 
     rows = gads_client.search_stream(customer_id, QUERY.format(start=start, end=end))
+    brand_rules = gads_brandguard.load_rules()
 
     by_campaign: dict[str, dict] = {}
     for row in rows:
@@ -60,6 +66,7 @@ def analyze(customer_id: str) -> dict:
         entry = by_campaign.setdefault(cid_, {
             "campaign_id": cid_,
             "campaign_name": c.get("name"),
+            "brand": gads_brandguard.is_brand_campaign(c.get("name"), brand_rules),
             "daily_budget": gads_utils.micros_to_currency(b.get("amount_micros")),
             "period": b.get("period"),
             "mtd_spend": 0.0,
@@ -101,6 +108,21 @@ def analyze(customer_id: str) -> dict:
                     f"${target_eom:,.0f} target ({delta_pct*100:+.0f}%)."
                 ),
             })
+        elif delta_pct < UNDER_THRESHOLD and entry["brand"]:
+            findings.append({
+                "severity": "low",
+                "code": "brand_underpacing",
+                "campaign_id": entry["campaign_id"],
+                "brand": True,
+                "message": (
+                    f"{entry['campaign_name']!r} (brand) on pace for "
+                    f"${projected_eom:,.0f} vs ${target_eom:,.0f} "
+                    f"({delta_pct*100:+.0f}%). Brand spend is capped by brand "
+                    f"search demand, not budget; raising bids or budget mostly "
+                    f"replaces organic brand clicks. Not a scale candidate "
+                    f"unless the owner asks for it."
+                ),
+            })
         elif delta_pct < UNDER_THRESHOLD:
             findings.append({
                 "severity": "medium" if delta_pct < -0.25 else "low",
@@ -114,6 +136,7 @@ def analyze(customer_id: str) -> dict:
             })
 
     items.sort(key=lambda x: -x["delta_pct"])
+    brand_count = sum(1 for i in items if i["brand"])
     return {
         "customer_id": customer_id,
         "as_of": end,
@@ -121,7 +144,10 @@ def analyze(customer_id: str) -> dict:
         "days_in_month": days_in_month,
         "campaigns": items,
         "findings": findings,
-        "summary": f"{len(items)} campaigns, {len(findings)} pacing issue(s)",
+        "summary": (
+            f"{len(items)} campaigns ({brand_count} brand), "
+            f"{len(findings)} pacing issue(s)"
+        ),
     }
 
 

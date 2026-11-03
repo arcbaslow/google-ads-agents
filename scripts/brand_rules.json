@@ -1,0 +1,27 @@
+{
+  "campaign_name_patterns": [
+    "(?i)\\bbrand(ed)?\\b",
+    "(?i)бренд",
+    "(?i)\\bbrend\\b"
+  ],
+  "spend_expanding_recommendation_types": [
+    "CAMPAIGN_BUDGET",
+    "FORECASTING_CAMPAIGN_BUDGET",
+    "MARGINAL_ROI_CAMPAIGN_BUDGET",
+    "MOVE_UNUSED_BUDGET",
+    "RAISE_TARGET_CPA",
+    "RAISE_TARGET_CPA_BID_TOO_LOW",
+    "RAISE_TARGET_CPA_PERFORMANCE_BID_TOO_LOW",
+    "LOWER_TARGET_ROAS",
+    "LOWER_TARGET_ROAS_PERFORMANCE_BID_TOO_LOW",
+    "MAXIMIZE_CLICKS_OPT_IN",
+    "MAXIMIZE_CONVERSIONS_OPT_IN",
+    "MAXIMIZE_CONVERSION_VALUE_OPT_IN",
+    "KEYWORD",
+    "KEYWORD_MATCH_TYPE",
+    "USE_BROAD_MATCH_KEYWORD",
+    "SEARCH_PARTNERS_OPT_IN",
+    "DISPLAY_EXPANSION_OPT_IN",
+    "PERFORMANCE_MAX_OPT_IN"
+  ]
+}

@@ -5,18 +5,30 @@ from __future__ import annotations
 import gads_recommendations
 
 
-def _row(rtype, dismissed=False, base=None, potential=None):
-    return {
-        "recommendation": {
-            "type": rtype,
-            "resource_name": f"customers/1/recommendations/{rtype}-1",
-            "dismissed": dismissed,
-            "impact": {
-                "base_metrics": base or {},
-                "potential_metrics": potential or {},
-            },
+def _row(rtype, dismissed=False, base=None, potential=None, campaign=None):
+    rec = {
+        "type": rtype,
+        "resource_name": f"customers/1/recommendations/{rtype}-1",
+        "dismissed": dismissed,
+        "impact": {
+            "base_metrics": base or {},
+            "potential_metrics": potential or {},
         },
     }
+    if campaign:
+        rec["campaign"] = campaign
+    return {"recommendation": rec}
+
+
+def _campaign_row(resource_name, name):
+    return {"campaign": {"resource_name": resource_name, "name": name}}
+
+
+def _dispatch(rec_rows, campaign_rows):
+    """search_stream stub that answers the recommendation and campaign queries separately."""
+    def _stream(cid, query):
+        return campaign_rows if "FROM campaign" in query else rec_rows
+    return _stream
 
 
 def test_groups_by_type(monkeypatch):
@@ -69,3 +81,43 @@ def test_impact_metrics_flattened(monkeypatch):
 def test_query_selects_whole_impact_message():
     assert "recommendation.impact," in gads_recommendations.QUERY
     assert "recommendation.impact." not in gads_recommendations.QUERY
+
+
+BRAND = "customers/1/campaigns/10"
+GENERIC = "customers/1/campaigns/20"
+CAMPAIGNS = [_campaign_row(BRAND, "Search - Brand"), _campaign_row(GENERIC, "Search - Generic")]
+
+
+def test_brand_hold_collects_spend_expanding_recs_on_brand(monkeypatch):
+    monkeypatch.setattr(gads_recommendations.gads_client, "search_stream", _dispatch([
+        _row("CAMPAIGN_BUDGET", campaign=BRAND),
+        _row("RAISE_TARGET_CPA", campaign=BRAND),
+        _row("SITELINK_ASSET", campaign=BRAND),
+        _row("CAMPAIGN_BUDGET", campaign=GENERIC),
+    ], CAMPAIGNS))
+    out = gads_recommendations.fetch("123")
+    assert out["total"] == 4
+    held = {(h["type"], h["campaign_name"]) for h in out["brand_hold"]}
+    assert held == {("CAMPAIGN_BUDGET", "Search - Brand"), ("RAISE_TARGET_CPA", "Search - Brand")}
+    assert all(h["brand"] and h["reason"] for h in out["brand_hold"])
+    assert out["by_type"]["CAMPAIGN_BUDGET"][1]["brand"] is False
+    assert out["by_type"]["SITELINK_ASSET"][0]["brand"] is True
+    assert out["summary"][-1].startswith("brand_hold: 2")
+
+
+def test_no_brand_hold_without_brand_campaigns(monkeypatch):
+    monkeypatch.setattr(gads_recommendations.gads_client, "search_stream", _dispatch([
+        _row("CAMPAIGN_BUDGET", campaign=GENERIC),
+        _row("KEYWORD"),
+    ], CAMPAIGNS))
+    out = gads_recommendations.fetch("123")
+    assert out["brand_hold"] == []
+    assert not any(s.startswith("brand_hold") for s in out["summary"])
+    assert out["by_type"]["KEYWORD"][0]["campaign_name"] is None
+
+
+def test_dismissed_brand_recs_not_held_by_default(monkeypatch):
+    monkeypatch.setattr(gads_recommendations.gads_client, "search_stream", _dispatch([
+        _row("CAMPAIGN_BUDGET", campaign=BRAND, dismissed=True),
+    ], CAMPAIGNS))
+    assert gads_recommendations.fetch("123")["brand_hold"] == []
