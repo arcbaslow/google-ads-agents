@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- Tag brand campaigns (name rules in `scripts/brand_rules.json`) in pacing and recommendations. Brand underpacing gets its own finding and spend-expanding recommendations on brand campaigns are listed under `brand_hold`; agents do not propose scaling brand unless the user asks explicitly. The audit now sends 20 search requests.
+- Tag brand campaigns in pacing and recommendations, by campaign-name pattern or by brand share of search-term clicks against per-customer `brand_terms` (`scripts/brand_rules.json`, threshold 0.7). Brand underpacing gets its own finding and spend-expanding recommendations on brand campaigns are listed under `brand_hold`; agents do not propose scaling brand unless the user asks explicitly. The audit now sends 20 search requests, plus one cached search-terms request when brand terms are configured.
 
 - Refuse write approval from piped stdin; the y/N prompt needs an interactive terminal.
 

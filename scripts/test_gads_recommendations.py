@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+
 import gads_recommendations
 
 
@@ -121,3 +123,35 @@ def test_dismissed_brand_recs_not_held_by_default(monkeypatch):
         _row("CAMPAIGN_BUDGET", campaign=BRAND, dismissed=True),
     ], CAMPAIGNS))
     assert gads_recommendations.fetch("123")["brand_hold"] == []
+
+
+def test_brand_hold_by_search_term_share(monkeypatch, tmp_path):
+    rules = tmp_path / "brand_rules.json"
+    rules.write_text(json.dumps({
+        "campaign_name_patterns": [],
+        "brand_terms": {"123": ["acme"]},
+        "brand_share_threshold": 0.7,
+        "spend_expanding_recommendation_types": ["CAMPAIGN_BUDGET"],
+    }))
+    monkeypatch.setattr(gads_recommendations.gads_brandguard, "DEFAULT_RULES", rules)
+    campaigns = [_campaign_row(BRAND, "Search - Acme Exact"), _campaign_row(GENERIC, "Search - Generic")]
+    term_rows = [
+        {"campaign": {"id": "10"}, "search_term_view": {"search_term": "acme"}, "metrics": {"clicks": 8}},
+        {"campaign": {"id": "10"}, "search_term_view": {"search_term": "bank"}, "metrics": {"clicks": 2}},
+        {"campaign": {"id": "20"}, "search_term_view": {"search_term": "acme"}, "metrics": {"clicks": 1}},
+        {"campaign": {"id": "20"}, "search_term_view": {"search_term": "bank"}, "metrics": {"clicks": 9}},
+    ]
+    rec_rows = [_row("CAMPAIGN_BUDGET", campaign=BRAND), _row("CAMPAIGN_BUDGET", campaign=GENERIC)]
+
+    def _stream(cid, query):
+        if "search_term_view" in query:
+            return term_rows
+        return campaigns if "FROM campaign" in query else rec_rows
+
+    monkeypatch.setattr(gads_recommendations.gads_client, "search_stream", _stream)
+    out = gads_recommendations.fetch("123")
+    assert [h["campaign_name"] for h in out["brand_hold"]] == ["Search - Acme Exact"]
+    assert out["brand_hold"][0]["brand_reason"] == "search_terms"
+    assert out["brand_hold"][0]["brand_share"] == 0.8
+    generic = [r for r in out["by_type"]["CAMPAIGN_BUDGET"] if r["campaign"] == GENERIC][0]
+    assert generic["brand"] is False and generic["brand_share"] == 0.1

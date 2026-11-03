@@ -10,9 +10,10 @@ For each enabled campaign:
 
 Daily over/under-pacing is normal; MTD projections smooth that noise.
 
-Brand campaigns (see brand_rules.json) are tagged. Their underpacing gets its
-own finding because the usual fix, raising bids or budget, mostly buys clicks
-the brand would have received organically.
+Brand campaigns are tagged by name pattern or by brand share of search-term
+clicks (see brand_rules.json). Their underpacing gets its own finding because
+the usual fix, raising bids or budget, mostly buys clicks the brand would
+have received organically.
 """
 
 from __future__ import annotations
@@ -54,6 +55,7 @@ def analyze(customer_id: str) -> dict:
 
     rows = gads_client.search_stream(customer_id, QUERY.format(start=start, end=end))
     brand_rules = gads_brandguard.load_rules()
+    brand_shares = gads_brandguard.brand_shares(customer_id, brand_rules)
 
     by_campaign: dict[str, dict] = {}
     for row in rows:
@@ -66,7 +68,7 @@ def analyze(customer_id: str) -> dict:
         entry = by_campaign.setdefault(cid_, {
             "campaign_id": cid_,
             "campaign_name": c.get("name"),
-            "brand": gads_brandguard.is_brand_campaign(c.get("name"), brand_rules),
+            **gads_brandguard.classify(c.get("name"), cid_, brand_shares, brand_rules),
             "daily_budget": gads_utils.micros_to_currency(b.get("amount_micros")),
             "period": b.get("period"),
             "mtd_spend": 0.0,

@@ -4,6 +4,8 @@
     "(?i)бренд",
     "(?i)\\bbrend\\b"
   ],
+  "brand_terms": {},
+  "brand_share_threshold": 0.7,
   "spend_expanding_recommendation_types": [
     "CAMPAIGN_BUDGET",
     "FORECASTING_CAMPAIGN_BUDGET",

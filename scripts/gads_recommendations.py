@@ -11,7 +11,8 @@ We never auto-apply a recommendation. The user decides.
 Recommendations that would put more spend behind a brand campaign (budget
 raises, looser targets, reach expansion; see brand_rules.json) are listed
 again under `brand_hold`. Google rates those by reported conversions, which
-on brand are mostly non-incremental.
+on brand are mostly non-incremental. Brand is decided by campaign name or
+by brand share of search-term clicks; see gads_brandguard.
 """
 
 from __future__ import annotations
@@ -51,6 +52,7 @@ def fetch(customer_id: str, include_dismissed: bool = False) -> dict:
     rows = gads_client.search_stream(customer_id, QUERY)
     names = _campaign_names(customer_id)
     brand_rules = gads_brandguard.load_rules()
+    brand_shares = gads_brandguard.brand_shares(customer_id, brand_rules)
     by_type: dict[str, list[dict]] = {}
     brand_hold: list[dict] = []
     for row in rows:
@@ -59,12 +61,13 @@ def fetch(customer_id: str, include_dismissed: bool = False) -> dict:
             continue
         rtype = rec.get("type", "UNKNOWN")
         impact = rec.get("impact", {})
-        campaign_name = names.get(rec.get("campaign") or "")
+        campaign = rec.get("campaign") or ""
+        campaign_name = names.get(campaign)
         item = {
             "resource_name": rec.get("resource_name"),
             "campaign": rec.get("campaign"),
             "campaign_name": campaign_name,
-            "brand": gads_brandguard.is_brand_campaign(campaign_name, brand_rules),
+            **gads_brandguard.classify(campaign_name, campaign.rsplit("/", 1)[-1], brand_shares, brand_rules),
             "ad_group": rec.get("ad_group"),
             "base": _flatten_metrics(impact.get("base_metrics", {})),
             "potential": _flatten_metrics(impact.get("potential_metrics", {})),

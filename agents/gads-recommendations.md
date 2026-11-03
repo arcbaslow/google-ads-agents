@@ -27,7 +27,9 @@ For each type group, evaluate:
   spend in ways that don't align with goals.
 - **Brand hold** - Everything in the `brand_hold` list: budget raises,
   looser CPA/ROAS targets, cap removals and reach expansion on a campaign
-  classified as brand (`scripts/brand_rules.json`). Google scores these by
+  classified as brand (`scripts/brand_rules.json`: name pattern, or brand
+  share of search-term clicks at or above the threshold; the row says
+  which in `brand_reason`). Google scores these by
   reported conversions, and on brand those are mostly non-incremental, so
   the projected impact is not an argument. List them with their delta but
   do not recommend applying them. The user can override this with an

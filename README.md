@@ -151,7 +151,7 @@ Every tool is annotated read-only. The tools call only `GoogleAdsService` search
 
 **Authentication.** Every tool accepts `profile`. The standalone server uses the active local profile from `gads_auth.py`, including the 24-hour session cap. It never switches profiles: naming a different profile returns `invalid_argument` with the `--use-profile` command to run locally. A host can pass `provider_factory(profile)`, which returns a `gads_provider.CredentialProvider`, to supply its own per-profile credentials. A developer token is optional. `credentials_present()` reports whether a local credentials file, a `GOOGLE_APPLICATION_CREDENTIALS` file or the gcloud application-default credentials file exists. It does not open these files or make a network call.
 
-**Quotas.** Each request counts against the Google Ads API quota of the OAuth Cloud project. `account_audit` sends 20 search requests. The other tools send one request, or two for `anomalies_and_pacing` with `check="both"`. When the API reports a quota or rate limit, the tool returns `quota_exceeded`; retry later or narrow the request.
+**Quotas.** Each request counts against the Google Ads API quota of the OAuth Cloud project. `account_audit` sends 20 search requests, plus one search-terms request when `scripts/brand_rules.json` has brand terms for the customer (cached 15 minutes). The other tools send one request, or two for `anomalies_and_pacing` with `check="both"`, plus that same search-terms request for pacing when brand terms are configured. When the API reports a quota or rate limit, the tool returns `quota_exceeded`; retry later or narrow the request.
 
 ## Tests
 

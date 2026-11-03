@@ -73,9 +73,12 @@ hard-coding an override in the agent.
 
 ## Brand rules
 
-`scripts/brand_rules.json` names brand campaigns by campaign-name pattern
-and lists the recommendation types that put more spend behind a campaign.
-Pacing and recommendations tag the matches; agents hold any scale step on
+`scripts/brand_rules.json` names brand campaigns two ways: campaign-name
+patterns, and per-customer `brand_terms` matched against search terms, with a
+campaign counted as brand when its brand share of clicks reaches
+`brand_share_threshold` (0.7). It also lists the recommendation types that
+put more spend behind a campaign. Pacing and recommendations tag the matches
+with `brand`, `brand_share` and `brand_reason`; agents hold any scale step on
 a brand campaign until the user asks for it explicitly, and the user's
 explicit instruction overrides the hold. Same rule as placements: fix a
 miss in the rules file, not in the agent. Any future writer that raises a

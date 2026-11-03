@@ -12,7 +12,28 @@ there is nothing for a budget hook to gate. The brand guard lives in the
 reads that lead to such a change: `gads_pacing.py` tags brand campaigns and
 reports their underpacing as `brand_underpacing`; `gads_recommendations.py`
 lists spend-expanding recommendations on brand campaigns under `brand_hold`.
-Classification is by campaign name against `scripts/brand_rules.json`.
+
+Classification uses `scripts/brand_rules.json` and either signal is enough:
+a campaign-name match against `campaign_name_patterns`, or a brand share of
+search-term clicks at or above `brand_share_threshold` (default 0.7) over the
+last 28 days. The share needs `brand_terms` for the customer ID:
+
+```json
+"brand_terms": {
+  "1234567890": ["acme", "акме"]
+}
+```
+
+Terms are lower-cased substrings matched against search terms only, never
+against campaign names, because many accounts put the client name in every
+campaign. Use distinctive terms; a short one such as `jet` also matches
+`jet ski`. Without terms for the customer no search-terms query is sent. With
+terms, the query runs once per customer and is cached for 15 minutes, so
+pacing and recommendations share it. Each tagged row carries `brand`,
+`brand_share` (null when the campaign had no search-term clicks, which is the
+case for PMax) and `brand_reason` (`name`, `search_terms` or null). PMax
+campaigns taking brand queries are therefore not caught by the share; the
+lever there is the brand-list exclusion below.
 
 Agents do not propose more spend on a brand campaign from its CPA, ROAS or
 unused budget, because on brand those metrics are mostly non-incremental.

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from datetime import date
 
 import gads_pacing
@@ -73,11 +74,36 @@ def test_brand_overpacing_is_reported_normally(monkeypatch):
     assert [f["code"] for f in out["findings"]] == ["overpacing"]
 
 
+def test_brand_by_search_term_share(monkeypatch, tmp_path):
+    rules = tmp_path / "brand_rules.json"
+    rules.write_text(json.dumps({
+        "campaign_name_patterns": [],
+        "brand_terms": {"123": ["acme"]},
+        "brand_share_threshold": 0.7,
+        "spend_expanding_recommendation_types": [],
+    }))
+    monkeypatch.setattr(gads_pacing.gads_brandguard, "DEFAULT_RULES", rules)
+    pacing_rows = _mtd_rows("1", "Search - Acme Exact", daily_budget_dollars=100.0, daily_cost_dollars=20.0)
+    term_rows = [
+        {"campaign": {"id": "1"}, "search_term_view": {"search_term": "acme bank"}, "metrics": {"clicks": 9}},
+        {"campaign": {"id": "1"}, "search_term_view": {"search_term": "bank almaty"}, "metrics": {"clicks": 1}},
+    ]
+    monkeypatch.setattr(gads_pacing.gads_client, "search_stream",
+                        lambda c, q: term_rows if "search_term_view" in q else pacing_rows)
+    out = gads_pacing.analyze("123")
+    campaign = out["campaigns"][0]
+    assert campaign["brand"] is True
+    assert campaign["brand_reason"] == "search_terms"
+    assert campaign["brand_share"] == 0.9
+    assert [f["code"] for f in out["findings"]] == ["brand_underpacing"]
+
+
 def test_non_brand_campaigns_tagged_false(monkeypatch):
     rows = _mtd_rows("1", "Search - Generic", daily_budget_dollars=50.0, daily_cost_dollars=50.0)
     monkeypatch.setattr(gads_pacing.gads_client, "search_stream", lambda c, q: rows)
     out = gads_pacing.analyze("123")
     assert out["campaigns"][0]["brand"] is False
+    assert out["campaigns"][0]["brand_reason"] is None
 
 
 def test_zero_budget_campaigns_skipped(monkeypatch):
