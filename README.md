@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/banner.svg" alt="Google Ads Agents - Paid media audits, tracking checks and reviewed changes." width="100%">
+  <img src="assets/hero.jpg" alt="Google Ads Agents: three small robots inspect a stack of search ad cards with a magnifying glass, sift keyword tiles through a sieve and guard a toll gate with a clipboard." width="100%">
 </p>
 
 # Google Ads Agents
@@ -11,7 +11,7 @@ Paid media audits, tracking checks and reviewed changes.
 [![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-2563eb?logo=python&logoColor=white)](#installation)
 [![MIT license](https://img.shields.io/badge/license-MIT-475569)](LICENSE)
 
-[Quick start](#quick-start) · [Example output](#example-output) · [Tests](#tests) · [Releases](#releases) · [Contributing](CONTRIBUTING.md)
+[Quick start](#quick-start) | [How an audit runs](#how-an-audit-runs) | [Example output](#example-output) | [MCP](#mcp) | [Tests](#tests) | [Contributing](CONTRIBUTING.md)
 
 A Python toolkit for investigating Google Ads accounts and preparing changes for review. Use individual adapters from a terminal, or use the specialist agents and `/gads` skills in an agent runtime. API responses are structured JSON; the audit driver combines them into reports.
 
@@ -26,6 +26,22 @@ A Python toolkit for investigating Google Ads accounts and preparing changes for
 | Assets | RSA strength, PMax linked asset inventory, creative briefs and asset workflows |
 | Account operations | Per-MCC auth profiles, saved audit history and multi-account audits |
 | Reviewed changes | PAUSED Search, Demand Gen and App campaigns, App targets, negatives, placements, Display targeting, image and YouTube video assets, and Video/Display ad edits with JSON review, confirmation and validation |
+
+## How an audit runs
+
+```mermaid
+flowchart LR
+  A["gads_audit.py<br/>--customer ID --days 28"] --> B["16 read-only adapters, up to 6 at a time<br/>conversions, Search, search terms, PMax,<br/>App, Display, Demand Gen, Shopping, YouTube,<br/>auction insights, placements, recommendations,<br/>bid strategy, pacing, Quality Score, demographics"]
+  A -. "--site URL" .-> C["Google tag scan<br/>and linked accounts"]
+  B --> D[("audit.json")]
+  C --> D
+  D --> E["gads_report.py<br/>Markdown or HTML"]
+  D -. "--save-history" .-> F["Saved snapshot"]
+  classDef step fill:#eef3fe,stroke:#2563eb,color:#17202a
+  class A,B,C,D,E,F step
+```
+
+No adapter waits on another, so one failed read does not stop the rest. Read the conversion findings and the tag-scan limits first; bidding, pacing and search-term results depend on them.
 
 ## Installation
 
@@ -95,6 +111,8 @@ python scripts/gads_audit.py --all-customers --days 28 --save-history --output a
 ```
 
 Use `--help` on an adapter for its complete flags. Most read commands print a compact summary; `--json` selects machine-readable output. The audit driver always emits JSON.
+
+Read-only GAQL and saved multi-account audit exports are documented in [REPORTING.md](docs/REPORTING.md); local monitoring output does not refresh credentials or schedule new account reads. See [read-only interoperability](docs/INTEROPERABILITY.md) for query and export handoffs, and [offline evaluation](docs/EVALUATION.md) for safety task fixtures.
 
 ### Agent workflow
 
@@ -171,7 +189,7 @@ The suites use mocks and temporary credential stores. They cover auth profiles a
 | Path | Purpose |
 | --- | --- |
 | [scripts/](scripts/) | API adapters, report rendering and unit tests |
-| [agents/](agents/) · [skills/](skills/) | Specialist instructions and `/gads` routing |
+| [agents/](agents/), [skills/](skills/) | Specialist instructions and `/gads` routing |
 | [hooks/](hooks/) | Session guard and Telegram notifications |
 | [webapp/](webapp/) | Optional hosted sign-in service and tests |
 | [examples/demo/](examples/demo/) | Reproducible report with synthetic data |
@@ -202,10 +220,3 @@ Maintained by [Good Labs](https://goodlabs.kz) - measurement implementation, tra
 ## License
 
 [MIT](LICENSE) © Dilshat Rakhimov. This is an independent project; it is not an official product of the platform vendors.
-
-Read-only GAQL and saved multi-account audit exports are documented in
-[REPORTING.md](docs/REPORTING.md). Local monitoring output does not refresh
-credentials or schedule new account reads.
-
-See [read-only interoperability](docs/INTEROPERABILITY.md) for query and export
-handoffs, and [offline evaluation](docs/EVALUATION.md) for safety task fixtures.
