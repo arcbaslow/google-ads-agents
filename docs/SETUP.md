@@ -75,8 +75,7 @@ python scripts/gads_auth.py --set-oauth acme \
 
 > Web-app trajectory: the same flow becomes a **Web** OAuth client with a
 > redirect URI, the refresh/exchange code is reused, and a database token
-> store replaces the local file. See
-> `docs/superpowers/specs/2026-05-29-auth-backends-design.md`.
+> store replaces the local file.
 
 ## 4. Configure local credentials
 

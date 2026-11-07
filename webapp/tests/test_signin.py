@@ -11,8 +11,8 @@ def test_email_allowed_empty_list_allows_anyone():
 
 def test_email_allowed_matches_domain_exactly():
     allowed = ["goodlabs.kz"]
-    assert email_allowed(allowed, "dilshat@goodlabs.kz")
-    assert email_allowed(allowed, "DILSHAT@GOODLABS.KZ")
+    assert email_allowed(allowed, "user@goodlabs.kz")
+    assert email_allowed(allowed, "USER@GOODLABS.KZ")
     assert not email_allowed(allowed, "x@sub.goodlabs.kz")
     assert not email_allowed(allowed, "x@evil-goodlabs.kz")
 
@@ -60,7 +60,7 @@ def _start_signin(client, Session):
         return rows[-1].state
 
 
-def _mock_google(monkeypatch, sub="sub-1", email="dilshat@goodlabs.kz", verified=True):
+def _mock_google(monkeypatch, sub="sub-1", email="user@goodlabs.kz", verified=True):
     monkeypatch.setattr(
         oauth_mod, "exchange_code",
         lambda settings, code, code_verifier, redirect_uri=None: {"id_token": "idtok"})
@@ -78,7 +78,7 @@ def test_signin_callback_sets_cookie_and_creates_user(api, monkeypatch):
     assert r.status_code == 200
     assert r.cookies.get("gads_session")
     assert "httponly" in r.headers["set-cookie"].lower()
-    assert r.json()["user"]["email"] == "dilshat@goodlabs.kz"
+    assert r.json()["user"]["email"] == "user@goodlabs.kz"
     assert client.cookies.get("gads_signin_state") is None
 
     with Session() as s:

@@ -84,10 +84,3 @@ explicit instruction overrides the hold. Same rule as placements: fix a
 miss in the rules file, not in the agent. Any future writer that raises a
 budget or loosens a target must check `gads_brandguard.is_brand_campaign`
 and refuse without an explicit owner flag.
-
-## Asset role (2026-08)
-
-Shipped and public. Maintenance mode: bugfixes, Google API version bumps,
-and docs only - the active OSS build slot belongs to capi-kit. Role:
-portfolio proof for the measurement practice; the README should keep a link
-to Good Labs services. New features need an explicit owner decision.
