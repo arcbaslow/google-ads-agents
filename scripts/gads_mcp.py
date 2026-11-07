@@ -577,9 +577,16 @@ def register(server, prefix: str = "", provider_factory=None) -> int:
 
 
 def main() -> None:
+    from importlib.metadata import PackageNotFoundError, version
+
     from mcp.server.fastmcp import FastMCP
 
     server = FastMCP("google-ads-agents")
+    # FastMCP takes no version argument; without this the handshake reports the mcp SDK version.
+    try:
+        server._mcp_server.version = version("google-ads-agents")
+    except PackageNotFoundError:
+        server._mcp_server.version = "0.0.0+source"
     register(server)
     server.run()
 

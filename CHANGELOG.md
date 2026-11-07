@@ -78,6 +78,8 @@
 
 - Require operation JSON review and explicit y/N confirmation inside negative-keyword, placement and creative write adapters. Apply now validates first; conflicting mode flags are rejected.
 
+- Report the package version in the MCP server handshake instead of the mcp SDK version.
+
 ## [0.6.1] - 2026-09-08
 
 ### Added
