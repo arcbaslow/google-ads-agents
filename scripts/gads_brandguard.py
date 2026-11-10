@@ -51,7 +51,7 @@ SEARCH_TERMS_QUERY = """
 
 
 def load_rules(path: Path | None = None) -> dict:
-    data = json.loads((path or DEFAULT_RULES).read_text())
+    data = json.loads((path or DEFAULT_RULES).read_text(encoding="utf-8"))
     terms = {
         gads_utils.normalize_customer_id(cid): [t.lower() for t in values if t]
         for cid, values in (data.get("brand_terms") or {}).items()

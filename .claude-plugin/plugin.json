@@ -1,6 +1,6 @@
 {
   "name": "google-ads-agents",
-  "version": "0.6.1",
+  "version": "0.7.0",
   "description": "Multi-agent toolkit for Google Ads. End-user gcloud SSO, 24h session cap, profiles per MCC. Search, Performance Max, App, Display, Demand Gen, Shopping, YouTube analysis; conversion-action checks and static tag detection; keyword research; campaign impression share; placement safety with built-in exclusions for scams, bots, politics, religion, games, gambling, adult; campaign planning and reviewed negative-keyword, placement and creative writes.",
   "author": {
     "name": "Dilshat Rakhimov",

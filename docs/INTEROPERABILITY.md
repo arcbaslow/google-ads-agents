@@ -1,8 +1,9 @@
 # Read-only interoperability
 
-This repository keeps its flat adapters and local session boundary. No MCP
-server is included. The bounded interoperability path is a reviewed GAQL
-query executed here, followed by a saved JSON or CSV export for another tool.
+This repository keeps its flat adapters and local session boundary. An MCP
+server is included in `scripts/gads_mcp.py` (see the README). Without it, the
+bounded interoperability path is a reviewed GAQL query executed here, followed
+by a saved JSON or CSV export for another tool.
 
 ## Map the workflow
 

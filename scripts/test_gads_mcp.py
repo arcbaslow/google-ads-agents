@@ -32,7 +32,8 @@ TYPES = GoogleAdsClient(credentials=AnonymousCredentials(), version="v25", use_p
 FIELD = type(TYPES.get_type("GoogleAdsField"))
 
 NAMES = {"list_accounts", "run_gaql", "resource_metadata", "account_audit",
-         "anomalies_and_pacing", "change_history"}
+         "anomalies_and_pacing", "change_history", "keywords", "ads", "search_terms",
+         "asset_group_assets"}
 ALLOWED = {
     ("GoogleAdsService", "search_stream"),
     ("GoogleAdsService", "search"),
@@ -55,6 +56,11 @@ CALLS = [
     ("account_audit", {"customer_id": CUSTOMER}),
     ("anomalies_and_pacing", {"customer_id": CUSTOMER}),
     ("change_history", {"customer_id": CUSTOMER}),
+    ("keywords", {"customer_id": CUSTOMER}),
+    ("ads", {"customer_id": CUSTOMER}),
+    ("search_terms", {"customer_id": CUSTOMER, "date_from": "2026-10-01",
+                      "date_to": "2026-10-07"}),
+    ("asset_group_assets", {"customer_id": CUSTOMER}),
 ]
 
 
@@ -325,7 +331,7 @@ def test_inventory(prefix):
     tools = asyncio.run(server.list_tools())
     assert {tool.name for tool in tools} == {prefix + name for name in NAMES}
     assert [name for name, _, _ in gads_mcp.TOOLS] == [name for name, _ in CALLS]
-    assert len(tools) <= 6
+    assert len(tools) == len(NAMES)
     for tool in tools:
         assert tool.title and tool.description
         assert tool.annotations.readOnlyHint is True

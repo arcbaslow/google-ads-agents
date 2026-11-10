@@ -54,7 +54,7 @@ work around it.
 
 ## Confirmation before writes
 
-For every mutate:
+For every CLI mutate:
 
 1. Build the operation JSON.
 2. Show it to the user.
@@ -64,6 +64,11 @@ For every mutate:
 5. Show the response the operator pastes back.
 
 Skill bodies wire this in; don't bypass.
+
+The MCP write tools in `scripts/gads_mcp.py` confirm without a terminal: a
+call without `confirm` is a `validate_only` dry run that returns a single-use
+token, and only the identical call with that token, after the host's gate,
+sends the change once. Show the dry run to the user before confirming.
 
 ## Placement rules
 
