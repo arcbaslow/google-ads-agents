@@ -1,9 +1,25 @@
 # Bounded writes
 
-Every write prints operation JSON, requires an explicit `y` at a `y/N` prompt,
-and validates before application. Piped stdin and EOF cancel. The local
-24-hour session gate still applies. YouTube uploads are the one step the API
-cannot validate; see the upload section.
+Every CLI write prints operation JSON, requires an explicit `y` at a `y/N`
+prompt, and validates before application. Piped stdin and EOF cancel. The
+local 24-hour session gate still applies. YouTube uploads are the one step the
+API cannot validate; see the upload section.
+
+## MCP write tools
+
+The write tools in `scripts/gads_mcp.py` are registered by a host with
+`register_writes(server, gate, prefix, provider_factory)` and never prompt. A
+call without `confirm` reads the targets, sends the operations with
+`validate_only=True`, which changes nothing, and returns current and new
+values with a single-use `confirm` token. The token lasts 10 minutes and is
+bound to the tool, every argument and the state read in the dry run. The
+identical call with the token calls the host's `gate()` and then sends the same
+operations once, with a 60-second deadline and no automatic retry. Changed
+arguments or a used token return `invalid_argument`, changed state returns
+`conflict`, and a gate refusal is returned as is; none of these sends anything.
+A timeout or server error after sending says the change may have been applied.
+Each tool takes up to 200 items in one atomic mutate. Video campaigns return
+`not_supported`. The README lists the tools.
 
 ## Brand campaigns
 

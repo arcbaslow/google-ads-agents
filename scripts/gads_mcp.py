@@ -1,24 +1,31 @@
-"""Read-only Google Ads tools for an MCP host.
+"""Google Ads tools for an MCP host.
 
-register() adds six tools to a host FastMCP; main() serves them alone over
-stdio. The tools only call GoogleAdsService search, CustomerService
-list_accessible_customers and GoogleAdsFieldService search; none of them can
-change an account. Each call binds a credential provider for its duration:
-the host's provider_factory(profile), or the active local profile. The
-`profile` argument every tool exposes is consumed by that binding.
+register() adds the read-only tools to a host FastMCP; main() serves them
+alone over stdio. They only call GoogleAdsService search, CustomerService
+list_accessible_customers and GoogleAdsFieldService search. register_writes()
+adds the gated write tools, which change an account only on a confirmed call.
+Each call binds a credential provider for its duration: the host's
+provider_factory(profile), or the active local profile. The `profile`
+argument every tool exposes is consumed by that binding.
 """
 
 from __future__ import annotations
 
 import concurrent.futures
 import functools
+import hashlib
 import inspect
 import itertools
+import json
 import logging
 import os
 import re
+import secrets
+import threading
+import time
 from collections.abc import Callable
 from contextvars import copy_context
+from datetime import date
 from pathlib import Path
 from typing import Any, Literal
 
@@ -42,6 +49,10 @@ _HINTS = {
     ),
     "not_found": "The customer or resource was not found or is not accessible with this profile.",
     "upstream_error": "The Google Ads API request failed. Retry later.",
+    "not_supported": (
+        "The Google Ads API does not accept this change for this campaign type (Video campaigns "
+        "reject every API change). Make it in the Google Ads UI."
+    ),
 }
 
 _GOOGLE_ADS_ERRORS = (
@@ -50,6 +61,7 @@ _GOOGLE_ADS_ERRORS = (
     ("quota_error", "quota_exceeded"),
     ("internal_error", "upstream_error"),
     ("request_error.RESOURCE_NOT_FOUND", "not_found"),
+    ("operation_access_denied_error.OPERATION_NOT_PERMITTED_FOR_CAMPAIGN_TYPE", "not_supported"),
 )
 
 _SECRET_TEXT = re.compile(
@@ -84,15 +96,18 @@ _SEVERITY = {"critical": 0, "high": 1, "medium": 2, "low": 3, "info": 4}
 _AUDIT_WORKERS = 4
 # gads_history.CHANGE_QUERY ends with LIMIT 500, so a full page may hide older events.
 _HISTORY_QUERY_CAP = 500
+_MAX_WRITE_ITEMS = 200
+_ROW_STATUSES = ("ENABLED", "PAUSED", "REMOVED")
 
 
 class _Failure(Exception):
     """A refusal that already carries a contract category and a client-safe hint."""
 
-    def __init__(self, category: str, hint: str):
+    def __init__(self, category: str, hint: str, errors: list[dict] | None = None):
         super().__init__(hint)
         self.category = category
         self.hint = hint
+        self.errors = errors
 
 
 def _scrub(text: str) -> str:
@@ -111,6 +126,61 @@ def _bounded(name: str, value, low, high):
     if isinstance(value, bool) or not isinstance(value, numeric) or not low <= value <= high:
         raise _Failure("invalid_argument", f"{name} must be between {low} and {high}.")
     return value
+
+
+def _id(value, name: str) -> str:
+    if isinstance(value, bool) or not isinstance(value, (str, int)):
+        raise _Failure("invalid_argument", f"{name} must be a numeric Google Ads ID.")
+    value = str(value).strip()
+    if not re.fullmatch(r"[0-9]{1,20}", value):
+        raise _Failure("invalid_argument", f"{name} must be a numeric Google Ads ID.")
+    return value
+
+
+def _ids(values, name: str) -> list[str]:
+    if not isinstance(values, list) or not 1 <= len(values) <= _MAX_WRITE_ITEMS:
+        raise _Failure("invalid_argument", f"{name} must list 1 to {_MAX_WRITE_ITEMS} IDs.")
+    ids = [_id(value, name) for value in values]
+    if len(set(ids)) != len(ids):
+        raise _Failure("invalid_argument", f"{name} contains duplicates.")
+    return ids
+
+
+def _status(value, allowed: tuple[str, ...], name: str = "status") -> str:
+    if value not in allowed:
+        raise _Failure("invalid_argument", f"{name} must be one of {', '.join(allowed)}.")
+    return value
+
+
+def _date(value, name: str) -> date:
+    try:
+        if not isinstance(value, str) or not re.fullmatch(r"\d{4}-\d{2}-\d{2}", value):
+            raise ValueError
+        return date.fromisoformat(value)
+    except ValueError:
+        raise _Failure("invalid_argument", f"{name} must be a date in YYYY-MM-DD format.") from None
+
+
+def _scope(campaign_id, ad_group_id=None) -> list[str]:
+    where = []
+    if campaign_id is not None:
+        where.append(f"campaign.id = {_id(campaign_id, 'campaign_id')}")
+    if ad_group_id is not None:
+        where.append(f"ad_group.id = {_id(ad_group_id, 'ad_group_id')}")
+    return where
+
+
+def _select(cid: str, fields: str, resource: str, where: list[str], order: str, limit: int):
+    import gads_export
+
+    query = f"SELECT {fields} FROM {resource} WHERE {' AND '.join(where)} ORDER BY {order}"
+    result = gads_export.query_rows(cid, query, limit)
+    return result["rows"], not result["truncated"]
+
+
+def _criterion_id(resource_name: str | None) -> str | None:
+    # customers/{customer_id}/adGroupCriteria/{ad_group_id}~{criterion_id}
+    return resource_name.rpartition("~")[2] if resource_name else None
 
 
 # ---------- tools ----------
@@ -410,6 +480,196 @@ def change_history(
     }
 
 
+def keywords(
+    customer_id: str,
+    campaign_id: str | None = None,
+    ad_group_id: str | None = None,
+    status: str | None = None,
+    limit: int = 200,
+    profile: str | None = None,
+) -> dict[str, Any]:
+    """List keyword criteria (not negatives) with criterion ID, ad group ID, campaign ID, text,
+    match type and status, ordered by criterion ID. Filter by `campaign_id`, `ad_group_id` and
+    `status` (ENABLED, PAUSED or REMOVED; default all but REMOVED). The IDs are what
+    set_keyword_status takes. `limit` defaults to 200, maximum 500.
+    """
+    cid = _customer_id(customer_id)
+    limit = _bounded("limit", limit, 1, 500)
+    where = ["ad_group_criterion.type = 'KEYWORD'", "ad_group_criterion.negative = FALSE"]
+    if status is None:
+        where.append("ad_group_criterion.status != 'REMOVED'")
+    else:
+        where.append(f"ad_group_criterion.status = '{_status(status, _ROW_STATUSES)}'")
+    rows, complete = _select(
+        cid,
+        "campaign.id, ad_group.id, ad_group_criterion.criterion_id, "
+        "ad_group_criterion.keyword.text, ad_group_criterion.keyword.match_type, "
+        "ad_group_criterion.status",
+        "ad_group_criterion",
+        where + _scope(campaign_id, ad_group_id),
+        "ad_group_criterion.criterion_id",
+        limit,
+    )
+    items = []
+    for row in rows:
+        criterion = row.get("ad_group_criterion", {})
+        items.append({
+            "criterion_id": criterion.get("criterion_id"),
+            "ad_group_id": row.get("ad_group", {}).get("id"),
+            "campaign_id": row.get("campaign", {}).get("id"),
+            "text": criterion.get("keyword", {}).get("text"),
+            "match_type": criterion.get("keyword", {}).get("match_type"),
+            "status": criterion.get("status"),
+        })
+    return {"customer_id": cid, "keywords": items, "rows_returned": len(items),
+            "complete": complete}
+
+
+def ads(
+    customer_id: str,
+    campaign_id: str | None = None,
+    ad_group_id: str | None = None,
+    status: str | None = None,
+    limit: int = 200,
+    profile: str | None = None,
+) -> dict[str, Any]:
+    """List ads with ad ID, ad group ID, campaign ID, ad type, status, policy approval status and
+    final URLs, ordered by ad ID. Filter by `campaign_id`, `ad_group_id` and `status` (ENABLED,
+    PAUSED or REMOVED; default all but REMOVED). The IDs are what set_ad_status takes. `limit`
+    defaults to 200, maximum 500.
+    """
+    cid = _customer_id(customer_id)
+    limit = _bounded("limit", limit, 1, 500)
+    if status is None:
+        where = ["ad_group_ad.status != 'REMOVED'"]
+    else:
+        where = [f"ad_group_ad.status = '{_status(status, _ROW_STATUSES)}'"]
+    rows, complete = _select(
+        cid,
+        "campaign.id, ad_group.id, ad_group_ad.ad.id, ad_group_ad.ad.type, ad_group_ad.status, "
+        "ad_group_ad.policy_summary.approval_status, ad_group_ad.ad.final_urls",
+        "ad_group_ad",
+        where + _scope(campaign_id, ad_group_id),
+        "ad_group_ad.ad.id",
+        limit,
+    )
+    items = []
+    for row in rows:
+        ad_group_ad = row.get("ad_group_ad", {})
+        ad = ad_group_ad.get("ad", {})
+        items.append({
+            "ad_id": ad.get("id"),
+            "ad_group_id": row.get("ad_group", {}).get("id"),
+            "campaign_id": row.get("campaign", {}).get("id"),
+            "type": ad.get("type"),
+            "status": ad_group_ad.get("status"),
+            "approval_status": ad_group_ad.get("policy_summary", {}).get("approval_status"),
+            "final_urls": ad.get("final_urls", []),
+        })
+    return {"customer_id": cid, "ads": items, "rows_returned": len(items), "complete": complete}
+
+
+def search_terms(
+    customer_id: str,
+    date_from: str,
+    date_to: str,
+    campaign_id: str | None = None,
+    limit: int = 200,
+    profile: str | None = None,
+) -> dict[str, Any]:
+    """Search terms report between `date_from` and `date_to` (YYYY-MM-DD, inclusive), highest
+    cost first: search term, its status (ADDED, EXCLUDED, ADDED_EXCLUDED or NONE), campaign and
+    ad group IDs, the matched keyword's text, match type and criterion ID, cost (micros),
+    clicks, impressions and conversions. The matched keyword's own status is not available from
+    this report; look it up with keywords. One row per term, ad group and matched keyword.
+    `limit` defaults to 200, maximum 500.
+    """
+    cid = _customer_id(customer_id)
+    limit = _bounded("limit", limit, 1, 500)
+    start, end = _date(date_from, "date_from"), _date(date_to, "date_to")
+    if start > end:
+        raise _Failure("invalid_argument", "date_from must not be after date_to.")
+    rows, complete = _select(
+        cid,
+        "search_term_view.search_term, search_term_view.status, campaign.id, ad_group.id, "
+        "segments.keyword.info.text, segments.keyword.info.match_type, "
+        "segments.keyword.ad_group_criterion, metrics.cost_micros, metrics.clicks, "
+        "metrics.impressions, metrics.conversions",
+        "search_term_view",
+        [f"segments.date BETWEEN '{start.isoformat()}' AND '{end.isoformat()}'"]
+        + _scope(campaign_id),
+        "metrics.cost_micros DESC",
+        limit,
+    )
+    items = []
+    for row in rows:
+        view = row.get("search_term_view", {})
+        keyword = row.get("segments", {}).get("keyword", {})
+        metrics = row.get("metrics", {})
+        items.append({
+            "search_term": view.get("search_term"),
+            "status": view.get("status"),
+            "campaign_id": row.get("campaign", {}).get("id"),
+            "ad_group_id": row.get("ad_group", {}).get("id"),
+            "keyword_text": keyword.get("info", {}).get("text"),
+            "keyword_match_type": keyword.get("info", {}).get("match_type"),
+            "keyword_criterion_id": _criterion_id(keyword.get("ad_group_criterion")),
+            "cost_micros": int(metrics.get("cost_micros", 0)),
+            "clicks": int(metrics.get("clicks", 0)),
+            "impressions": int(metrics.get("impressions", 0)),
+            "conversions": float(metrics.get("conversions", 0)),
+        })
+    return {"customer_id": cid, "date_range": {"start": start.isoformat(), "end": end.isoformat()},
+            "search_terms": items, "rows_returned": len(items), "complete": complete}
+
+
+def asset_group_assets(
+    customer_id: str,
+    campaign_id: str | None = None,
+    asset_group_id: str | None = None,
+    limit: int = 200,
+    profile: str | None = None,
+) -> dict[str, Any]:
+    """List Performance Max asset group asset links (not REMOVED): campaign and asset group IDs,
+    field type, asset ID, asset type, asset name or text, link status and primary status. API
+    v25 has no asset performance label; primary_status (ELIGIBLE, LIMITED, NOT_ELIGIBLE,
+    PAUSED, PENDING) is the serving state Google reports. The IDs and field types are what
+    update_asset_group_assets takes. `limit` defaults to 200, maximum 500.
+    """
+    cid = _customer_id(customer_id)
+    limit = _bounded("limit", limit, 1, 500)
+    where = ["campaign.advertising_channel_type = 'PERFORMANCE_MAX'",
+             "asset_group_asset.status != 'REMOVED'"]
+    if asset_group_id is not None:
+        where.append(f"asset_group.id = {_id(asset_group_id, 'asset_group_id')}")
+    rows, complete = _select(
+        cid,
+        "campaign.id, asset_group.id, asset_group_asset.field_type, asset_group_asset.status, "
+        "asset_group_asset.primary_status, asset.id, asset.type, asset.name, asset.text_asset.text",
+        "asset_group_asset",
+        where + _scope(campaign_id),
+        "asset_group.id, asset_group_asset.field_type",
+        limit,
+    )
+    items = []
+    for row in rows:
+        link = row.get("asset_group_asset", {})
+        asset = row.get("asset", {})
+        items.append({
+            "campaign_id": row.get("campaign", {}).get("id"),
+            "asset_group_id": row.get("asset_group", {}).get("id"),
+            "field_type": link.get("field_type"),
+            "asset_id": asset.get("id"),
+            "asset_type": asset.get("type"),
+            "name": asset.get("name"),
+            "text": asset.get("text_asset", {}).get("text"),
+            "status": link.get("status"),
+            "primary_status": link.get("primary_status"),
+        })
+    return {"customer_id": cid, "assets": items, "rows_returned": len(items),
+            "complete": complete}
+
+
 TOOLS: tuple[tuple[str, str, Callable[..., dict[str, Any]]], ...] = (
     ("list_accounts", "List Google Ads accounts", list_accounts),
     ("run_gaql", "Run a GAQL query", run_gaql),
@@ -417,6 +677,10 @@ TOOLS: tuple[tuple[str, str, Callable[..., dict[str, Any]]], ...] = (
     ("account_audit", "Audit a Google Ads account", account_audit),
     ("anomalies_and_pacing", "Find anomalies and budget pacing", anomalies_and_pacing),
     ("change_history", "Show recent account changes", change_history),
+    ("keywords", "List keywords", keywords),
+    ("ads", "List ads", ads),
+    ("search_terms", "Search terms report", search_terms),
+    ("asset_group_assets", "List Performance Max asset group assets", asset_group_assets),
 )
 
 
@@ -499,7 +763,7 @@ def _classify(exc: Exception) -> tuple[str, str]:
     if isinstance(exc, (auth_errors.RefreshError, auth_errors.DefaultCredentialsError)):
         return "auth_required", _HINTS["auth_required"]
     if isinstance(exc, GoogleAdsException):
-        # Error messages and field paths can echo submitted data; only the codes are read.
+        # Error messages and trigger values can echo submitted data; only the codes are read.
         codes = set()
         for error in exc.failure.errors:
             kind = error.error_code._pb.WhichOneof("error_code")
@@ -546,8 +810,570 @@ def _guarded(fn: Callable[..., dict[str, Any]], provider_factory) -> Callable[..
         except Exception as exc:
             category, hint = _classify(exc)
             log.warning("%s failed: %s (%s)", fn.__name__, category, type(exc).__name__)
-            return {"error": category, "hint": hint}
+            out = {"error": category, "hint": hint}
+            if isinstance(exc, _Failure) and exc.errors:
+                out["errors"] = exc.errors
+            return out
 
+    return tool
+
+
+CONFIRM_TTL_SECONDS = 600
+MAX_PENDING_CONFIRMS = 100
+_CONFIRM_RE = re.compile(r"[0-9a-f]{32}")
+_STALE_CONFIRM = (
+    "confirm is unknown, expired, already used or was issued for a different request. Nothing "
+    "was sent. Call again without confirm for a new dry run, check it, then confirm."
+)
+_CONFIRM_HINT = (
+    "Google Ads validated this request (validate_only); nothing was changed. To send exactly "
+    "this request once, repeat the call with identical arguments plus confirm within 10 "
+    "minutes; a token works once."
+)
+_CONFLICT_HINT = (
+    "The resources changed since the dry run. Nothing was sent. Run the dry run again and "
+    "review it."
+)
+_UNKNOWN_OUTCOME = (
+    "The write was sent but no answer came back, so it may have been applied. Read the "
+    "resources before trying again."
+)
+_ENABLE_PAUSE = ("ENABLED", "PAUSED")
+# No client deadline means a hung mutate never returns; 60 s covers 200 operations.
+_WRITE_TIMEOUT_SECONDS = 60.0
+_WRITE_HINTS = {
+    "permission_denied": (
+        "These credentials cannot change this account. The Google Ads user needs Standard or "
+        "Admin access, and the profile's manager account must manage the customer."
+    ),
+    "invalid_argument": (
+        "Google Ads rejected the change; errors lists the codes and field paths. Nothing was "
+        "changed."
+    ),
+    "not_found": "The resource to change was not found or is not accessible with this profile.",
+}
+_pending: dict[str, tuple[str, str, float]] = {}
+_pending_lock = threading.Lock()
+
+
+def _arguments(local: dict[str, Any]) -> dict[str, Any]:
+    return {key: value for key, value in local.items() if key not in ("confirm", "gate")}
+
+
+def _digest(value: Any) -> str:
+    return hashlib.sha256(json.dumps(value, sort_keys=True, default=str).encode()).hexdigest()
+
+
+def _issue(digest: str, reviewed: str) -> str:
+    now = time.monotonic()
+    token = secrets.token_hex(16)
+    with _pending_lock:
+        for old in [t for t, (_, _, at) in _pending.items() if now - at > CONFIRM_TTL_SECONDS]:
+            del _pending[old]
+        _pending[token] = (digest, reviewed, now)
+        while len(_pending) > MAX_PENDING_CONFIRMS:
+            del _pending[next(iter(_pending))]
+    return token
+
+
+def _check_confirm(confirm) -> None:
+    if confirm is not None and (not isinstance(confirm, str) or not _CONFIRM_RE.fullmatch(confirm)):
+        raise _Failure("invalid_argument", _STALE_CONFIRM)
+
+
+def _refusal(gate: Callable[[], Any]) -> dict[str, Any] | None:
+    refusal = gate()
+    if refusal is None:
+        return None
+    if isinstance(refusal, dict):
+        return refusal
+    return {"error": "permission_denied", "hint": "The host does not allow writes."}
+
+
+def _api_errors(exc: Exception) -> list[dict] | None:
+    """Error codes and field paths only: messages and trigger values can echo the request."""
+    from google.ads.googleads.errors import GoogleAdsException
+
+    if not isinstance(exc, GoogleAdsException):
+        return None
+    errors = []
+    for error in itertools.islice(exc.failure.errors, _MAX_WRITE_ITEMS):
+        kind = error.error_code._pb.WhichOneof("error_code")
+        value = getattr(getattr(error.error_code, kind), "name", "") if kind else ""
+        path = "".join(
+            f".{element.field_name}" + (f"[{element.index}]" if element._pb.HasField("index") else "")
+            for element in error.location.field_path_elements
+        )
+        errors.append({"code": f"{kind}.{value}" if kind else "unknown",
+                       "field_path": path.lstrip(".") or None})
+    return errors
+
+
+def _mutate(client, service: str, method: str, request_type: str, cid: str, operations: list,
+            validate_only: bool):
+    request = client.get_type(request_type)
+    request.customer_id = cid
+    request.operations.extend(operations)
+    request.validate_only = validate_only
+    try:
+        # A retried write could be applied twice.
+        return getattr(client.get_service(service), method)(
+            request=request, retry=None, timeout=_WRITE_TIMEOUT_SECONDS)
+    except Exception as exc:
+        category, hint = _classify(exc)
+        hint = _WRITE_HINTS.get(category, hint)
+        if not validate_only and category == "upstream_error":
+            hint = _UNKNOWN_OUTCOME
+        raise _Failure(category, hint, _api_errors(exc)) from None
+
+
+def _review(tool: str, arguments: dict, confirm: str | None, gate: Callable[[], Any], target: str,
+            state: Any, head: dict[str, Any], send: Callable[[bool], Any]) -> dict[str, Any]:
+    """Dry run: validate_only and a token. Confirmed: gate, redeem, then send once."""
+    digest = _digest({"tool": tool, **arguments})
+    reviewed = _digest(state)
+    if confirm is None:
+        send(True)
+        return {"dry_run": True, **head, "validated": True, "confirm": _issue(digest, reviewed),
+                "confirm_expires_in": CONFIRM_TTL_SECONDS, "hint": _CONFIRM_HINT}
+    refusal = _refusal(gate)
+    if refusal is not None:
+        return refusal
+    with _pending_lock:
+        entry = _pending.pop(confirm, None)
+    if entry is None or time.monotonic() - entry[2] > CONFIRM_TTL_SECONDS or entry[0] != digest:
+        raise _Failure("invalid_argument", _STALE_CONFIRM)
+    if entry[1] != reviewed:
+        raise _Failure("conflict", _CONFLICT_HINT)
+    try:
+        response = send(False)
+    except Exception as exc:
+        log.info("gads write %s %s outcome=%s", tool, target, _classify(exc)[0])
+        raise
+    log.info("gads write %s %s outcome=ok", tool, target)
+    return {"dry_run": False, **head, "applied": len(response.results),
+            "resource_names": [result.resource_name for result in response.results]}
+
+
+def _writable(row: dict) -> None:
+    if row.get("campaign", {}).get("advertising_channel_type") == "VIDEO":
+        raise _Failure("not_supported", _HINTS["not_supported"])
+
+
+def _found(ids: list[str], rows: dict[str, dict], label: str) -> list[dict]:
+    missing = [i for i in ids if i not in rows]
+    if missing:
+        raise _Failure("not_found", f"No {label} with ID {', '.join(missing[:20])} was found.")
+    return [rows[i] for i in ids]
+
+
+def set_keyword_status(
+    customer_id: str,
+    ad_group_id: str,
+    criterion_ids: list[str],
+    status: str,
+    confirm: str | None = None,
+    profile: str | None = None,
+    *,
+    gate: Callable[[], Any],
+) -> dict[str, Any]:
+    """Set up to 200 keywords of one ad group to ENABLED or PAUSED in one mutate. Take the IDs
+    from keywords. A call without confirm changes nothing: it reads the keywords, validates the
+    update with Google Ads (validate_only) and returns each keyword's current and new status
+    plus a single-use confirm token valid for 10 minutes. The identical call with that token
+    sends the update once. If a keyword changed in between, nothing is sent and the result is
+    conflict. Keywords in Video campaigns return not_supported.
+    """
+    arguments = _arguments(locals())
+    import gads_client
+
+    cid = _customer_id(customer_id)
+    ag = _id(ad_group_id, "ad_group_id")
+    ids = _ids(criterion_ids, "criterion_ids")
+    status = _status(status, _ENABLE_PAUSE)
+    _check_confirm(confirm)
+    rows = gads_client.search_stream(cid, f"""
+        SELECT ad_group_criterion.criterion_id, ad_group_criterion.status,
+          ad_group_criterion.keyword.text, ad_group_criterion.keyword.match_type,
+          campaign.advertising_channel_type
+        FROM ad_group_criterion
+        WHERE ad_group.id = {ag} AND ad_group_criterion.type = 'KEYWORD'
+          AND ad_group_criterion.criterion_id IN ({', '.join(ids)})""")
+    state = _found(ids, {r["ad_group_criterion"]["criterion_id"]: r for r in rows}, "keyword")
+    changes = []
+    for row in state:
+        _writable(row)
+        criterion = row["ad_group_criterion"]
+        changes.append({
+            "criterion_id": criterion["criterion_id"],
+            "text": criterion.get("keyword", {}).get("text"),
+            "match_type": criterion.get("keyword", {}).get("match_type"),
+            "status": criterion.get("status"),
+            "new_status": status,
+        })
+    client = gads_client.build_client()
+    operations = []
+    for criterion_id in ids:
+        op = client.get_type("AdGroupCriterionOperation")
+        op.update.resource_name = f"customers/{cid}/adGroupCriteria/{ag}~{criterion_id}"
+        op.update.status = getattr(client.enums.AdGroupCriterionStatusEnum, status)
+        op.update_mask.paths.append("status")
+        operations.append(op)
+    head = {"customer_id": cid, "ad_group_id": ag, "changes": changes}
+    return _review(
+        "set_keyword_status", arguments, confirm, gate, f"customers/{cid}/adGroups/{ag}", state,
+        head, lambda validate_only: _mutate(
+            client, "AdGroupCriterionService", "mutate_ad_group_criteria",
+            "MutateAdGroupCriteriaRequest", cid, operations, validate_only))
+
+
+def set_ad_status(
+    customer_id: str,
+    ad_group_id: str,
+    ad_ids: list[str],
+    status: str,
+    confirm: str | None = None,
+    profile: str | None = None,
+    *,
+    gate: Callable[[], Any],
+) -> dict[str, Any]:
+    """Set up to 200 ads of one ad group to ENABLED or PAUSED in one mutate. Take the IDs from
+    ads. A call without confirm changes nothing: it reads the ads, validates the update with
+    Google Ads (validate_only) and returns each ad's current and new status plus a single-use
+    confirm token valid for 10 minutes. The identical call with that token sends the update
+    once. If an ad changed in between, nothing is sent and the result is conflict. Ads in Video
+    campaigns return not_supported.
+    """
+    arguments = _arguments(locals())
+    import gads_client
+
+    cid = _customer_id(customer_id)
+    ag = _id(ad_group_id, "ad_group_id")
+    ids = _ids(ad_ids, "ad_ids")
+    status = _status(status, _ENABLE_PAUSE)
+    _check_confirm(confirm)
+    rows = gads_client.search_stream(cid, f"""
+        SELECT ad_group_ad.ad.id, ad_group_ad.ad.type, ad_group_ad.status,
+          campaign.advertising_channel_type
+        FROM ad_group_ad
+        WHERE ad_group.id = {ag} AND ad_group_ad.ad.id IN ({', '.join(ids)})""")
+    state = _found(ids, {r["ad_group_ad"]["ad"]["id"]: r for r in rows}, "ad")
+    changes = []
+    for row in state:
+        _writable(row)
+        ad_group_ad = row["ad_group_ad"]
+        changes.append({"ad_id": ad_group_ad["ad"]["id"], "type": ad_group_ad["ad"].get("type"),
+                        "status": ad_group_ad.get("status"), "new_status": status})
+    client = gads_client.build_client()
+    operations = []
+    for ad_id in ids:
+        op = client.get_type("AdGroupAdOperation")
+        op.update.resource_name = f"customers/{cid}/adGroupAds/{ag}~{ad_id}"
+        op.update.status = getattr(client.enums.AdGroupAdStatusEnum, status)
+        op.update_mask.paths.append("status")
+        operations.append(op)
+    head = {"customer_id": cid, "ad_group_id": ag, "changes": changes}
+    return _review(
+        "set_ad_status", arguments, confirm, gate, f"customers/{cid}/adGroups/{ag}", state, head,
+        lambda validate_only: _mutate(client, "AdGroupAdService", "mutate_ad_group_ads",
+                                      "MutateAdGroupAdsRequest", cid, operations, validate_only))
+
+
+def update_campaign_schedule(
+    customer_id: str,
+    campaign_id: str,
+    end_date: str | None = None,
+    start_date: str | None = None,
+    confirm: str | None = None,
+    profile: str | None = None,
+    *,
+    gate: Callable[[], Any],
+) -> dict[str, Any]:
+    """Change a campaign's end date and, while the campaign has not started yet, its start date
+    (YYYY-MM-DD, customer time zone). The end is sent as end_date_time "YYYY-MM-DD 23:59:59" and
+    the start as start_date_time "YYYY-MM-DD 00:00:00". A call without confirm changes nothing:
+    it reads the campaign, validates the update with Google Ads (validate_only) and returns the
+    current and new values plus a single-use confirm token valid for 10 minutes. Google Ads
+    rejects a start change on a started campaign (CANNOT_MODIFY_START_DATE_IF_ALREADY_STARTED)
+    and dates in the past (CANNOT_SET_DATE_TO_PAST). The identical call with that token sends
+    the update once; if the campaign changed in between, nothing is sent and the result is
+    conflict. Video campaigns return not_supported.
+    """
+    arguments = _arguments(locals())
+    import gads_client
+
+    cid = _customer_id(customer_id)
+    campaign = _id(campaign_id, "campaign_id")
+    if end_date is None and start_date is None:
+        raise _Failure("invalid_argument", "Pass end_date, start_date or both.")
+    end = None if end_date is None else _date(end_date, "end_date")
+    start = None if start_date is None else _date(start_date, "start_date")
+    if start and end and start > end:
+        raise _Failure("invalid_argument", "start_date must not be after end_date.")
+    _check_confirm(confirm)
+    rows = gads_client.search_stream(cid, f"""
+        SELECT campaign.id, campaign.status, campaign.advertising_channel_type,
+          campaign.start_date_time, campaign.end_date_time
+        FROM campaign WHERE campaign.id = {campaign}""")
+    if not rows:
+        raise _Failure("not_found", f"No campaign with ID {campaign} was found.")
+    _writable(rows[0])
+    current = rows[0]["campaign"]
+    client = gads_client.build_client()
+    op = client.get_type("CampaignOperation")
+    op.update.resource_name = f"customers/{cid}/campaigns/{campaign}"
+    changes = {}
+    for field, day, clock in (("start_date_time", start, "00:00:00"),
+                              ("end_date_time", end, "23:59:59")):
+        if day is not None:
+            value = f"{day.isoformat()} {clock}"
+            setattr(op.update, field, value)
+            op.update_mask.paths.append(field)
+            changes[field] = {"current": current.get(field), "new": value}
+    head = {"customer_id": cid, "campaign_id": campaign, "campaign_status": current.get("status"),
+            "advertising_channel_type": current.get("advertising_channel_type"),
+            "changes": changes}
+    return _review(
+        "update_campaign_schedule", arguments, confirm, gate, op.update.resource_name, rows, head,
+        lambda validate_only: _mutate(client, "CampaignService", "mutate_campaigns",
+                                      "MutateCampaignsRequest", cid, [op], validate_only))
+
+
+def set_conversion_action_goal(
+    customer_id: str,
+    conversion_action_id: str,
+    primary: bool,
+    confirm: str | None = None,
+    profile: str | None = None,
+    *,
+    gate: Callable[[], Any],
+) -> dict[str, Any]:
+    """Make a conversion action primary (counted in Conversions and used for bidding) or
+    secondary (reported in All conversions only) for its goal, by setting primary_for_goal. A
+    call without confirm changes nothing: it reads the action, validates the update with Google
+    Ads (validate_only) and returns the current and new value plus a single-use confirm token
+    valid for 10 minutes. The identical call with that token sends the update once; if the
+    action changed in between, nothing is sent and the result is conflict.
+    """
+    arguments = _arguments(locals())
+    import gads_client
+
+    cid = _customer_id(customer_id)
+    action = _id(conversion_action_id, "conversion_action_id")
+    if type(primary) is not bool:
+        raise _Failure("invalid_argument", "primary must be true or false.")
+    _check_confirm(confirm)
+    rows = gads_client.search_stream(cid, f"""
+        SELECT conversion_action.id, conversion_action.name, conversion_action.status,
+          conversion_action.category, conversion_action.primary_for_goal
+        FROM conversion_action WHERE conversion_action.id = {action}""")
+    if not rows:
+        raise _Failure("not_found", f"No conversion action with ID {action} was found.")
+    current = rows[0]["conversion_action"]
+    client = gads_client.build_client()
+    op = client.get_type("ConversionActionOperation")
+    op.update.resource_name = f"customers/{cid}/conversionActions/{action}"
+    op.update.primary_for_goal = primary
+    op.update_mask.paths.append("primary_for_goal")
+    head = {"customer_id": cid, "conversion_action_id": action, "name": current.get("name"),
+            "category": current.get("category"), "status": current.get("status"),
+            "changes": {"primary_for_goal": {"current": current.get("primary_for_goal", False),
+                                             "new": primary}}}
+    return _review(
+        "set_conversion_action_goal", arguments, confirm, gate, op.update.resource_name, rows,
+        head, lambda validate_only: _mutate(
+            client, "ConversionActionService", "mutate_conversion_actions",
+            "MutateConversionActionsRequest", cid, [op], validate_only))
+
+
+def _strings(values, name: str) -> list[str]:
+    if values is None:
+        return []
+    if not isinstance(values, list) or any(
+            not isinstance(value, str) or not value.strip() for value in values):
+        raise _Failure("invalid_argument", f"{name} must be a list of non-empty strings.")
+    cleaned = [value.strip() for value in values]
+    if len(set(cleaned)) != len(cleaned):
+        raise _Failure("invalid_argument", f"{name} contains duplicates.")
+    return cleaned
+
+
+def add_placement_exclusions(
+    customer_id: str,
+    campaign_id: str,
+    placements: list[str] | None = None,
+    youtube_channel_ids: list[str] | None = None,
+    youtube_video_ids: list[str] | None = None,
+    mobile_app_ids: list[str] | None = None,
+    confirm: str | None = None,
+    profile: str | None = None,
+    *,
+    gate: Callable[[], Any],
+) -> dict[str, Any]:
+    """Exclude up to 200 placements from one campaign in one atomic mutate, as campaign-level
+    negative criteria: website `placements` (URL or domain), `youtube_channel_ids` (UC...),
+    `youtube_video_ids` and `mobile_app_ids` ("{platform}-{app id}": "1-123456789" for an iOS
+    App Store ID, "2-com.example.app" for an Android package name). A call without confirm changes
+    nothing: it reads the campaign, validates the exclusions with Google Ads (validate_only) and
+    returns them plus a single-use confirm token valid for 10 minutes. The identical call with
+    that token sends them once; either all are added or none. Video campaigns return
+    not_supported.
+    """
+    arguments = _arguments(locals())
+    import gads_client
+
+    cid = _customer_id(customer_id)
+    campaign = _id(campaign_id, "campaign_id")
+    targets = [(kind, value) for kind, values in (
+        ("placement", _strings(placements, "placements")),
+        ("youtube_channel", _strings(youtube_channel_ids, "youtube_channel_ids")),
+        ("youtube_video", _strings(youtube_video_ids, "youtube_video_ids")),
+        ("mobile_application", _strings(mobile_app_ids, "mobile_app_ids")),
+    ) for value in values]
+    if not 1 <= len(targets) <= _MAX_WRITE_ITEMS:
+        raise _Failure("invalid_argument", f"Pass 1 to {_MAX_WRITE_ITEMS} exclusions in total.")
+    _check_confirm(confirm)
+    rows = gads_client.search_stream(cid, f"""
+        SELECT campaign.id, campaign.status, campaign.advertising_channel_type
+        FROM campaign WHERE campaign.id = {campaign}""")
+    if not rows:
+        raise _Failure("not_found", f"No campaign with ID {campaign} was found.")
+    _writable(rows[0])
+    client = gads_client.build_client()
+    campaign_path = f"customers/{cid}/campaigns/{campaign}"
+    fields = {"placement": "url", "youtube_channel": "channel_id",
+              "youtube_video": "video_id", "mobile_application": "app_id"}
+    operations = []
+    for kind, value in targets:
+        op = client.get_type("CampaignCriterionOperation")
+        op.create.campaign = campaign_path
+        op.create.negative = True
+        setattr(getattr(op.create, kind), fields[kind], value)
+        operations.append(op)
+    head = {"customer_id": cid, "campaign_id": campaign,
+            "advertising_channel_type": rows[0]["campaign"].get("advertising_channel_type"),
+            "exclusions": [{"type": kind, "value": value} for kind, value in targets]}
+    return _review(
+        "add_placement_exclusions", arguments, confirm, gate, campaign_path, rows, head,
+        lambda validate_only: _mutate(
+            client, "CampaignCriterionService", "mutate_campaign_criteria",
+            "MutateCampaignCriteriaRequest", cid, operations, validate_only))
+
+
+def _asset_links(items, name: str) -> list[tuple[str, str]]:
+    from google.ads.googleads.v25.enums.types.asset_field_type import AssetFieldTypeEnum
+
+    if items is None:
+        return []
+    known = set(AssetFieldTypeEnum.AssetFieldType.__members__) - {"UNSPECIFIED", "UNKNOWN"}
+    if not isinstance(items, list) or any(
+            not isinstance(item, dict) or set(item) != {"asset_id", "field_type"}
+            for item in items):
+        raise _Failure("invalid_argument",
+                       f"{name} items must be objects with exactly asset_id and field_type.")
+    links = []
+    for item in items:
+        if item["field_type"] not in known:
+            raise _Failure("invalid_argument",
+                           f"{name}: field_type must be an AssetFieldType such as HEADLINE, "
+                           "DESCRIPTION, LONG_HEADLINE, MARKETING_IMAGE, LOGO or YOUTUBE_VIDEO.")
+        links.append((_id(item["asset_id"], f"{name} asset_id"), item["field_type"]))
+    return links
+
+
+def update_asset_group_assets(
+    customer_id: str,
+    asset_group_id: str,
+    add: list[dict] | None = None,
+    remove: list[dict] | None = None,
+    confirm: str | None = None,
+    profile: str | None = None,
+    *,
+    gate: Callable[[], Any],
+) -> dict[str, Any]:
+    """Link existing assets to a Performance Max asset group and unlink others in one atomic
+    mutate, unlinks first. Items in `add` and `remove` are {"asset_id": "...", "field_type":
+    "HEADLINE"}; up to 200 in total. Unlinking removes only the link, not the asset; nothing is
+    uploaded. A call without confirm changes nothing: it reads the group's current links,
+    validates the change with Google Ads (validate_only, which also checks the group's asset
+    minimums) and returns it plus a single-use confirm token valid for 10 minutes. The identical
+    call with that token sends it once; if the group's links changed in between, nothing is
+    sent and the result is conflict.
+    """
+    arguments = _arguments(locals())
+    import gads_client
+
+    cid = _customer_id(customer_id)
+    group = _id(asset_group_id, "asset_group_id")
+    adds, removes = _asset_links(add, "add"), _asset_links(remove, "remove")
+    links = adds + removes
+    if not 1 <= len(links) <= _MAX_WRITE_ITEMS:
+        raise _Failure("invalid_argument", f"Pass 1 to {_MAX_WRITE_ITEMS} add and remove items.")
+    if len(set(links)) != len(links):
+        raise _Failure("invalid_argument", "add and remove contain the same link twice.")
+    _check_confirm(confirm)
+    groups = gads_client.search_stream(cid, f"""
+        SELECT asset_group.id, asset_group.status, campaign.id, campaign.advertising_channel_type
+        FROM asset_group WHERE asset_group.id = {group}""")
+    if not groups:
+        raise _Failure("not_found", f"No asset group with ID {group} was found.")
+    _writable(groups[0])
+    current = gads_client.search_stream(cid, f"""
+        SELECT asset.id, asset_group_asset.field_type, asset_group_asset.status
+        FROM asset_group_asset
+        WHERE asset_group.id = {group} AND asset_group_asset.status != 'REMOVED'""")
+    linked = sorted((row["asset"]["id"], row["asset_group_asset"]["field_type"]) for row in current)
+    missing = [f"{asset}/{field}" for asset, field in removes if (asset, field) not in linked]
+    if missing:
+        raise _Failure("not_found", f"Not linked to this asset group: {', '.join(missing[:20])}.")
+    client = gads_client.build_client()
+    group_path = f"customers/{cid}/assetGroups/{group}"
+    operations = []
+    for asset, field in removes:
+        op = client.get_type("AssetGroupAssetOperation")
+        op.remove = f"customers/{cid}/assetGroupAssets/{group}~{asset}~{field}"
+        operations.append(op)
+    for asset, field in adds:
+        op = client.get_type("AssetGroupAssetOperation")
+        op.create.asset_group = group_path
+        op.create.asset = f"customers/{cid}/assets/{asset}"
+        op.create.field_type = getattr(client.enums.AssetFieldTypeEnum, field)
+        operations.append(op)
+    head = {"customer_id": cid, "asset_group_id": group,
+            "remove": [{"asset_id": a, "field_type": f} for a, f in removes],
+            "add": [{"asset_id": a, "field_type": f} for a, f in adds],
+            "linked_before": len(linked)}
+    return _review(
+        "update_asset_group_assets", arguments, confirm, gate, group_path, [groups, linked], head,
+        lambda validate_only: _mutate(
+            client, "AssetGroupAssetService", "mutate_asset_group_assets",
+            "MutateAssetGroupAssetsRequest", cid, operations, validate_only))
+
+
+WRITE_TOOLS: tuple[tuple[str, str, Callable[..., dict[str, Any]], bool], ...] = (
+    ("set_keyword_status", "Enable or pause keywords", set_keyword_status, False),
+    ("set_ad_status", "Enable or pause ads", set_ad_status, False),
+    ("update_campaign_schedule", "Change campaign start or end date", update_campaign_schedule,
+     False),
+    ("set_conversion_action_goal", "Make a conversion action primary or secondary",
+     set_conversion_action_goal, False),
+    ("add_placement_exclusions", "Exclude placements from a campaign", add_placement_exclusions,
+     False),
+    ("update_asset_group_assets", "Link or unlink Performance Max asset group assets",
+     update_asset_group_assets, True),
+)
+
+
+def _bind_gate(fn: Callable[..., Any], gate: Callable[[], Any]) -> Callable[..., Any]:
+    def tool(*args, **kwargs):
+        return fn(*args, **kwargs, gate=gate)
+
+    # FastMCP builds the input schema from __signature__; the gate is not an argument.
+    signature = inspect.signature(fn, eval_str=True)
+    tool.__signature__ = signature.replace(
+        parameters=[p for p in signature.parameters.values() if p.name != "gate"])
+    tool.__name__ = fn.__name__
+    tool.__doc__ = fn.__doc__
     return tool
 
 
@@ -574,6 +1400,29 @@ def register(server, prefix: str = "", provider_factory=None) -> int:
             annotations=annotations,
         )
     return len(TOOLS)
+
+
+def register_writes(server, gate, prefix: str = "", provider_factory=None) -> int:
+    """Add every tool in WRITE_TOOLS to a host FastMCP and return how many were added.
+
+    gate() is called before every confirmed write, never for a dry run. It returns None to
+    allow the write, or an error dict that the tool returns unchanged without sending anything.
+    provider_factory works as in register().
+    """
+    from mcp.types import ToolAnnotations
+
+    if not callable(gate):
+        raise TypeError("gate must be a callable that returns None or an error dict")
+    for name, title, fn, destructive in WRITE_TOOLS:
+        server.add_tool(
+            _guarded(_bind_gate(fn, gate), provider_factory),
+            name=prefix + name,
+            title=title,
+            description=inspect.cleandoc(fn.__doc__),
+            annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=destructive,
+                                        idempotentHint=False, openWorldHint=True),
+        )
+    return len(WRITE_TOOLS)
 
 
 def main() -> None:

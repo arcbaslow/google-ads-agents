@@ -149,7 +149,7 @@ The [hooks guide](docs/HOOKS.md) covers the session-expiry guard and opt-in Tele
 
 ## MCP
 
-[`scripts/gads_mcp.py`](scripts/gads_mcp.py) exposes six read-only tools to an MCP client. Run it as a standalone stdio server, or import it in a host FastMCP server and call `register(server, prefix="", provider_factory=None)`, which returns the number of tools added.
+[`scripts/gads_mcp.py`](scripts/gads_mcp.py) exposes ten read-only tools to an MCP client, plus six gated write tools for a host. Run it as a standalone stdio server (read tools only), or import it in a host FastMCP server and call `register(server, prefix="", provider_factory=None)` and `register_writes(server, gate, prefix="", provider_factory=None)`, which return the number of tools added.
 
 ```bash
 python -m pip install -e ".[mcp]"
@@ -164,8 +164,25 @@ gads-mcp
 | `account_audit` | Status and summary of every read-only audit agent, plus the top findings by severity. Raw agent data, the website tag scan and saved snapshots are not included. | 50 / 200 |
 | `anomalies_and_pacing` | Day-level metric anomalies and month-to-date budget pacing, together or separately. | 50 / 200 per list |
 | `change_history` | Recent `change_event` entries over up to 30 days. Actor emails are reduced to their domain. | 50 / 200 |
+| `keywords` | Keyword criteria (not negatives) with criterion ID, ad group ID, campaign ID, text, match type and status. Filters: campaign, ad group, status (default all but `REMOVED`). | 200 / 500 |
+| `ads` | Ads with ad ID, ad group ID, campaign ID, type, status, policy approval status and final URLs. Same filters as `keywords`. | 200 / 500 |
+| `search_terms` | Search terms between two dates, highest cost first: term status, campaign and ad group IDs, matched keyword text, match type and criterion ID, cost, clicks, impressions, conversions. The matched keyword's own status is not in this report; look it up with `keywords`. | 200 / 500 |
+| `asset_group_assets` | Performance Max asset group links: field type, asset ID, type, name or text, link status and primary status. API v25 has no asset performance label. | 200 / 500 |
 
-Every tool is annotated read-only. The tools call only `GoogleAdsService` search, `CustomerService.ListAccessibleCustomers` and `GoogleAdsFieldService` search. They do not write to an account, save audit snapshots, send notifications or change local credential files. Bounded results include `rows_returned` and `complete`; `complete: false` means rows were cut by `limit`, or an audit agent failed. Failures return `{"error": "<category>", "hint": "..."}`, where the category is `auth_required`, `permission_denied`, `quota_exceeded`, `invalid_argument`, `not_found` or `upstream_error`. Provider error messages are not passed through.
+Every tool registered by `register` is annotated read-only. These tools call only `GoogleAdsService` search, `CustomerService.ListAccessibleCustomers` and `GoogleAdsFieldService` search. They do not write to an account, save audit snapshots, send notifications or change local credential files. Bounded results include `rows_returned` and `complete`; `complete: false` means rows were cut by `limit`, or an audit agent failed. Failures return `{"error": "<category>", "hint": "..."}`, where the category is `auth_required`, `permission_denied`, `quota_exceeded`, `invalid_argument`, `not_found` or `upstream_error`. Provider error messages are not passed through.
+
+**Write tools.** `register_writes` adds these tools. Each takes `confirm` and `profile`.
+
+| Tool | Changes | Mutate |
+| --- | --- | --- |
+| `set_keyword_status` | Up to 200 keywords of one ad group to `ENABLED` or `PAUSED` (`ad_group_criterion.status`). | `AdGroupCriterionService` |
+| `set_ad_status` | Up to 200 ads of one ad group to `ENABLED` or `PAUSED` (`ad_group_ad.status`). | `AdGroupAdService` |
+| `update_campaign_schedule` | Campaign `end_date_time` (`YYYY-MM-DD 23:59:59`) and, before the campaign starts, `start_date_time` (`YYYY-MM-DD 00:00:00`). | `CampaignService` |
+| `set_conversion_action_goal` | `conversion_action.primary_for_goal`: primary or secondary for its goal. | `ConversionActionService` |
+| `add_placement_exclusions` | Up to 200 campaign-level negative placement, YouTube channel, YouTube video and mobile app criteria, all or none. | `CampaignCriterionService` |
+| `update_asset_group_assets` | Links existing assets to a Performance Max asset group and unlinks others, unlinks first, all or none. No upload. Annotated destructive. | `AssetGroupAssetService` |
+
+A call without `confirm` changes nothing: it reads the targets, sends the operations with `validate_only`, and returns current and new values with a single-use `confirm` token valid for 10 minutes. The identical call with that token calls the host's `gate()`, then sends the same operations once, with a 60-second deadline and no automatic retry. Different arguments or a used token return `invalid_argument`; targets that changed since the dry run return `conflict`; in both cases nothing is sent. A gate refusal is returned unchanged and keeps the token. A Google Ads rejection returns `errors` with only the API's error codes and field paths. A timeout or server error on a confirmed write says the change may have been applied; read before trying again. Video campaigns return `not_supported`, since the API rejects every change to them. Each confirmed write logs one line: `gads write <tool> <resource> outcome=<ok|category>`. The OAuth scope is the same `adwords` scope the read tools use; the Google Ads user needs Standard or Admin access to the account.
 
 **Authentication.** Every tool accepts `profile`. The standalone server uses the active local profile from `gads_auth.py`, including the 24-hour session cap. It never switches profiles: naming a different profile returns `invalid_argument` with the `--use-profile` command to run locally. A host can pass `provider_factory(profile)`, which returns a `gads_provider.CredentialProvider`, to supply its own per-profile credentials. A developer token is optional. `credentials_present()` reports whether a local credentials file, a `GOOGLE_APPLICATION_CREDENTIALS` file or the gcloud application-default credentials file exists. It does not open these files or make a network call.
 
@@ -197,7 +214,7 @@ The suites use mocks and temporary credential stores. They cover auth profiles a
 
 ## Releases
 
-**[v0.6.1](https://github.com/arcbaslow/google-ads-agents/releases/tag/v0.6.1)** - see the [release notes](docs/RELEASE_NOTES.md) for this release and the [changelog](CHANGELOG.md) for project history.
+**[v0.7.0](https://github.com/arcbaslow/google-ads-agents/releases/tag/v0.7.0)** - see the [release notes](docs/RELEASE_NOTES.md) for this release and the [changelog](CHANGELOG.md) for project history.
 
 GitHub Releases include downloadable artifacts and checksums. Package-registry publication is a separate, opt-in workflow; a GitHub release does not imply that the same version is available on PyPI or npm. Maintainers can follow the [release guide](docs/RELEASING.md).
 

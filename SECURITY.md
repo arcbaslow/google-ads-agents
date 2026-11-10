@@ -14,9 +14,12 @@ Please do not file public issues for security problems.
   token, refresh tokens, or the per-MCC profile store
 - Bypasses of the 24-hour session cap in `gads_auth.enforce_session()`
 - Bypasses of the `PreToolUse` session gate in `hooks/session_gate.py`
-- Any mutate path that reaches the Google Ads API without the
+- Any CLI mutate path that reaches the Google Ads API without the
   confirm-before-write prompt (`gads_apply.py`, `gads_creation.py`,
   placement exclusion writes)
+- Any MCP write tool in `scripts/gads_mcp.py` that sends a change
+  without a matching single-use confirm token and the host's gate, or
+  that sends one confirmed change more than once
 - The hosted sign-in service under `webapp/`: OAuth state and CSRF
   handling, session fixation, token encryption at rest
   (`app/crypto.py`), and the token store (`app/tokenstore_db.py`)
@@ -33,8 +36,9 @@ Please do not file public issues for security problems.
 - Bugs in the upstream Google Ads API itself - report those to Google
 - Issues that require an attacker with shell access to the user's
   machine (they already own `~/.claude/` and the gcloud config dir)
-- Spend caused by an approved mutate. The toolkit shows the operation
-  JSON and waits for `y/N`; approving it is the operator's decision.
+- Spend caused by an approved mutate. The CLI shows the operation JSON
+  and waits for `y/N`; the MCP tools return a validated dry run and need
+  a confirm token. Approving it is the operator's decision.
 
 ## Where credentials live on disk
 
@@ -63,10 +67,19 @@ deliberate: an ADC refresh token outlives a working session, and a
 long-lived agent shell holding write scope on an ad account is a
 standing risk.
 
-**Confirm before mutate.** Every write builds the operation JSON, shows
-it, and waits for `y/N`. `validate_only=True` is used first where the
-API supports it. New campaigns are created `PAUSED`. A PR that adds a
-write path without this pattern will not be merged.
+**Confirm before mutate.** Every CLI write builds the operation JSON,
+shows it, and waits for `y/N`. `validate_only=True` is used first where
+the API supports it. New campaigns are created `PAUSED`.
+
+The MCP write tools (`register_writes` in `scripts/gads_mcp.py`) have no
+terminal, so they confirm differently. A call without `confirm` reads
+the targets, sends the operations with `validate_only=True` and returns
+what would change plus a single-use token, valid 10 minutes and bound to
+the tool, every argument and the state that was read. The identical call
+with that token runs the host's `gate()`, then sends the same operations
+once with no automatic retry. Changed arguments, a reused token or
+changed state send nothing. A PR that adds a write path without one of
+these two patterns will not be merged.
 
 ## Disclosure timeline
 
