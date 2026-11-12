@@ -1148,9 +1148,12 @@ def set_conversion_action_goal(
     *,
     gate: Callable[[], Any],
 ) -> dict[str, Any]:
-    """Make a conversion action primary (counted in Conversions and used for bidding) or
-    secondary (reported in All conversions only) for its goal, by setting primary_for_goal. A
-    call without confirm changes nothing: it reads the action, validates the update with Google
+    """Set primary_for_goal on a conversion action. Primary means the action counts in
+    Conversions and is used for bidding in campaigns that optimize toward its standard goal;
+    secondary means it is reported in All conversions only. An action that is part of a custom
+    conversion goal keeps driving bidding and Conversions for campaigns on that custom goal
+    whatever this value is, so secondary does not by itself stop optimization there. A call
+    without confirm changes nothing: it reads the action, validates the update with Google
     Ads (validate_only) and returns the current and new value plus a single-use confirm token
     valid for 10 minutes. The identical call with that token sends the update once; if the
     action changed in between, nothing is sent and the result is conflict.
@@ -1322,7 +1325,9 @@ def update_asset_group_assets(
         SELECT asset.id, asset_group_asset.field_type, asset_group_asset.status
         FROM asset_group_asset
         WHERE asset_group.id = {group} AND asset_group_asset.status != 'REMOVED'""")
-    linked = sorted((row["asset"]["id"], row["asset_group_asset"]["field_type"]) for row in current)
+    reviewed = sorted((row["asset"]["id"], row["asset_group_asset"]["field_type"],
+                       row["asset_group_asset"]["status"]) for row in current)
+    linked = [link[:2] for link in reviewed]
     missing = [f"{asset}/{field}" for asset, field in removes if (asset, field) not in linked]
     if missing:
         raise _Failure("not_found", f"Not linked to this asset group: {', '.join(missing[:20])}.")
@@ -1344,7 +1349,7 @@ def update_asset_group_assets(
             "add": [{"asset_id": a, "field_type": f} for a, f in adds],
             "linked_before": len(linked)}
     return _review(
-        "update_asset_group_assets", arguments, confirm, gate, group_path, [groups, linked], head,
+        "update_asset_group_assets", arguments, confirm, gate, group_path, [groups, reviewed], head,
         lambda validate_only: _mutate(
             client, "AssetGroupAssetService", "mutate_asset_group_assets",
             "MutateAssetGroupAssetsRequest", cid, operations, validate_only))

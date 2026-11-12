@@ -68,6 +68,7 @@ class Account:
     def __init__(self):
         self.channel = "DEMAND_GEN"
         self.keyword_status = "ENABLED"
+        self.link_status = "ENABLED"
         self.mutate_error: Exception | None = None
 
     def rows(self, query):
@@ -99,7 +100,7 @@ class Account:
         if resource == "asset_group_asset":
             return [{"campaign": {"id": int(CAMPAIGN)}, "asset_group": {"id": 41},
                      "asset": {"id": 51, "type_": "TEXT", "text_asset": {"text": "Example"}},
-                     "asset_group_asset": {"field_type": "HEADLINE", "status": "ENABLED",
+                     "asset_group_asset": {"field_type": "HEADLINE", "status": self.link_status,
                                            "primary_status": "ELIGIBLE"}}]
         if resource == "search_term_view":
             return [{"search_term_view": {"search_term": "example query", "status": "NONE"},
@@ -377,6 +378,15 @@ def test_changed_state_is_a_conflict(account):
     dry = call(server, "set_keyword_status", **WRITES[0][1])
     account.keyword_status = "PAUSED"
     out = call(server, "set_keyword_status", **WRITES[0][1], confirm=dry["confirm"])
+    assert out["error"] == "conflict"
+    assert len(mutates(account)) == 1
+
+
+def test_changed_link_status_is_a_conflict(account):
+    server = build_writes(Gate())
+    dry = call(server, "update_asset_group_assets", **WRITES[5][1])
+    account.link_status = "PAUSED"
+    out = call(server, "update_asset_group_assets", **WRITES[5][1], confirm=dry["confirm"])
     assert out["error"] == "conflict"
     assert len(mutates(account)) == 1
 

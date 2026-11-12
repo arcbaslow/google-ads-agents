@@ -35,11 +35,11 @@ def test_search_writer_validates_atomic_paused_request(service, monkeypatch, cap
 
     monkeypatch.setattr("builtins.input", approve)
     gads_creation.create_search_campaign("123", SPEC, dry)
-    assert [c.kwargs["validate_only"] for c in service.mutate.call_args_list] == ([True] if dry else [True, False])
+    assert [c.kwargs["request"]["validate_only"] for c in service.mutate.call_args_list] == ([True] if dry else [True, False])
     for call in service.mutate.call_args_list:
-        assert call.kwargs["partial_failure"] is False
+        assert call.kwargs["request"]["partial_failure"] is False
         assert call.kwargs["retry"] is None
-        ops = call.kwargs["mutate_operations"]
+        ops = call.kwargs["request"]["mutate_operations"]
         campaign = ops[1].campaign_operation.create
         assert campaign.status.name == "PAUSED"
         assert campaign._pb.WhichOneof("campaign_bidding_strategy") == "maximize_conversions"
@@ -63,7 +63,7 @@ def test_search_validation_failure_cannot_leave_budget(service, monkeypatch):
     with pytest.raises(ValueError):
         gads_creation.create_search_campaign("123", SPEC, False)
     assert service.mutate.call_count == 1
-    assert service.mutate.call_args.kwargs["validate_only"] is True
+    assert service.mutate.call_args.kwargs["request"]["validate_only"] is True
 
 
 @pytest.mark.parametrize("key,value", [("budget_micros", -1), ("budget_micros", True),
@@ -157,15 +157,15 @@ def test_creation_operation_order_and_gate(api, writer, base, dry, capsys):
     assert result == {"status": "validated" if dry else "applied", "customer_id": "123",
                       "response": {}, "limitations": result["limitations"]}
     assert '"PAUSED"' in capsys.readouterr().err
-    assert [c.kwargs["validate_only"] for c in ads.mutate.call_args_list] == ([True] if dry else [True, False])
+    assert [c.kwargs["request"]["validate_only"] for c in ads.mutate.call_args_list] == ([True] if dry else [True, False])
     campaigns.mutate_campaigns.assert_not_called()
     dg = base is DG_SPEC
     criterion_kind = "ad_group_criterion_operation" if dg else "campaign_criterion_operation"
     for call in ads.mutate.call_args_list:
-        assert call.kwargs["customer_id"] == "123"
-        assert call.kwargs["partial_failure"] is False
+        assert call.kwargs["request"]["customer_id"] == "123"
+        assert call.kwargs["request"]["partial_failure"] is False
         assert call.kwargs["retry"] is None
-        ops = call.kwargs["mutate_operations"]
+        ops = call.kwargs["request"]["mutate_operations"]
         assert [op._pb.WhichOneof("operation") for op in ops] == [
             "campaign_budget_operation", "campaign_operation", "ad_group_operation",
             criterion_kind, criterion_kind, "ad_group_ad_operation",
@@ -220,7 +220,7 @@ def test_demand_gen_bidding(api, bidding, field, target, value):
     if target:
         spec[target] = value
     gads_creation.create_demand_gen_campaign("123", spec)
-    campaign = api[0].mutate.call_args.kwargs["mutate_operations"][1].campaign_operation.create
+    campaign = api[0].mutate.call_args.kwargs["request"]["mutate_operations"][1].campaign_operation.create
     assert campaign._pb.WhichOneof("campaign_bidding_strategy") == field
     assert gads_client._msg_to_dict(getattr(campaign, field)._pb) == (
         {target: str(value) if target == "target_cpa_micros" else value} if target else {})
@@ -238,7 +238,7 @@ def test_demand_gen_channels_ads_and_automation(api, selected, video):
     spec["asset_automation"] = {key: "OPTED_IN" if i % 2 else "OPTED_OUT"
                                 for i, key in enumerate(automation_types)}
     gads_creation.create_demand_gen_campaign("123", spec)
-    ops = api[0].mutate.call_args.kwargs["mutate_operations"]
+    ops = api[0].mutate.call_args.kwargs["request"]["mutate_operations"]
     assert not ops[1].campaign_operation.create.asset_automation_settings
     controls = ops[2].ad_group_operation.create.demand_gen_ad_group_settings.channel_controls
     assert controls.channel_config.name == "UNSPECIFIED"
@@ -286,7 +286,7 @@ def test_app_goals_and_ads(api, goal, strategy, needs_actions, app_store, app_id
     if needs_actions:
         spec["selective_optimization_conversion_actions"] = ["customers/123/conversionActions/9"]
     gads_creation.create_app_campaign("123", spec)
-    ops = api[0].mutate.call_args.kwargs["mutate_operations"]
+    ops = api[0].mutate.call_args.kwargs["request"]["mutate_operations"]
     campaign = ops[1].campaign_operation.create
     assert campaign._pb.WhichOneof("campaign_bidding_strategy") == strategy
     if strategy == "target_cpa":
@@ -318,7 +318,7 @@ def test_app_engagement_targets_user_list(api, goal, strategy, needs_actions):
                 selective_optimization_conversion_actions=["customers/123/conversionActions/9"],
                 user_list="customers/123/userLists/5")
     gads_creation.create_app_campaign("123", spec)
-    ops = api[0].mutate.call_args.kwargs["mutate_operations"]
+    ops = api[0].mutate.call_args.kwargs["request"]["mutate_operations"]
     assert ops[1].campaign_operation.create.advertising_channel_sub_type.name == "APP_CAMPAIGN_FOR_ENGAGEMENT"
     audience = ops[-2].ad_group_criterion_operation.create
     assert audience.ad_group == "customers/123/adGroups/-3"
@@ -350,7 +350,7 @@ def test_demand_gen_campaign_total_budget(api):
     spec = copy.deepcopy(DG_SPEC)
     spec.update(budget_period="CAMPAIGN_TOTAL", start_date="2026-11-01", end_date="2026-11-30")
     gads_creation.create_demand_gen_campaign("123", spec)
-    ops = api[0].mutate.call_args.kwargs["mutate_operations"]
+    ops = api[0].mutate.call_args.kwargs["request"]["mutate_operations"]
     budget = ops[0].campaign_budget_operation.create
     assert budget.period.name == "CUSTOM_PERIOD" and budget.total_amount_micros == 50000000
     assert not budget._pb.HasField("amount_micros")
@@ -382,7 +382,7 @@ def test_creation_deduplicates_criteria_and_all_languages(api, writer, base):
     else:
         spec["ad"].update(marketing_images=None, square_marketing_images=["customers/123/assets/10"])
     writer("123", spec)
-    ops = api[0].mutate.call_args.kwargs["mutate_operations"]
+    ops = api[0].mutate.call_args.kwargs["request"]["mutate_operations"]
     assert len(ops) == 5
     assert not ops[-1].ad_group_ad_operation.create.ad.resource_name
     assert "resource_name" not in gads_client._msg_to_dict(ops[-1].ad_group_ad_operation.create.ad._pb)
@@ -568,7 +568,7 @@ def test_validation_failure_stops_apply(api, writer, base):
     with pytest.raises(ValueError, match="API validation failed"):
         writer("123", copy.deepcopy(base), False)
     assert mutation.call_count == 1
-    assert mutation.call_args.kwargs["validate_only"] is True
+    assert mutation.call_args.kwargs["request"]["validate_only"] is True
 
 
 @pytest.mark.parametrize("dry", [True, False])
@@ -590,11 +590,11 @@ def test_app_target_update(api, dry, roas):
     ads.mutate.assert_not_called()
     field = "target_roas.target_roas" if roas else "target_cpa.target_cpa_micros"
     assert result["field"] == field
-    assert [c.kwargs["validate_only"] for c in campaigns.mutate_campaigns.call_args_list] == ([True] if dry else [True, False])
+    assert [c.kwargs["request"]["validate_only"] for c in campaigns.mutate_campaigns.call_args_list] == ([True] if dry else [True, False])
     for call in campaigns.mutate_campaigns.call_args_list:
-        assert call.kwargs["customer_id"] == "123"
-        assert len(call.kwargs["operations"]) == 1
-        op = call.kwargs["operations"][0]
+        assert call.kwargs["request"]["customer_id"] == "123"
+        assert len(call.kwargs["request"]["operations"]) == 1
+        op = call.kwargs["request"]["operations"][0]
         assert list(op.update_mask.paths) == [field]
         assert gads_client._msg_to_dict(op.update._pb) == {
             "resource_name": "customers/123/campaigns/42",

@@ -43,21 +43,28 @@ def reviewed_mutate(mutation, *, customer_id: str, operations: list,
     action = "Validate only" if validate_only else "Validate, then apply"
     review_request(preview, action)
 
-    response = mutation(customer_id=customer_id, operations=copy.deepcopy(reviewed),
-                        validate_only=True)
+    def send(validate):
+        # validate_only exists only on the request message, not as a method keyword.
+        return mutation(request={"customer_id": customer_id,
+                                 "operations": copy.deepcopy(reviewed),
+                                 "validate_only": validate})
+
+    response = send(True)
     if validate_only:
         return response
-    return mutation(customer_id=customer_id, operations=copy.deepcopy(reviewed),
-                    validate_only=False)
+    return send(False)
 
 
 def reviewed_atomic_mutate(client, customer_id: str, operations: list, validate_only: bool):
     """Use GoogleAdsService for linked resources, without partial writes or retries."""
     service = client.get_service("GoogleAdsService")
 
-    def send(*, customer_id, operations, validate_only):
-        return service.mutate(customer_id=customer_id, mutate_operations=operations,
-                              validate_only=validate_only, partial_failure=False, retry=None)
+    def send(*, request):
+        return service.mutate(
+            request={"customer_id": request["customer_id"],
+                     "mutate_operations": request["operations"],
+                     "validate_only": request["validate_only"], "partial_failure": False},
+            retry=None)
 
     print("Atomic request: partial_failure=false; automatic retries disabled.", file=sys.stderr)
     return reviewed_mutate(send, customer_id=customer_id, operations=operations,
