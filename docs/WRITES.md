@@ -5,6 +5,13 @@ prompt, and validates before application. Piped stdin and EOF cancel. The
 local 24-hour session gate still applies. YouTube uploads are the one step the
 API cannot validate; see the upload section.
 
+Each validate and apply request has a 60-second deadline. If the apply request
+times out, the service is unavailable or Google Ads reports an internal error,
+the writer stops with `outcome_unknown`: the change may have been applied, so
+read the account before trying again. The deadline was sized for a few hundred
+operations; split a negatives or placements list of thousands into several
+runs, because a slower request times out while Google Ads may still apply it.
+
 ## MCP write tools
 
 The write tools in `scripts/gads_mcp.py` are registered by a host with
