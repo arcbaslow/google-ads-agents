@@ -2,6 +2,8 @@
 
 ## [0.7.0] - 2026-11-10
 
+- Send `validate_only` and `partial_failure` inside the request message in the CLI writers, as google-ads 33 requires; the service methods reject them as keyword arguments.
+
 - Add four bounded MCP read tools (`keywords`, `ads`, `search_terms`, `asset_group_assets`) and six gated MCP write tools through `register_writes(server, gate, prefix, provider_factory)`: keyword and ad status, campaign start and end dates, conversion action primary or secondary, campaign placement exclusions, and Performance Max asset group links. A dry run validates with `validate_only` and returns a single-use confirm token; the confirmed call sends once after the host gate. Failures return only Google Ads error codes and field paths.
 
 - Tag brand campaigns in pacing and recommendations, by campaign-name pattern or by brand share of search-term clicks against per-customer `brand_terms` (`scripts/brand_rules.json`, threshold 0.7). Brand underpacing gets its own finding and spend-expanding recommendations on brand campaigns are listed under `brand_hold`; agents do not propose scaling brand unless the user asks explicitly. The audit now sends 20 search requests, plus one cached search-terms request when brand terms are configured.
@@ -82,6 +84,7 @@
 
 - Report the package version in the MCP server handshake instead of the mcp SDK version.
 - Read `brand_rules.json` as UTF-8, so Cyrillic brand patterns match on Windows.
+- `update_asset_group_assets` returns `conflict` when a link's status changed between the dry run and the confirmed call.
 
 ## [0.6.1] - 2026-09-08
 

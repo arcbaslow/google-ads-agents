@@ -45,8 +45,8 @@ def test_optimized_targeting(api, capsys, enabled):
     _, row, service = api
     result = gads_apply.apply_optimized_targeting("123", {"ad_group_id": "8", "enabled": enabled}, False)
     calls = service("AdGroupService").mutate_ad_groups.call_args_list
-    assert [c.kwargs["validate_only"] for c in calls] == [True, False]
-    op = calls[-1].kwargs["operations"][0]
+    assert [c.kwargs["request"]["validate_only"] for c in calls] == [True, False]
+    op = calls[-1].kwargs["request"]["operations"][0]
     assert op.update.resource_name == row.ad_group.resource_name
     assert op.update.optimized_targeting_enabled is enabled
     assert list(op.update_mask.paths) == ["optimized_targeting_enabled"]
@@ -79,8 +79,8 @@ def test_placement_routing_and_scope(api, campaign_id):
     else:
         mutation = service("CustomerNegativeCriterionService").mutate_customer_negative_criteria
         service("GoogleAdsService").search.assert_not_called()
-    assert [c.kwargs["validate_only"] for c in mutation.call_args_list] == [True, False]
-    operations = mutation.call_args.kwargs["operations"]
+    assert [c.kwargs["request"]["validate_only"] for c in mutation.call_args_list] == [True, False]
+    operations = mutation.call_args.kwargs["request"]["operations"]
     assert operations[0].create.placement.url == "example.test"
     assert operations[1].create.youtube_channel.channel_id == "UCabc"
     assert operations[2].create.youtube_channel.channel_id == "UCdef"

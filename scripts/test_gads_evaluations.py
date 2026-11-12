@@ -40,7 +40,7 @@ def test_offline_safety_contract(case, tmp_path, monkeypatch, capsys):
 
         monkeypatch.setattr("builtins.input", approve)
         exit_code = gads_creation.main()
-        assert [c.kwargs["validate_only"] for c in service.mutate.call_args_list] == case["expected_calls"]
+        assert [c.kwargs["request"]["validate_only"] for c in service.mutate.call_args_list] == case["expected_calls"]
         if case.get("expected_error") == "invalid_request":
             build.assert_not_called()
     elif case["runner"] == "query":

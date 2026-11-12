@@ -68,10 +68,10 @@ def test_brand_create_and_attach_atomic(writer, capsys, monkeypatch, dry):
     monkeypatch.setattr("builtins.input", approve)
     result = gads_brands.exclude("123", ["9", "9"], ["/m/acme"], dry)
     assert result["managed_list_name"] == name
-    assert [c.kwargs["validate_only"] for c in service.mutate.call_args_list] == ([True] if dry else [True, False])
+    assert [c.kwargs["request"]["validate_only"] for c in service.mutate.call_args_list] == ([True] if dry else [True, False])
     for call in service.mutate.call_args_list:
-        assert call.kwargs["retry"] is None and call.kwargs["partial_failure"] is False
-        ops = call.kwargs["mutate_operations"]
+        assert call.kwargs["retry"] is None and call.kwargs["request"]["partial_failure"] is False
+        ops = call.kwargs["request"]["mutate_operations"]
         assert len(ops) == 3
         assert ops[0].shared_set_operation.create.type_.name == "BRANDS"
         ref = ops[0].shared_set_operation.create.resource_name
@@ -91,7 +91,7 @@ def test_brand_reuse_never_edits_list(writer):
     service, rows, name = writer
     existing(rows, name)
     gads_brands.exclude("123", ["9"], ["/m/acme"], False)
-    ops = service.mutate.call_args.kwargs["mutate_operations"]
+    ops = service.mutate.call_args.kwargs["request"]["mutate_operations"]
     assert len(ops) == 1
     assert ops[0].campaign_criterion_operation.create.brand_list.shared_set == "customers/123/sharedSets/7"
 
@@ -136,7 +136,7 @@ def test_brand_cancel_and_validation_failure(writer, monkeypatch):
     with pytest.raises(ValueError):
         gads_brands.exclude("123", ["9"], ["/m/acme"], False)
     assert service.mutate.call_count == 1
-    assert service.mutate.call_args.kwargs["validate_only"] is True
+    assert service.mutate.call_args.kwargs["request"]["validate_only"] is True
 
 
 @pytest.mark.parametrize("campaigns,brands", [([], ["/m/acme"]), (["9"], []), (["9 OR 1=1"], ["x"])])

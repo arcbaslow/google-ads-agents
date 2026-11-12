@@ -1,5 +1,7 @@
 """Exercise every supported writer with real message types and mocked services."""
 
+import importlib
+import inspect
 import json
 import sys
 from functools import partial
@@ -10,7 +12,7 @@ import gads_apply
 import gads_client
 import gads_creative
 import pytest
-from gads_mutate import MutationCancelled
+from gads_mutate import MutationCancelled, reviewed_atomic_mutate, reviewed_mutate
 from google.ads.googleads.client import GoogleAdsClient
 from google.auth.credentials import AnonymousCredentials
 
@@ -90,13 +92,13 @@ def test_writer_previews_before_input_and_validates_before_apply(writer, monkeyp
 
     monkeypatch.setattr("builtins.input", approve)
     call(dry)
-    assert [c.kwargs["validate_only"] for c in mutation.call_args_list] == (
+    assert [c.kwargs["request"]["validate_only"] for c in mutation.call_args_list] == (
         [True] if dry else [True, False])
     from google.protobuf.json_format import MessageToDict
     for c in mutation.call_args_list:
-        assert c.kwargs["customer_id"] == previews[0]["customer_id"]
+        assert c.kwargs["request"]["customer_id"] == previews[0]["customer_id"]
         assert [MessageToDict(op._pb, preserving_proto_field_name=True)
-                for op in c.kwargs["operations"]] == previews[0]["operations"]
+                for op in c.kwargs["request"]["operations"]] == previews[0]["operations"]
 
 
 def test_validation_failure_never_applies(writer, monkeypatch):
@@ -106,7 +108,7 @@ def test_validation_failure_never_applies(writer, monkeypatch):
     with pytest.raises(ValueError, match="invalid operation"):
         call(False)
     assert mutation.call_count == 1
-    assert mutation.call_args.kwargs["validate_only"] is True
+    assert mutation.call_args.kwargs["request"]["validate_only"] is True
 
 
 @pytest.mark.parametrize("module,args", [
@@ -124,3 +126,56 @@ def test_conflicting_modes_rejected_before_io(module, args, monkeypatch):
     with pytest.raises(SystemExit) as exc:
         module.main()
     assert exc.value.code == 2
+
+
+def _real_method(module, method):
+    client = importlib.import_module(f"google.ads.googleads.v25.services.services.{module}.client")
+    return getattr(getattr(client, module.title().replace("_", "") + "Client"), method)
+
+
+def _request_type(module, name):
+    return getattr(importlib.import_module(f"google.ads.googleads.v25.services.types.{module}"), name)
+
+
+@pytest.fixture
+def approved(monkeypatch):
+    monkeypatch.setattr(sys.stdin, "isatty", lambda: True)
+    monkeypatch.setattr("builtins.input", lambda: "y")
+
+
+@pytest.mark.parametrize("module,method", [
+    ("campaign_criterion_service", "mutate_campaign_criteria"),
+    ("customer_negative_criterion_service", "mutate_customer_negative_criteria"),
+    ("ad_group_service", "mutate_ad_groups"),
+    ("campaign_service", "mutate_campaigns"),
+    ("asset_service", "mutate_assets"),
+    ("ad_service", "mutate_ads"),
+    ("asset_group_asset_service", "mutate_asset_group_assets"),
+    ("campaign_asset_service", "mutate_campaign_assets"),
+])
+def test_reviewed_mutate_matches_real_service_signature(approved, module, method):
+    sent = Mock()
+    reviewed_mutate(sent, customer_id="123", operations=[], validate_only=True)
+    assert sent.call_args.args == ()
+    assert set(sent.call_args.kwargs) == {"request"}
+    real = _real_method(module, method)
+    assert "validate_only" not in inspect.signature(real).parameters
+    inspect.signature(real).bind(None, **sent.call_args.kwargs)
+    request = _request_type(module, method.title().replace("_", "") + "Request")
+    assert request(sent.call_args.kwargs["request"]).validate_only is True
+
+
+def test_atomic_mutate_matches_real_google_ads_service_signature(approved):
+    service = Mock()
+    client = Mock()
+    client.get_service.return_value = service
+    reviewed_atomic_mutate(client, "123", [], True)
+    real = _real_method("google_ads_service", "mutate")
+    assert "validate_only" not in inspect.signature(real).parameters
+    assert "partial_failure" not in inspect.signature(real).parameters
+    assert service.mutate.call_args.args == ()
+    assert set(service.mutate.call_args.kwargs) == {"request", "retry"}
+    inspect.signature(real).bind(None, **service.mutate.call_args.kwargs)
+    request = _request_type("google_ads_service", "MutateGoogleAdsRequest")(
+        service.mutate.call_args.kwargs["request"])
+    assert request.validate_only is True and request.partial_failure is False

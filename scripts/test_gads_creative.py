@@ -211,7 +211,7 @@ def test_upload_reviews_and_polling(api, monkeypatch, capsys):
     assert result["upload_resource"].endswith("/42")
     assert len(reviews) == 2
     sleep.assert_called_once_with(10)
-    assert [c.kwargs["validate_only"] for c in assets.call_args_list] == [True, False]
+    assert [c.kwargs["request"]["validate_only"] for c in assets.call_args_list] == [True, False]
     assert upload.call_args.kwargs["stream"].closed
 
 
@@ -324,8 +324,8 @@ def test_video_asset(api, dry):
     result = gads_creative.create_video_asset("123", "Abc_def-123", "Name", dry)
     assert result["status"] == ("validated" if dry else "applied")
     calls = service("AssetService").mutate_assets.call_args_list
-    assert [c.kwargs["validate_only"] for c in calls] == ([True] if dry else [True, False])
-    assert calls[0].kwargs["operations"][0].create.youtube_video_asset.youtube_video_id == "Abc_def-123"
+    assert [c.kwargs["request"]["validate_only"] for c in calls] == ([True] if dry else [True, False])
+    assert calls[0].kwargs["request"]["operations"][0].create.youtube_video_asset.youtube_video_id == "Abc_def-123"
 
 
 VRA_INPUT = {"videos": ["customers/123/assets/7"], "business_name": "Brand",
@@ -354,8 +354,8 @@ def test_edit_ad_exact_masks(api, payload, ad_type, channel, prefix):
     row.campaign.advertising_channel_type = channel
     result = gads_creative.edit_ad("123", "99", payload, False)
     calls = service("AdService").mutate_ads.call_args_list
-    assert [c.kwargs["validate_only"] for c in calls] == [True, False]
-    op = calls[-1].kwargs["operations"][0]
+    assert [c.kwargs["request"]["validate_only"] for c in calls] == [True, False]
+    op = calls[-1].kwargs["request"]["operations"][0]
     singular = {"business_name": "text"} if channel == "VIDEO" else {"long_headline": "text"}
     expected = {f"{prefix}.{key}" for key in payload if key not in singular and key != "control_spec"}
     expected |= {f"{prefix}.{key}.{leaf}" for key, leaf in singular.items()}
@@ -448,9 +448,9 @@ def test_display_partial_update_and_video_required_after_read(api):
     gads_creative.edit_ad("123", "99", {"headlines": ["Headline"]}, True)
     mutation = service("AdService").mutate_ads
     assert mutation.call_count == 1
-    op = mutation.call_args.kwargs["operations"][0]
+    op = mutation.call_args.kwargs["request"]["operations"][0]
     assert list(op.update_mask.paths) == ["responsive_display_ad.headlines"]
-    assert mutation.call_args.kwargs["validate_only"] is True
+    assert mutation.call_args.kwargs["request"]["validate_only"] is True
 
 
 @pytest.mark.parametrize("action,args", [
