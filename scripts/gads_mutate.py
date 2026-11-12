@@ -6,11 +6,19 @@ import copy
 import json
 import sys
 
+from google.api_core import exceptions as api_errors
 from google.protobuf.json_format import MessageToDict
+
+# Without a client deadline a hung mutate never returns.
+WRITE_TIMEOUT_SECONDS = 60
 
 
 class MutationCancelled(RuntimeError):
     """The operator did not explicitly approve the displayed request."""
+
+
+class MutationOutcomeUnknown(RuntimeError):
+    """The apply request was sent without a confirmed result."""
 
 
 def review_request(preview: dict, action: str) -> None:
@@ -47,24 +55,37 @@ def reviewed_mutate(mutation, *, customer_id: str, operations: list,
         # validate_only exists only on the request message, not as a method keyword.
         return mutation(request={"customer_id": customer_id,
                                  "operations": copy.deepcopy(reviewed),
-                                 "validate_only": validate})
+                                 "validate_only": validate},
+                        timeout=WRITE_TIMEOUT_SECONDS)
 
     response = send(True)
     if validate_only:
         return response
-    return send(False)
+    from google.ads.googleads.errors import GoogleAdsException
+
+    try:
+        return send(False)
+    except (api_errors.DeadlineExceeded, api_errors.ServiceUnavailable,
+            api_errors.InternalServerError) as exc:
+        raise MutationOutcomeUnknown("Apply was sent; no confirmed result") from exc
+    except GoogleAdsException as exc:
+        # Writes carry no idempotency key, so an internal error is treated as unknown.
+        if any(e.error_code._pb.WhichOneof("error_code") == "internal_error"
+               for e in exc.failure.errors):
+            raise MutationOutcomeUnknown("Apply was sent; Google Ads reported an internal error") from exc
+        raise
 
 
 def reviewed_atomic_mutate(client, customer_id: str, operations: list, validate_only: bool):
     """Use GoogleAdsService for linked resources, without partial writes or retries."""
     service = client.get_service("GoogleAdsService")
 
-    def send(*, request):
+    def send(*, request, timeout):
         return service.mutate(
             request={"customer_id": request["customer_id"],
                      "mutate_operations": request["operations"],
                      "validate_only": request["validate_only"], "partial_failure": False},
-            retry=None)
+            retry=None, timeout=timeout)
 
     print("Atomic request: partial_failure=false; automatic retries disabled.", file=sys.stderr)
     return reviewed_mutate(send, customer_id=customer_id, operations=operations,

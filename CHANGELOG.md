@@ -1,5 +1,9 @@
 # Changelog
 
+## [Unreleased]
+
+- Give the CLI writers a 60-second deadline on validate and apply requests. An apply request that times out, finds the service unavailable or gets an internal error from Google Ads now ends with `outcome_unknown` and a hint to read the account before retrying, instead of the retryable `temporarily_unavailable`.
+
 ## [0.7.0] - 2026-11-12
 
 - Send `validate_only` and `partial_failure` inside the request message in the CLI writers, as google-ads 33 requires; the service methods reject them as keyword arguments.

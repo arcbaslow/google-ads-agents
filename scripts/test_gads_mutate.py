@@ -12,8 +12,15 @@ import gads_apply
 import gads_client
 import gads_creative
 import pytest
-from gads_mutate import MutationCancelled, reviewed_atomic_mutate, reviewed_mutate
+from gads_mutate import (
+    WRITE_TIMEOUT_SECONDS,
+    MutationCancelled,
+    MutationOutcomeUnknown,
+    reviewed_atomic_mutate,
+    reviewed_mutate,
+)
 from google.ads.googleads.client import GoogleAdsClient
+from google.api_core import exceptions as api_errors
 from google.auth.credentials import AnonymousCredentials
 
 
@@ -101,6 +108,42 @@ def test_writer_previews_before_input_and_validates_before_apply(writer, monkeyp
                 for op in c.kwargs["request"]["operations"]] == previews[0]["operations"]
 
 
+def _ads_exception(error_code):
+    from google.ads.googleads.errors import GoogleAdsException
+    from google.ads.googleads.v25.errors.types.errors import GoogleAdsFailure
+
+    failure = GoogleAdsFailure(errors=[{"error_code": error_code, "message": "PRIVATE"}])
+    return GoogleAdsException(Mock(), Mock(), failure, "request-id")
+
+
+@pytest.mark.parametrize("failure", [
+    api_errors.DeadlineExceeded("PRIVATE"), api_errors.ServiceUnavailable("PRIVATE"),
+    api_errors.InternalServerError("PRIVATE"),
+    _ads_exception({"internal_error": "DEADLINE_EXCEEDED"})])
+def test_apply_without_a_result_is_an_unknown_outcome(approved, failure):
+    sent = Mock(side_effect=[None, failure])
+    with pytest.raises(MutationOutcomeUnknown) as raised:
+        reviewed_mutate(sent, customer_id="123", operations=[], validate_only=False)
+    assert raised.value.__cause__ is failure
+    assert "PRIVATE" not in str(raised.value)
+    assert sent.call_count == 2
+
+
+def test_rejected_apply_is_not_an_unknown_outcome(approved):
+    from google.ads.googleads.errors import GoogleAdsException
+
+    sent = Mock(side_effect=[None, _ads_exception({"mutate_error": "RESOURCE_NOT_FOUND"})])
+    with pytest.raises(GoogleAdsException):
+        reviewed_mutate(sent, customer_id="123", operations=[], validate_only=False)
+
+
+def test_timeout_on_validation_is_not_an_unknown_outcome(approved):
+    sent = Mock(side_effect=api_errors.DeadlineExceeded("PRIVATE"))
+    with pytest.raises(api_errors.DeadlineExceeded):
+        reviewed_mutate(sent, customer_id="123", operations=[], validate_only=False)
+    assert sent.call_count == 1
+
+
 def test_validation_failure_never_applies(writer, monkeypatch):
     call, mutation = writer
     monkeypatch.setattr("builtins.input", lambda: "y")
@@ -157,7 +200,8 @@ def test_reviewed_mutate_matches_real_service_signature(approved, module, method
     sent = Mock()
     reviewed_mutate(sent, customer_id="123", operations=[], validate_only=True)
     assert sent.call_args.args == ()
-    assert set(sent.call_args.kwargs) == {"request"}
+    assert set(sent.call_args.kwargs) == {"request", "timeout"}
+    assert sent.call_args.kwargs["timeout"] == WRITE_TIMEOUT_SECONDS
     real = _real_method(module, method)
     assert "validate_only" not in inspect.signature(real).parameters
     inspect.signature(real).bind(None, **sent.call_args.kwargs)
@@ -174,7 +218,8 @@ def test_atomic_mutate_matches_real_google_ads_service_signature(approved):
     assert "validate_only" not in inspect.signature(real).parameters
     assert "partial_failure" not in inspect.signature(real).parameters
     assert service.mutate.call_args.args == ()
-    assert set(service.mutate.call_args.kwargs) == {"request", "retry"}
+    assert set(service.mutate.call_args.kwargs) == {"request", "retry", "timeout"}
+    assert service.mutate.call_args.kwargs["timeout"] == WRITE_TIMEOUT_SECONDS
     inspect.signature(real).bind(None, **service.mutate.call_args.kwargs)
     request = _request_type("google_ads_service", "MutateGoogleAdsRequest")(
         service.mutate.call_args.kwargs["request"])

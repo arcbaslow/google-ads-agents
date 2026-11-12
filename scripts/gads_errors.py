@@ -10,11 +10,14 @@ from google.auth.exceptions import RefreshError
 
 def describe(exc: Exception) -> dict:
     from gads_auth import AuthRequiredError, SessionExpiredError
-    from gads_mutate import MutationCancelled
+    from gads_mutate import MutationCancelled, MutationOutcomeUnknown
 
     code, message, retryable = "unexpected_error", "Operation failed; inspect configuration and inputs.", False
     if isinstance(exc, MutationCancelled):
         code, message = "cancelled", "Operation cancelled; no changes sent."
+    elif isinstance(exc, MutationOutcomeUnknown):
+        code, message = ("outcome_unknown", "The write was sent without a confirmed result; it may "
+                         "have been applied. Read the account before trying again.")
     elif isinstance(exc, RefreshError):
         if exc.retryable:
             code, message, retryable = "temporarily_unavailable", "Authentication service temporarily unavailable.", True

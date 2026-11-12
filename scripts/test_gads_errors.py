@@ -107,3 +107,13 @@ def test_history_cli_does_not_echo_provider_text(monkeypatch, capsys):
     output = capsys.readouterr().out
     assert "PRIVATE" not in output
     assert json.loads(output)["error_code"] == "permission_denied"
+
+
+def test_unknown_write_outcome_is_not_retryable():
+    from gads_mutate import MutationOutcomeUnknown
+
+    result = gads_errors.describe(MutationOutcomeUnknown("PRIVATE"))
+    assert result["error_code"] == "outcome_unknown"
+    assert result["retryable"] is False
+    assert "may have been applied" in result["error"]
+    assert "PRIVATE" not in json.dumps(result)
