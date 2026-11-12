@@ -1,6 +1,6 @@
 # Google Ads Agents v0.7.0
 
-Release date: pending
+Release date: 2026-11-12
 
 This release extends the MCP server with keyword, ad, search-term and Performance Max asset reads, and adds gated write tools a host can register.
 

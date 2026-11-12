@@ -1,6 +1,6 @@
 # Changelog
 
-## [0.7.0] - 2026-11-10
+## [0.7.0] - 2026-11-12
 
 - Send `validate_only` and `partial_failure` inside the request message in the CLI writers, as google-ads 33 requires; the service methods reject them as keyword arguments.
 
