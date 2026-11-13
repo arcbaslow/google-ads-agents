@@ -32,6 +32,8 @@ that server does not invoke `gads_auth.enforce_session()` or this session hook.
 It is therefore not a drop-in route around a blocked local session. This pass
 did not install it, connect credentials or verify its runtime safety.
 
+The toolkit now covers label management, label associations for campaigns, ad groups and criteria, unlinked asset creation, local video upload and the historical-metrics status-filter hint from that server. Hosted writes use `_review`: a validate-only preview, a single-use token with a 10-minute TTL, the host gate, a state re-read and a conflict check, rather than Google's propose-and-confirm checksum. Video upload is a separate CLI with terminal `y/N`; the remote MCP server never reads local video files. Standalone MCP remains read-only.
+
 [cohnen/mcp-google-ads](https://github.com/cohnen/mcp-google-ads) documents GAQL
 and export workflows. The local exporter addresses that occasional reporting
 need without introducing a server. Verify all query fields against the

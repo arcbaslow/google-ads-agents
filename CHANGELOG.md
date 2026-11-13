@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+- Add MCP label management, label associations (campaigns, ad groups and ad group criteria; customer-level labels are not included) and unlinked asset creation through the existing single-use, 10-minute confirm-token flow with state re-read and conflict checks. Add the historical-metrics status-filter hint to `run_gaql`.
+- Add `gads_upload_video.py`: reviewed local video upload with PUBLIC/UNLISTED privacy, a 30-minute deadline, one upload session (the SDK may resend chunks within it) and unknown-outcome reporting. Returns the upload ID and a processing-state query without creating an asset.
+
 - Give the CLI writers a 60-second deadline on validate and apply requests. An apply request that times out, finds the service unavailable or gets an internal error from Google Ads now ends with `outcome_unknown` and a hint to read the account before retrying, instead of the retryable `temporarily_unavailable`.
 
 ## [0.7.0] - 2026-11-12

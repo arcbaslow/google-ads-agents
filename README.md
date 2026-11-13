@@ -139,7 +139,12 @@ python scripts/gads_creation.py --customer 1234567890 --context-file context.jso
 
 # Validate proposed negatives without applying them.
 python scripts/gads_apply.py --customer 1234567890 negatives --input negatives.json --validate-only --json
+
+# Review and upload a local video once (interactive terminal required).
+python scripts/gads_upload_video.py --customer 1234567890 --file video.mp4 --title "Product demo" --description "Product walkthrough" --json
 ```
+
+Video uploads default to `UNLISTED`; `--privacy PUBLIC` and `--channel-id` are optional. Uploads have no validate-only mode: the CLI previews the resolved file path, size and metadata, requires terminal `y/N`, and opens the upload session once with a 30-minute deadline. Within that session the SDK may resend chunks after a network error, which cannot create a second upload. It returns the upload resource, upload ID and a processing-state query for MCP `run_gaql`. Any failure after confirmation reports `outcome_unknown`.
 
 Campaign context produces a planning draft and does not verify measurement health. Separate strict `--search-spec`, `--demand-gen-spec` and `--app-spec` files create PAUSED campaigns atomically after review and validation; Video campaigns cannot be created through the API. See [bounded writes](docs/WRITES.md) for the required fields and limits.
 
@@ -149,7 +154,7 @@ The [hooks guide](docs/HOOKS.md) covers the session-expiry guard and opt-in Tele
 
 ## MCP
 
-[`scripts/gads_mcp.py`](scripts/gads_mcp.py) exposes ten read-only tools to an MCP client, plus six gated write tools for a host. Run it as a standalone stdio server (read tools only), or import it in a host FastMCP server and call `register(server, prefix="", provider_factory=None)` and `register_writes(server, gate, prefix="", provider_factory=None)`, which return the number of tools added.
+[`scripts/gads_mcp.py`](scripts/gads_mcp.py) exposes ten read-only tools to an MCP client, plus nine gated write tools for a host. Run it as a standalone stdio server (read tools only), or import it in a host FastMCP server and call `register(server, prefix="", provider_factory=None)` and `register_writes(server, gate, prefix="", provider_factory=None)`, which return the number of tools added.
 
 ```bash
 python -m pip install -e ".[mcp]"
@@ -181,6 +186,9 @@ Every tool registered by `register` is annotated read-only. These tools call onl
 | `set_conversion_action_goal` | `conversion_action.primary_for_goal`: primary or secondary for its goal. | `ConversionActionService` |
 | `add_placement_exclusions` | Up to 200 campaign-level negative placement, YouTube channel, YouTube video and mobile app criteria, all or none. | `CampaignCriterionService` |
 | `update_asset_group_assets` | Links existing assets to a Performance Max asset group and unlinks others, unlinks first, all or none. No upload. Annotated destructive. | `AssetGroupAssetService` |
+| `manage_labels` | Create, update supplied fields or remove one label. Names up to 80 characters, descriptions up to 200 and `#RRGGBB` colors. Annotated destructive. | `LabelService` |
+| `manage_label_associations` | Attach or remove a label on up to 200 campaigns, ad groups or ad group criteria. Customer-level labels are not supported yet. Checks existing links and refuses Video campaign targets. Annotated destructive. | Campaign, ad group and criterion label services |
+| `create_asset` | Create an unlinked text, image, YouTube video, sitelink, callout or structured snippet asset. Images are base64 PNG/JPEG/GIF up to 5120 KB; previews contain only MIME, byte count and SHA-256. Use `update_asset_group_assets` to link to PMax. | `AssetService` |
 
 A call without `confirm` changes nothing: it reads the targets, sends the operations with `validate_only`, and returns current and new values with a single-use `confirm` token valid for 10 minutes. The identical call with that token calls the host's `gate()`, then sends the same operations once, with a 60-second deadline and no automatic retry. Different arguments or a used token return `invalid_argument`; targets that changed since the dry run return `conflict`; in both cases nothing is sent. A gate refusal is returned unchanged and keeps the token. A Google Ads rejection returns `errors` with only the API's error codes and field paths. A timeout or server error on a confirmed write says the change may have been applied; read before trying again. Video campaigns return `not_supported`, since the API rejects every change to them. Each confirmed write logs one line: `gads write <tool> <resource> outcome=<ok|category>`. The OAuth scope is the same `adwords` scope the read tools use; the Google Ads user needs Standard or Admin access to the account.
 

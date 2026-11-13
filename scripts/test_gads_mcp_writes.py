@@ -241,15 +241,17 @@ def test_read_filters_are_validated(account, name, args):
 @pytest.mark.parametrize("prefix", ["", "ads_"])
 def test_write_inventory(prefix):
     server = FastMCP("test")
-    assert gads_mcp.register_writes(server, Gate(), prefix=prefix) == len(WRITES)
+    assert gads_mcp.register_writes(server, Gate(), prefix=prefix) == len(WRITES) + 3
     tools = {tool.name: tool for tool in asyncio.run(server.list_tools())}
-    assert set(tools) == {prefix + name for name in WRITE_NAMES}
+    assert set(tools) == {prefix + name for name in WRITE_NAMES + [
+        "manage_labels", "manage_label_associations", "create_asset"]}
     for name, tool in tools.items():
         assert tool.title and tool.description
         assert tool.annotations.readOnlyHint is False
         assert tool.annotations.idempotentHint is False
         assert tool.annotations.openWorldHint is True
-        assert tool.annotations.destructiveHint is (name == prefix + "update_asset_group_assets")
+        assert tool.annotations.destructiveHint is (name in {prefix + n for n in (
+            "update_asset_group_assets", "manage_labels", "manage_label_associations")})
         assert {"profile", "confirm"} <= set(tool.inputSchema["properties"])
         assert "gate" not in tool.inputSchema["properties"]
 

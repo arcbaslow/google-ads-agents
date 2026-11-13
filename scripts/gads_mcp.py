@@ -11,6 +11,8 @@ argument every tool exposes is consumed by that binding.
 
 from __future__ import annotations
 
+import base64
+import binascii
 import concurrent.futures
 import functools
 import hashlib
@@ -28,6 +30,7 @@ from contextvars import copy_context
 from datetime import date
 from pathlib import Path
 from typing import Any, Literal
+from urllib.parse import urlsplit
 
 import gads_provider
 
@@ -232,6 +235,12 @@ def run_gaql(
     `SELECT <fields> FROM <resource> [WHERE ...] [ORDER BY ...] [LIMIT n]` statement without
     PARAMETERS, comments or semicolons. Rows are bounded by the smaller of the query's LIMIT and
     `limit` (default 100, maximum 500). Use resource_metadata to discover fields.
+
+    Status fields (campaign.status, ad_group.status, ad_group_criterion.status,
+    ad_group_ad.status) hold the current status, not the status during the date range.
+    When selecting metrics over a date range do not filter on status: entities paused or
+    removed during the range drop out, understating cost and conversions. Drop
+    zero-impression rows after the query instead. Filter on status only for what is live now.
     """
     import gads_export
 
@@ -1355,6 +1364,295 @@ def update_asset_group_assets(
             "MutateAssetGroupAssetsRequest", cid, operations, validate_only))
 
 
+def manage_labels(
+    customer_id: str, operation: str, name: str | None = None,
+    background_color: str | None = None, description: str | None = None,
+    label_id: str | None = None, confirm: str | None = None, profile: str | None = None,
+    *, gate: Callable[[], Any],
+) -> dict[str, Any]:
+    """Create, update or remove one label. Names contain 1-80 characters, descriptions at
+    most 200, and colors are #RRGGBB. UPDATE sends only supplied fields; REMOVE takes only
+    label_id. Without confirm, validate_only returns current and new values and a single-use
+    token valid for 10 minutes. Repeat identical arguments with the token to send once after
+    the host gate. A changed label state returns conflict without sending.
+    """
+    arguments = _arguments(locals())
+    import gads_client
+
+    cid = _customer_id(customer_id)
+    operation = _status(operation, ("CREATE", "UPDATE", "REMOVE"), "operation")
+    fields = {key: value for key, value in {
+        "name": name, "background_color": background_color, "description": description,
+    }.items() if value is not None}
+    if operation == "CREATE":
+        if name is None or label_id is not None:
+            raise _Failure("invalid_argument", "CREATE requires name and does not accept label_id.")
+    else:
+        label_id = _id(label_id, "label_id")
+        if operation == "UPDATE" and not fields or operation == "REMOVE" and fields:
+            raise _Failure("invalid_argument", "UPDATE requires fields; REMOVE accepts only label_id.")
+    if name is not None:
+        if not isinstance(name, str) or not 1 <= len(name.strip()) <= 80:
+            raise _Failure("invalid_argument", "name must contain 1 to 80 characters after stripping.")
+        fields["name"] = name.strip()
+    if description is not None and (not isinstance(description, str) or len(description) > 200):
+        raise _Failure("invalid_argument", "description must contain at most 200 characters.")
+    if background_color is not None and (
+            not isinstance(background_color, str) or not re.fullmatch(r"#[0-9A-Fa-f]{6}", background_color)):
+        raise _Failure("invalid_argument", "background_color must be #RRGGBB.")
+    _check_confirm(confirm)
+    if operation == "CREATE":
+        escaped = fields["name"].replace("\\", "\\\\").replace("'", "\\'")
+        where = f"label.name = '{escaped}'"
+    else:
+        where = f"label.id = {label_id}"
+    state = gads_client.search_stream(cid, f"""
+        SELECT label.id, label.name, label.status, label.text_label.background_color,
+          label.text_label.description FROM label WHERE {where} ORDER BY label.id""")
+    current = state[0]["label"] if state else {}
+    if operation == "CREATE":
+        duplicates = [str(row["label"]["id"]) for row in state if row["label"].get("status") == "ENABLED"]
+        if duplicates and confirm is None:
+            raise _Failure("invalid_argument", f"An ENABLED label with this name exists: {', '.join(duplicates)}.")
+        current = {}
+    elif not current or current.get("status") == "REMOVED":
+        raise _Failure("not_found", f"No label with ID {label_id} was found.")
+    client = gads_client.build_client()
+    op = client.get_type("LabelOperation")
+    target = f"customers/{cid}/labels/{label_id}" if label_id else f"customers/{cid}"
+    changes = []
+    if operation == "REMOVE":
+        op.remove = target
+        changes.append({"field": "status", "current": current.get("status"), "new": "REMOVED"})
+    else:
+        label = op.create if operation == "CREATE" else op.update
+        if operation == "UPDATE":
+            label.resource_name = target
+        for field, value in fields.items():
+            path = field if field == "name" else f"text_label.{field}"
+            setattr(label if field == "name" else label.text_label, field, value)
+            if operation == "UPDATE":
+                op.update_mask.paths.append(path)
+            previous = current if field == "name" else current.get("text_label", {})
+            changes.append({"field": path, "current": previous.get(field), "new": value})
+    head = {"customer_id": cid, "label_id": label_id, "operation": operation, "changes": changes}
+    return _review(
+        "manage_labels", arguments, confirm, gate, target, state, head,
+        lambda validate_only: _mutate(client, "LabelService", "mutate_labels",
+                                      "MutateLabelsRequest", cid, [op], validate_only))
+
+
+def manage_label_associations(
+    customer_id: str, operation: str, association_type: str, label_id: str,
+    resource_ids: list[str] | None = None, confirm: str | None = None,
+    profile: str | None = None, *, gate: Callable[[], Any],
+) -> dict[str, Any]:
+    """Attach or remove an ENABLED label on 1-200 campaigns, ad groups or ad group criteria.
+    Criteria use ad_group_id~criterion_id. CREATE rejects existing links; REMOVE requires
+    them. Video campaigns return not_supported. Without confirm, validate_only returns
+    before/after links and a single-use token valid for 10 minutes. Repeat identical
+    arguments with the token to send once after the host gate. Changed target or
+    association state returns conflict without sending.
+    """
+    arguments = _arguments(locals())
+    import gads_client
+
+    cid = _customer_id(customer_id)
+    operation = _status(operation, ("CREATE", "REMOVE"), "operation")
+    # CUSTOMER is left out: v25 documents customerLabels/{label_id} with output-only fields,
+    # which contradicts Google's own server, and no live call has settled it.
+    association_type = _status(association_type, ("CAMPAIGN", "AD_GROUP", "AD_GROUP_CRITERION"),
+                               "association_type")
+    label_id = _id(label_id, "label_id")
+    if association_type == "AD_GROUP_CRITERION":
+        if not isinstance(resource_ids, list) or not 1 <= len(resource_ids) <= _MAX_WRITE_ITEMS:
+            raise _Failure("invalid_argument", "resource_ids must list 1 to 200 IDs.")
+        ids = []
+        for value in resource_ids:
+            if not isinstance(value, str) or not re.fullmatch(r"[0-9]+~[0-9]+", value):
+                raise _Failure("invalid_argument", "Criterion IDs must be ad_group_id~criterion_id.")
+            ids.append("~".join(_id(part, "resource_ids") for part in value.split("~")))
+        if len(set(ids)) != len(ids):
+            raise _Failure("invalid_argument", "resource_ids contains duplicates.")
+    else:
+        ids = _ids(resource_ids, "resource_ids")
+    _check_confirm(confirm)
+    labels = gads_client.search_stream(cid, f"""
+        SELECT label.id, label.name, label.status FROM label WHERE label.id = {label_id}""")
+    if not labels or labels[0]["label"].get("status") != "ENABLED":
+        raise _Failure("not_found", f"No ENABLED label with ID {label_id} was found.")
+    entity, stem, plural, segment = {
+        "CAMPAIGN": ("campaign", "Campaign", "campaigns", "campaignLabels"),
+        "AD_GROUP": ("ad_group", "AdGroup", "adGroups", "adGroupLabels"),
+        "AD_GROUP_CRITERION": ("ad_group_criterion", "AdGroupCriterion", "adGroupCriteria", "adGroupCriterionLabels"),
+    }[association_type]
+    paths = {i: f"customers/{cid}/{plural}/{i}" for i in ids}
+    path_list = ", ".join(f"'{path}'" for path in paths.values())
+    fields = f"{entity}.resource_name, {entity}.status, campaign.advertising_channel_type"
+    if entity != "ad_group_criterion":
+        fields += f", {entity}.name"
+    rows = gads_client.search_stream(cid, f"""
+        SELECT {fields} FROM {entity} WHERE {entity}.resource_name IN ({path_list})""")
+    targets = _found(ids, {r[entity]["resource_name"].rsplit("/", 1)[-1]: r for r in rows
+                           if r[entity].get("status") != "REMOVED"}, entity)
+    for row in targets:
+        _writable(row)
+    association = f"{entity}_label"
+    label_path = f"customers/{cid}/labels/{label_id}"
+    links = gads_client.search_stream(cid, f"""
+        SELECT {association}.resource_name, {association}.{entity}, {association}.label
+        FROM {association} WHERE {association}.label = '{label_path}'
+          AND {association}.{entity} IN ({path_list})""")
+    # resource_name is not sortable in GAQL; the conflict digest needs a stable order.
+    links.sort(key=lambda r: r[association]["resource_name"])
+    linked = {r[association][entity] for r in links}
+    mismatched = [i for i in ids if (paths[i] in linked) == (operation == "CREATE")]
+    if mismatched and confirm is None:
+        category = "invalid_argument" if operation == "CREATE" else "not_found"
+        message = "already have" if operation == "CREATE" else "do not have"
+        raise _Failure(category, f"Targets {', '.join(mismatched)} {message} label {label_id}.")
+    client = gads_client.build_client()
+    operations, changes = [], []
+    for i, row in zip(ids, targets):
+        op = client.get_type(f"{stem}LabelOperation")
+        if operation == "CREATE":
+            setattr(op.create, entity, paths[i])
+            op.create.label = label_path
+        else:
+            op.remove = f"customers/{cid}/{segment}/{i}~{label_id}"
+        operations.append(op)
+        changes.append({"resource_id": i, "name": row[entity].get("name"),
+                        "has_label": paths[i] in linked, "new_has_label": operation == "CREATE"})
+    state = {"label": labels, "targets": targets, "associations": links}
+    head = {"customer_id": cid, "label_id": label_id, "association_type": association_type, "changes": changes}
+    return _review(
+        "manage_label_associations", arguments, confirm, gate, label_path, state, head,
+        lambda validate_only: _mutate(client, f"{stem}LabelService", f"mutate_{entity}_labels",
+                                      f"Mutate{stem}LabelsRequest", cid, operations, validate_only))
+
+
+def create_asset(
+    customer_id: str, asset_type: str, name: str | None = None,
+    final_urls: list[str] | None = None, final_mobile_urls: list[str] | None = None,
+    tracking_url_template: str | None = None, final_url_suffix: str | None = None,
+    text: str | None = None, image_data: str | None = None, image_mime_type: str | None = None,
+    youtube_video_id: str | None = None, sitelink_link_text: str | None = None,
+    sitelink_description1: str | None = None, sitelink_description2: str | None = None,
+    callout_text: str | None = None, structured_snippet_header: str | None = None,
+    structured_snippet_values: list[str] | None = None, confirm: str | None = None,
+    profile: str | None = None, *, gate: Callable[[], Any],
+) -> dict[str, Any]:
+    """Create one unlinked TEXT, IMAGE, YOUTUBE_VIDEO, SITELINK, CALLOUT or STRUCTURED_SNIPPET
+    asset. Use update_asset_group_assets for Performance Max linking. URLs are HTTP(S), up to
+    10 per list. Images are base64 PNG, JPEG or GIF, at most 5120 KB; no local file paths.
+    Sitelink text and callouts allow 25 characters, descriptions 35; snippets need 3-10 values
+    of at most 25 characters. Without confirm, validate_only returns the fields (images only
+    as mime, byte count and SHA-256) and a single-use token valid for 10 minutes. Repeat the
+    identical call with the token to send once after the host gate. Changed customer state
+    returns conflict without sending.
+    """
+    arguments = _arguments(locals())
+    import gads_client
+
+    cid = _customer_id(customer_id)
+    kinds = {
+        "TEXT": ("text",), "IMAGE": ("image_data", "image_mime_type"),
+        "YOUTUBE_VIDEO": ("youtube_video_id",),
+        "SITELINK": ("sitelink_link_text", "sitelink_description1", "sitelink_description2"),
+        "CALLOUT": ("callout_text",),
+        "STRUCTURED_SNIPPET": ("structured_snippet_header", "structured_snippet_values"),
+    }
+    asset_type = _status(asset_type, tuple(kinds), "asset_type")
+    for kind, fields in kinds.items():
+        for field in fields:
+            value = arguments[field]
+            if kind != asset_type and value is not None:
+                raise _Failure("invalid_argument", f"{field} does not apply to {asset_type}.")
+            if kind == asset_type and value is None and field not in ("sitelink_description1", "sitelink_description2"):
+                raise _Failure("invalid_argument", f"{field} is required for {asset_type}.")
+    common = {}
+    for field in ("name", "tracking_url_template", "final_url_suffix"):
+        value = arguments[field]
+        if value is not None:
+            if not isinstance(value, str):
+                raise _Failure("invalid_argument", f"{field} must be text.")
+            common[field] = value
+    for field in ("final_urls", "final_mobile_urls"):
+        values = arguments[field]
+        if values is None:
+            continue
+        if not isinstance(values, list) or len(values) > 10:
+            raise _Failure("invalid_argument", f"{field} must list at most 10 HTTP(S) URLs.")
+        for value in values:
+            try:
+                url = urlsplit(value) if isinstance(value, str) else None
+                valid = url and url.scheme in ("http", "https") and url.hostname and not any(c.isspace() for c in value)
+            except ValueError:
+                valid = False
+            if not valid:
+                raise _Failure("invalid_argument", f"{field} must contain HTTP(S) URLs with a host.")
+        common[field] = values
+    if asset_type == "SITELINK" and not final_urls:
+        raise _Failure("invalid_argument", "SITELINK requires final_urls.")
+    for field in kinds[asset_type]:
+        value = arguments[field]
+        if field in ("image_data", "image_mime_type", "structured_snippet_values") or value is None:
+            continue
+        maximum = 35 if field in ("sitelink_description1", "sitelink_description2") else (
+            25 if field in ("sitelink_link_text", "callout_text") else None)
+        if not isinstance(value, str) or not value.strip() or maximum and len(value) > maximum:
+            raise _Failure("invalid_argument", f"{field} must be non-empty text" +
+                           (f" of at most {maximum} characters." if maximum else "."))
+    if asset_type == "YOUTUBE_VIDEO" and not re.fullmatch(r"[A-Za-z0-9_-]{11}", youtube_video_id):
+        raise _Failure("invalid_argument", "youtube_video_id must contain 11 letters, digits, _ or -.")
+    if asset_type == "STRUCTURED_SNIPPET":
+        if (not isinstance(structured_snippet_values, list) or not 3 <= len(structured_snippet_values) <= 10
+                or any(not isinstance(v, str) or not v.strip() or len(v) > 25 for v in structured_snippet_values)):
+            raise _Failure("invalid_argument", "structured_snippet_values needs 3 to 10 non-empty values of at most 25 characters.")
+    image = None
+    if asset_type == "IMAGE":
+        magic = {"IMAGE_PNG": (b"\x89PNG\r\n\x1a\n",), "IMAGE_JPEG": (b"\xff\xd8\xff",),
+                 "IMAGE_GIF": (b"GIF87a", b"GIF89a")}
+        _status(image_mime_type, tuple(magic), "image_mime_type")
+        if not isinstance(image_data, str) or len(image_data) > 4 * ((5 * 1024 * 1024 + 2) // 3):
+            raise _Failure("invalid_argument", "image_data must be base64 of at most 5120 KB decoded.")
+        try:
+            image = base64.b64decode(image_data, validate=True)
+        except (ValueError, binascii.Error):
+            raise _Failure("invalid_argument", "image_data must be strict base64.") from None
+        if len(image) > 5 * 1024 * 1024 or not image.startswith(magic[image_mime_type]):
+            raise _Failure("invalid_argument", "Image must match its mime signature and be at most 5120 KB.")
+        arguments["image_data"] = {"sha256": hashlib.sha256(image).hexdigest(), "size_bytes": len(image)}
+    _check_confirm(confirm)
+    state = gads_client.search_stream(cid, "SELECT customer.id, customer.status FROM customer")
+    if not state:
+        raise _Failure("not_found", f"No customer with ID {cid} was found.")
+    client = gads_client.build_client()
+    op = client.get_type("AssetOperation")
+    op.create = common
+    change = {"asset_type": asset_type, "name": name, **common}
+    if asset_type == "IMAGE":
+        op.create.image_asset.data = image
+        op.create.image_asset.mime_type = getattr(client.enums.MimeTypeEnum, image_mime_type)
+        change.update(image_mime_type=image_mime_type, **arguments["image_data"])
+    else:
+        destination = getattr(op.create, asset_type.lower() + "_asset")
+        for field in kinds[asset_type]:
+            value = arguments[field]
+            if value is not None:
+                api_field = field.removeprefix("sitelink_").removeprefix("structured_snippet_")
+                if field == "structured_snippet_values":
+                    destination.values.extend(value)
+                else:
+                    setattr(destination, api_field, value)
+                change[field] = value
+    head = {"customer_id": cid, "changes": [change]}
+    return _review(
+        "create_asset", arguments, confirm, gate, f"customers/{cid}", state, head,
+        lambda validate_only: _mutate(client, "AssetService", "mutate_assets",
+                                      "MutateAssetsRequest", cid, [op], validate_only))
+
+
 WRITE_TOOLS: tuple[tuple[str, str, Callable[..., dict[str, Any]], bool], ...] = (
     ("set_keyword_status", "Enable or pause keywords", set_keyword_status, False),
     ("set_ad_status", "Enable or pause ads", set_ad_status, False),
@@ -1366,6 +1664,9 @@ WRITE_TOOLS: tuple[tuple[str, str, Callable[..., dict[str, Any]], bool], ...] = 
      False),
     ("update_asset_group_assets", "Link or unlink Performance Max asset group assets",
      update_asset_group_assets, True),
+    ("manage_labels", "Create, update or remove labels", manage_labels, True),
+    ("manage_label_associations", "Attach or remove labels", manage_label_associations, True),
+    ("create_asset", "Create an unlinked asset", create_asset, False),
 )
 
 
