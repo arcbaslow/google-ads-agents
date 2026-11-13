@@ -1,3 +1,5 @@
+import importlib
+import io
 import json
 import sys
 from unittest.mock import Mock
@@ -5,7 +7,9 @@ from unittest.mock import Mock
 import gads_client
 import gads_upload_video
 import pytest
+import requests
 from gads_mutate import MutationCancelled, MutationOutcomeUnknown
+from google.ads.googleads.errors import GoogleAdsException, raise_formatted_for_status
 from google.api_core import exceptions as api_errors
 from test_gads_mcp import CUSTOMER, TYPES
 
@@ -45,6 +49,7 @@ def test_request_preview_and_single_send(upload, monkeypatch, capsys, privacy, c
 
     def respond(**kwargs):
         assert kwargs["stream"].read() == b"offline-video"
+        assert transport_module().raise_formatted_for_status is not raise_formatted_for_status
         return send.return_value
 
     monkeypatch.setattr("builtins.input", approve)
@@ -148,3 +153,48 @@ def test_cli_human_output(upload, monkeypatch, capsys, failure):
     else:
         assert "Upload 42:" in out and send.return_value.resource_name in out
         assert "run_gaql" in out and "you_tube_video_upload.state" in out
+
+
+def transport_module():
+    return importlib.import_module(gads_upload_video._TRANSPORT.format(gads_client.API_VERSION))
+
+
+def http_response(status, headers=None, body=b"{}"):
+    response = requests.Response()
+    response.status_code = status
+    response.headers.update(headers or {})
+    response._content = body
+    response.url = "https://example.test/upload"
+    response.request = requests.Request("POST", response.url).prepare()
+    return response
+
+
+class OneResponse:
+    def __init__(self, response):
+        self.response = response
+
+    def request(self, method, url, data=None, headers=None, timeout=None):
+        return self.response
+
+
+def test_real_transport_accepts_ok_response_and_restores_check():
+    module = transport_module()
+    original = module.raise_formatted_for_status
+    upload = module.ResumableUpload("https://example.test/upload", io.BytesIO(b"x"), size=1)
+    ok = http_response(200, {"X-Goog-Upload-URL": "https://example.test/session"})
+    with gads_upload_video._status_check_with_version():
+        upload.initiate(OneResponse(ok))
+        module.raise_formatted_for_status(ok, gads_client.API_VERSION)
+    assert upload.session_url == "https://example.test/session"
+    assert module.raise_formatted_for_status is original
+
+
+def test_real_transport_error_is_ads_exception_not_type_error():
+    module = transport_module()
+    original = module.raise_formatted_for_status
+    upload = module.ResumableUpload("https://example.test/upload", io.BytesIO(b"x"), size=1)
+    refused = http_response(400, {"Content-Type": "application/json"},
+                            json.dumps({"error": {"code": 400, "message": "bad"}}).encode())
+    with pytest.raises(GoogleAdsException), gads_upload_video._status_check_with_version():
+        upload.initiate(OneResponse(refused))
+    assert module.raise_formatted_for_status is original

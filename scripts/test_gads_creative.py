@@ -2,14 +2,17 @@
 
 from __future__ import annotations
 
+import importlib
 import json
 from unittest.mock import Mock
 
 import gads_client
 import gads_creative
+import gads_upload_video
 import pytest
 from gads_mutate import MutationCancelled
 from google.ads.googleads.client import GoogleAdsClient
+from google.ads.googleads.errors import raise_formatted_for_status
 from google.api_core.exceptions import NotFound
 from google.auth.credentials import AnonymousCredentials
 from google.oauth2.credentials import Credentials as UserCredentials
@@ -197,6 +200,8 @@ def test_upload_reviews_and_polling(api, monkeypatch, capsys):
 
     def send(**kwargs):
         assert kwargs["stream"].read() == b"private-video-bytes"
+        transport = importlib.import_module(gads_upload_video._TRANSPORT.format(gads_client.API_VERSION))
+        assert transport.raise_formatted_for_status is not raise_formatted_for_status
         assert "validate_only" not in kwargs
         assert kwargs["retry"] is None
         assert kwargs["you_tube_video_upload"].video_title == "Title"

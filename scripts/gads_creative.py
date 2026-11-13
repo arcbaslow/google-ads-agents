@@ -16,6 +16,7 @@ import gads_errors
 import gads_utils
 from gads_apply import WriteInputError, numeric_id, read_campaign
 from gads_mutate import review_request, reviewed_mutate
+from gads_upload_video import _status_check_with_version
 from google.api_core.exceptions import NotFound
 
 USER_AGENT = "gads-agents/0.5"
@@ -83,7 +84,7 @@ def upload_video(customer_id: str, file: Path, title: str, description: str = ""
     if channel_id:
         upload.channel_id = channel_id
     review_request(preview, "Upload without API validation")
-    with path.open("rb") as stream:
+    with path.open("rb") as stream, _status_check_with_version():
         response = client.get_service("YouTubeVideoUploadService").create_you_tube_video_upload(
             customer_id=customer_id, you_tube_video_upload=upload, stream=stream, retry=None)
     resource = response.resource_name

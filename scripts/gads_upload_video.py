@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
+import importlib
 import sys
 from pathlib import Path
 
@@ -14,6 +16,27 @@ from gads_mutate import MutationOutcomeUnknown, review_request
 
 VIDEO_EXTENSIONS = {".3gp", ".avi", ".flv", ".mkv", ".mov", ".mp4", ".mpeg", ".mpg", ".ogg", ".webm", ".wmv"}
 UPLOAD_TIMEOUT_SECONDS = 1800
+_TRANSPORT = ("google.ads.googleads.{}.services.services.you_tube_video_upload_service."
+              "transports.resumable_upload")
+
+
+@contextlib.contextmanager
+def _status_check_with_version():
+    # google-ads 33.0.0 calls raise_formatted_for_status(response) without its required
+    # version argument, so every upload response raises TypeError without this binding.
+    module = importlib.import_module(_TRANSPORT.format(gads_client.API_VERSION))
+    original = module.raise_formatted_for_status
+
+    def check(response, *args, **kwargs):
+        if not args and "version" not in kwargs:
+            kwargs["version"] = gads_client.API_VERSION
+        return original(response, *args, **kwargs)
+
+    module.raise_formatted_for_status = check
+    try:
+        yield
+    finally:
+        module.raise_formatted_for_status = original
 
 
 def upload_video(customer_id: str, file: str, title: str, description: str,
@@ -47,13 +70,13 @@ def upload_video(customer_id: str, file: str, title: str, description: str,
                "privacy": privacy, "channel": channel_id or "Google-managed",
                "file": str(path), "size_bytes": path.stat().st_size}
     review_request(preview, "Upload")
-    with path.open("rb") as stream:
+    with path.open("rb") as stream, _status_check_with_version():
         try:
             response = service.create_you_tube_video_upload(
                 request=req, stream=stream, retry=None, timeout=UPLOAD_TIMEOUT_SECONDS)
         except Exception as exc:
-            # google-ads 33 turns every HTTP error in this transport into a TypeError, and its
-            # deadline check raises RuntimeError mid-session, so no failure is safely definite.
+            # A failed chunk or finalize, or the SDK deadline raising RuntimeError mid-session,
+            # can follow bytes the server already accepted, so no failure is safely definite.
             raise MutationOutcomeUnknown("Upload was sent; no confirmed result") from exc
     resource = response.resource_name
     upload_id = resource.rsplit("/", 1)[-1]
