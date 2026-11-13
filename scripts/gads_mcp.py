@@ -29,6 +29,7 @@ from collections.abc import Callable
 from contextvars import copy_context
 from datetime import date
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any, Literal
 from urllib.parse import urlsplit
 
@@ -936,6 +937,26 @@ def _mutate(client, service: str, method: str, request_type: str, cid: str, oper
         raise _Failure(category, hint, _api_errors(exc)) from None
 
 
+def _mutate_atomic(client, cid, operations, validate_only):
+    try:
+        response = client.get_service("GoogleAdsService").mutate(request={
+            "customer_id": cid, "mutate_operations": operations,
+            "validate_only": validate_only, "partial_failure": False,
+        }, retry=None, timeout=_WRITE_TIMEOUT_SECONDS)
+    except Exception as exc:
+        category, hint = _classify(exc)
+        hint = _WRITE_HINTS.get(category, hint)
+        if not validate_only and category == "upstream_error":
+            hint = _UNKNOWN_OUTCOME
+        raise _Failure(category, hint, _api_errors(exc)) from None
+    results = []
+    for operation in response.mutate_operation_responses:
+        kind = operation._pb.WhichOneof("response")
+        if kind:
+            results.append(SimpleNamespace(resource_name=getattr(operation, kind).resource_name))
+    return SimpleNamespace(results=results)
+
+
 def _review(tool: str, arguments: dict, confirm: str | None, gate: Callable[[], Any], target: str,
             state: Any, head: dict[str, Any], send: Callable[[bool], Any]) -> dict[str, Any]:
     """Dry run: validate_only and a token. Confirmed: gate, redeem, then send once."""
@@ -1653,6 +1674,134 @@ def create_asset(
                                       "MutateAssetsRequest", cid, [op], validate_only))
 
 
+def _campaign_creation(tool, arguments, confirm, gate, validate, builder):
+    import gads_client
+
+    spec = arguments["spec"]
+    try:
+        validate(arguments["customer_id"], spec)
+    except ValueError as exc:
+        raise _Failure("invalid_argument", str(exc)) from None
+    client = gads_client.build_client()
+    cid, operations, summary = builder(arguments["customer_id"], spec, client)
+    state = []
+    slots = {field: spec["ad"][field] or [] for field in (
+        "marketing_images", "square_marketing_images", "logo_images", "square_logo_images",
+        "images", "videos", "youtube_videos") if field in spec["ad"]}
+    references = [("asset", sorted({asset for assets in slots.values() for asset in assets}), ", asset.type")]
+    if "selective_optimization_conversion_actions" in spec:
+        references.extend([
+            ("conversion_action", sorted(set(spec["selective_optimization_conversion_actions"])),
+             ", conversion_action.status"),
+            ("user_list", [spec["user_list"]] if spec["user_list"] else [], ""),
+        ])
+    for resource, names, fields in references:
+        if not names:
+            continue
+        quoted = ", ".join(f"'{name}'" for name in names)
+        rows = gads_client.search_stream(cid, f"""
+            SELECT {resource}.resource_name{fields} FROM {resource}
+            WHERE {resource}.resource_name IN ({quoted})""")
+        # resource_name is not sortable in GAQL; the conflict digest needs a stable order.
+        rows.sort(key=lambda row: row[resource]["resource_name"])
+        state.extend(rows)
+        found = {row[resource]["resource_name"]: row[resource] for row in rows}
+        if confirm is None:
+            missing = [name for name in names if name not in found or found[name].get("status") == "REMOVED"]
+            if missing:
+                raise _Failure("not_found", f"No {resource} found: {', '.join(missing)}.")
+            if resource == "asset":
+                for slot, assets in slots.items():
+                    expected = "YOUTUBE_VIDEO" if slot in ("videos", "youtube_videos") else "IMAGE"
+                    wrong = [name for name in assets if found[name].get("type") != expected]
+                    if wrong:
+                        raise _Failure("invalid_argument", f"{slot} requires {expected} assets: {', '.join(wrong)}.")
+    escaped = spec["name"].replace("\\", "\\\\").replace("'", "\\'")
+    campaigns = gads_client.search_stream(cid, f"""
+        SELECT campaign.id, campaign.name, campaign.status FROM campaign
+        WHERE campaign.name = '{escaped}' AND campaign.status != 'REMOVED' ORDER BY campaign.id""")
+    state.extend(campaigns)
+    if campaigns and confirm is None:
+        ids = ", ".join(str(row["campaign"]["id"]) for row in campaigns)
+        raise _Failure("invalid_argument", f"A non-REMOVED campaign with this name exists: {ids}.")
+    head = {"customer_id": cid, "changes": [summary]}
+    return _review(tool, arguments, confirm, gate, f"customers/{cid}", state, head,
+                   lambda validate_only: _mutate_atomic(client, cid, operations, validate_only))
+
+
+def create_demand_gen_campaign(
+    customer_id: str, spec: dict[str, Any], confirm: str | None = None,
+    profile: str | None = None, *, gate: Callable[[], Any],
+) -> dict[str, Any]:
+    """Create a PAUSED Demand Gen campaign, one ad group and one ad, using existing assets.
+    Uses the CLI's strict JSON spec: name, budget_micros, budget_period, start_date, end_date,
+    bidding, target_cpa_micros, target_roas, geo_target_ids, language_ids, channel_controls,
+    asset_automation, ad, eu_political_advertising, conversions_confirmed. ad has type
+    MULTI_ASSET (final_url, business_name, headlines, descriptions, logo_images,
+    marketing_images, square_marketing_images) or VIDEO_RESPONSIVE (final_url, business_name,
+    headlines, descriptions, logo_images, videos, long_headlines); asset fields take existing
+    asset resource names. VIDEO_RESPONSIVE reaches YouTube inventory; Video campaigns cannot be
+    created through the API. docs/WRITES.md has the full contract. Without confirm,
+    validate_only returns a single-use token valid for 10 minutes. Repeat identical arguments
+    with the token to send once after the host gate. Changed references or a same-name
+    campaign appearing return conflict without sending.
+    """
+    arguments = _arguments(locals())
+    _check_confirm(confirm)
+    import gads_creation
+
+    return _campaign_creation("create_demand_gen_campaign", arguments, confirm, gate,
+                              gads_creation._demand_gen_fields,
+                              gads_creation.build_demand_gen_campaign)
+
+
+def create_display_campaign(
+    customer_id: str, spec: dict[str, Any], confirm: str | None = None,
+    profile: str | None = None, *, gate: Callable[[], Any],
+) -> dict[str, Any]:
+    """Create a PAUSED Display campaign, one ad group and one ad, using existing assets.
+    Uses the CLI's strict JSON spec: name, budget_micros, bidding, target_cpa_micros,
+    target_roas, geo_target_ids, language_ids, ad, eu_political_advertising,
+    conversions_confirmed. ad has final_url, business_name, headlines (1-5), long_headline,
+    descriptions (1-5), marketing_images and square_marketing_images (at least one each, 15
+    together), logo_images and square_logo_images (5 together), all as existing asset
+    resource names. docs/WRITES.md has the full contract. Without confirm, validate_only
+    returns a single-use token valid for 10 minutes. Repeat identical arguments with the
+    token to send once after the host gate. Changed references or a same-name campaign
+    appearing return conflict without sending.
+    """
+    arguments = _arguments(locals())
+    _check_confirm(confirm)
+    import gads_creation
+
+    return _campaign_creation("create_display_campaign", arguments, confirm, gate,
+                              gads_creation._display_fields,
+                              gads_creation.build_display_campaign)
+
+
+def create_app_campaign(
+    customer_id: str, spec: dict[str, Any], confirm: str | None = None,
+    profile: str | None = None, *, gate: Callable[[], Any],
+) -> dict[str, Any]:
+    """Create a PAUSED App campaign, one ad group and one ad, using existing assets.
+    Uses the CLI's strict JSON spec: name, sub_type, app_id, app_store, goal_type,
+    target_cpa_micros, target_roas, budget_micros, geo_target_ids, language_ids,
+    selective_optimization_conversion_actions, user_list, ad, eu_political_advertising,
+    conversions_confirmed. ad has headlines, descriptions, images and youtube_videos, the
+    last two as existing asset resource names. docs/WRITES.md has the full contract.
+    Without confirm, validate_only returns a single-use token valid for 10 minutes. Repeat
+    identical arguments with the token to send once after the host gate. Changed references
+    or a same-name campaign appearing return conflict without sending.
+    """
+    arguments = _arguments(locals())
+    _check_confirm(confirm)
+    import gads_creation
+
+    return _campaign_creation("create_app_campaign", arguments, confirm, gate,
+                              gads_creation._app_fields,
+                              gads_creation.build_app_campaign)
+
+
 WRITE_TOOLS: tuple[tuple[str, str, Callable[..., dict[str, Any]], bool], ...] = (
     ("set_keyword_status", "Enable or pause keywords", set_keyword_status, False),
     ("set_ad_status", "Enable or pause ads", set_ad_status, False),
@@ -1667,6 +1816,9 @@ WRITE_TOOLS: tuple[tuple[str, str, Callable[..., dict[str, Any]], bool], ...] = 
     ("manage_labels", "Create, update or remove labels", manage_labels, True),
     ("manage_label_associations", "Attach or remove labels", manage_label_associations, True),
     ("create_asset", "Create an unlinked asset", create_asset, False),
+    ("create_demand_gen_campaign", "Create a paused Demand Gen campaign", create_demand_gen_campaign, False),
+    ("create_display_campaign", "Create a paused Display campaign", create_display_campaign, False),
+    ("create_app_campaign", "Create a paused App campaign", create_app_campaign, False),
 )
 
 

@@ -208,12 +208,8 @@ def _date(value, label):
         raise ValueError(f"{label} must be a valid calendar date") from None
 
 
-def _create_with_ad(cid, spec, budget_fields, campaign_fields, ad_group_fields, ad_fields,
-                    ad_group_targeting, automation, validate_only, user_list=None):
-    import gads_client
-    from gads_mutate import reviewed_atomic_mutate
-
-    client = gads_client.build_client()
+def _with_ad_operations(client, cid, spec, budget_fields, campaign_fields, ad_group_fields, ad_fields,
+                        ad_group_targeting, automation, user_list=None) -> list:
     budget_name = f"customers/{cid}/campaignBudgets/-1"
     campaign_name = f"customers/{cid}/campaigns/-2"
     group_name = f"customers/{cid}/adGroups/-3"
@@ -258,6 +254,16 @@ def _create_with_ad(cid, spec, budget_fields, campaign_fields, ad_group_fields, 
         "ad": ad_fields,
         "ad_group_ad_asset_automation_settings": automation,
     })
+    return operations
+
+
+def _create_campaign(customer_id, spec, validate_only, validate, builder):
+    import gads_client
+    from gads_mutate import reviewed_atomic_mutate
+
+    validate(customer_id, spec)
+    client = gads_client.build_client()
+    cid, operations, _ = builder(customer_id, spec, client)
     response = reviewed_atomic_mutate(client, cid, operations, validate_only)
     return {"status": "validated" if validate_only else "applied", "customer_id": cid,
             "response": gads_client._msg_to_dict(response._pb),
@@ -266,7 +272,7 @@ def _create_with_ad(cid, spec, budget_fields, campaign_fields, ad_group_fields, 
                             "No idempotency guarantee: inspect account state before retrying an uncertain write."]}
 
 
-def create_demand_gen_campaign(customer_id: str, spec: dict, validate_only: bool = True) -> dict:
+def _demand_gen_fields(customer_id, spec):
     _exact_keys(spec, {"name", "budget_micros", "budget_period", "start_date", "end_date", "bidding",
                        "target_cpa_micros", "target_roas", "geo_target_ids", "language_ids",
                        "channel_controls", "asset_automation", "ad", "eu_political_advertising",
@@ -306,15 +312,15 @@ def create_demand_gen_campaign(customer_id: str, spec: dict, validate_only: bool
         status = spec["asset_automation"][kind]
         _choice(status, ("OPTED_IN", "OPTED_OUT"), kind)
         automation.append({"asset_automation_type": kind, "asset_automation_status": status})
-    return _create_with_ad(cid, spec, budget, {
+    return cid, budget, {
         "advertising_channel_type": "DEMAND_GEN",
         "demand_gen_campaign_settings": {"upgraded_targeting": True},
         strategy: {target: spec[target]} if target else {},
         **schedule,
-    }, {"demand_gen_ad_group_settings": {"channel_controls": controls}}, ad, True, automation, validate_only)
+    }, {"demand_gen_ad_group_settings": {"channel_controls": controls}}, ad, True, automation
 
 
-def create_app_campaign(customer_id: str, spec: dict, validate_only: bool = True) -> dict:
+def _app_fields(customer_id, spec):
     _exact_keys(spec, {"name", "sub_type", "app_id", "app_store", "goal_type", "target_cpa_micros",
                        "target_roas", "budget_micros", "geo_target_ids", "language_ids",
                        "selective_optimization_conversion_actions", "user_list", "ad",
@@ -344,13 +350,112 @@ def create_app_campaign(customer_id: str, spec: dict, validate_only: bool = True
     elif spec["user_list"] is not None:
         raise ValueError("user_list must be null for APP_CAMPAIGN")
     ad = _app_ad(spec["ad"], cid, engagement)
-    return _create_with_ad(cid, spec, {"amount_micros": spec["budget_micros"]}, {
+    return cid, {"amount_micros": spec["budget_micros"]}, {
         "advertising_channel_type": "MULTI_CHANNEL", "advertising_channel_sub_type": spec["sub_type"],
         "app_campaign_setting": {"app_id": spec["app_id"], "app_store": spec["app_store"],
                                  "bidding_strategy_goal_type": goal},
         "selective_optimization": {"conversion_actions": actions},
         strategy: {target: spec[target]} if target else {},
-    }, {}, ad, False, [], validate_only, user_list=spec["user_list"])
+    }, {}, ad, False, [], spec["user_list"]
+
+
+def _display_fields(customer_id, spec):
+    _exact_keys(spec, {"name", "budget_micros", "bidding", "target_cpa_micros", "target_roas",
+                       "geo_target_ids", "language_ids", "ad", "eu_political_advertising",
+                       "conversions_confirmed"}, "Display spec")
+    cid = _creation_fields(customer_id, spec)
+    _numeric_ids(spec["language_ids"], "language IDs", 0, 50)
+    _choice(spec["bidding"], ("MAXIMIZE_CLICKS", "MAXIMIZE_CONVERSIONS", "TARGET_CPA", "TARGET_ROAS"), "bidding")
+    target = {"TARGET_CPA": "target_cpa_micros", "TARGET_ROAS": "target_roas"}.get(spec["bidding"])
+    _targets(spec, target)
+    strategy = {"MAXIMIZE_CLICKS": "target_spend", "MAXIMIZE_CONVERSIONS": "maximize_conversions",
+                "TARGET_CPA": "maximize_conversions", "TARGET_ROAS": "maximize_conversion_value"}[spec["bidding"]]
+    ad = spec["ad"]
+    _exact_keys(ad, {"final_url", "business_name", "headlines", "long_headline", "descriptions",
+                     "marketing_images", "square_marketing_images", "logo_images", "square_logo_images"}, "Display ad")
+    _text(ad["final_url"], "final_url")
+    url = urlsplit(ad["final_url"])
+    if url.scheme not in ("http", "https") or not url.netloc or any(c.isspace() for c in ad["final_url"]):
+        raise ValueError("final_url must be an absolute HTTP(S) URL")
+    _text(ad["business_name"], "business_name")
+    _text(ad["long_headline"], "long_headline")
+    info = {"business_name": ad["business_name"], "long_headline": {"text": ad["long_headline"]}}
+    for field in ("headlines", "descriptions"):
+        info[field] = _text_assets(ad[field], field)
+        if len(info[field]) > 5:
+            raise ValueError(f"{field} must contain 1-5 texts")
+    for field in ("marketing_images", "square_marketing_images", "logo_images", "square_logo_images"):
+        required = field in ("marketing_images", "square_marketing_images")
+        if not isinstance(ad[field], list):
+            raise ValueError(f"{field} must be a list of asset resource names")
+        info[field] = [{"asset": a} for a in _resource_list(ad[field], cid, "assets", field, required)]
+    # v25 ResponsiveDisplayAdInfo caps the two marketing slots and the two logo slots jointly.
+    if len(ad["marketing_images"]) + len(ad["square_marketing_images"]) > 15:
+        raise ValueError("marketing_images and square_marketing_images together allow at most 15 assets")
+    if len(ad["logo_images"]) + len(ad["square_logo_images"]) > 5:
+        raise ValueError("logo_images and square_logo_images together allow at most 5 assets")
+    return cid, {"amount_micros": spec["budget_micros"]}, {
+        "advertising_channel_type": "DISPLAY", strategy: {target: spec[target]} if target else {},
+    }, {"type_": "DISPLAY_STANDARD"}, {
+        "final_urls": [ad["final_url"]], "responsive_display_ad": info,
+    }, False, []
+
+
+def _campaign_summary(kind, spec):
+    ad = spec["ad"]
+    ad_type = (ad["type"] if kind == "DEMAND_GEN" else "RESPONSIVE_DISPLAY_AD" if kind == "DISPLAY"
+               else "APP_ENGAGEMENT_AD" if spec["sub_type"] == "APP_CAMPAIGN_FOR_ENGAGEMENT" else "APP_AD")
+    summary = {
+        "campaign_type": kind, "name": spec["name"], "status": "PAUSED",
+        "budget_micros": spec["budget_micros"], "budget_period": spec.get("budget_period", "DAILY"),
+        "bidding": spec.get("bidding") if kind != "APP" else APP_GOAL_STRATEGIES[spec["goal_type"]].upper(),
+        "target_cpa_micros": spec["target_cpa_micros"], "target_roas": spec["target_roas"],
+        "geo_count": len(set(spec["geo_target_ids"])), "language_count": len(set(spec["language_ids"])),
+        "eu_political_advertising": spec["eu_political_advertising"],
+        "ad": {"type": ad_type, "headlines": len(ad["headlines"]), "descriptions": len(ad["descriptions"]),
+               "assets": {field: len(ad[field] or []) for field in (
+                   "marketing_images", "square_marketing_images", "logo_images", "square_logo_images",
+                   "images", "videos", "youtube_videos") if field in ad}},
+    }
+    for field in ("final_url", "business_name"):
+        if field in ad:
+            summary["ad"][field] = ad[field]
+    if "long_headlines" in ad:
+        summary["ad"]["long_headlines"] = len(ad["long_headlines"])
+    if "long_headline" in ad:
+        summary["ad"]["long_headlines"] = 1
+    if kind == "DEMAND_GEN":
+        summary.update({key: spec[key] for key in ("channel_controls", "start_date", "end_date")})
+    if kind == "APP":
+        summary.update({key: spec[key] for key in ("sub_type", "app_id", "app_store", "goal_type")})
+    return summary
+
+
+def build_demand_gen_campaign(customer_id, spec, client):
+    cid, *fields = _demand_gen_fields(customer_id, spec)
+    return cid, _with_ad_operations(client, cid, spec, *fields), _campaign_summary("DEMAND_GEN", spec)
+
+
+def build_app_campaign(customer_id, spec, client):
+    cid, *fields = _app_fields(customer_id, spec)
+    return cid, _with_ad_operations(client, cid, spec, *fields), _campaign_summary("APP", spec)
+
+
+def build_display_campaign(customer_id, spec, client):
+    cid, *fields = _display_fields(customer_id, spec)
+    return cid, _with_ad_operations(client, cid, spec, *fields), _campaign_summary("DISPLAY", spec)
+
+
+def create_demand_gen_campaign(customer_id: str, spec: dict, validate_only: bool = True) -> dict:
+    return _create_campaign(customer_id, spec, validate_only, _demand_gen_fields, build_demand_gen_campaign)
+
+
+def create_app_campaign(customer_id: str, spec: dict, validate_only: bool = True) -> dict:
+    return _create_campaign(customer_id, spec, validate_only, _app_fields, build_app_campaign)
+
+
+def create_display_campaign(customer_id: str, spec: dict, validate_only: bool = True) -> dict:
+    return _create_campaign(customer_id, spec, validate_only, _display_fields, build_display_campaign)
 
 
 APP_TARGET_QUERY = """
@@ -463,6 +568,7 @@ def main() -> int:
     source.add_argument("--context-file", help="Legacy planning context; not executable")
     source.add_argument("--search-spec", help="Strict JSON spec for a PAUSED Search shell")
     source.add_argument("--demand-gen-spec", help="Strict JSON spec for a PAUSED Demand Gen campaign")
+    source.add_argument("--display-spec", help="Strict JSON spec for a PAUSED Display campaign")
     source.add_argument("--app-spec", help="Strict JSON spec for a PAUSED App campaign")
     source.add_argument("--app-target", help="Strict JSON spec for an existing App CPA or ROAS target")
     mode = p.add_mutually_exclusive_group()
@@ -474,6 +580,7 @@ def main() -> int:
 
     writers = ((args.search_spec, create_search_campaign),
                (args.demand_gen_spec, create_demand_gen_campaign),
+               (args.display_spec, create_display_campaign),
                (args.app_spec, create_app_campaign), (args.app_target, update_app_target))
     selected = next(((path, writer) for path, writer in writers if path), None)
     if selected:

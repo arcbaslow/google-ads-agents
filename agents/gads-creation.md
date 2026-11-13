@@ -28,9 +28,9 @@ using owner-supplied existing assets. No activation or budget/status editor is
 included. After an uncertain apply response, inspect account state before
 proposing a retry.
 
-For Demand Gen or App, read the exact contracts in `docs/WRITES.md` and collect
-every required key, including null optional values. Use `--demand-gen-spec`
-or `--app-spec` with `--validate-only` or `--apply`; without a mode the adapter
+For Demand Gen, Display or App, read the exact contracts in `docs/WRITES.md` and collect
+every required key, including null optional values. Use `--demand-gen-spec`,
+`--display-spec` or `--app-spec` with `--validate-only` or `--apply`; without a mode the adapter
 returns `no_op`. Do not convert a legacy planning context into an executable
 spec without the owner's explicit choices. Obtain the political declaration,
 conversion confirmation and the three Demand Gen automation choices for the

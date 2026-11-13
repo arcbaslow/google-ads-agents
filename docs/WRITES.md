@@ -272,6 +272,59 @@ mappings were checked against installed v25 `Campaign`, `TargetSpend`,
 and `DemandGenVideoResponsiveAdInfo` docstrings. Tests use real v25 protobufs
 with mocked services; no live account eligibility has been verified.
 
+## PAUSED Display campaigns
+
+`gads_creation.py --display-spec display.json` accepts exactly these fields:
+
+```json
+{
+  "name": "Reviewed Display campaign",
+  "budget_micros": 50000000,
+  "bidding": "MAXIMIZE_CONVERSIONS",
+  "target_cpa_micros": null,
+  "target_roas": null,
+  "geo_target_ids": ["2840"],
+  "language_ids": ["1000"],
+  "ad": {
+    "final_url": "https://example.com/offer",
+    "business_name": "Example",
+    "headlines": ["Short headline"],
+    "long_headline": "A longer headline for wider placements",
+    "descriptions": ["A description"],
+    "marketing_images": ["customers/1234567890/assets/10"],
+    "square_marketing_images": ["customers/1234567890/assets/11"],
+    "logo_images": [],
+    "square_logo_images": []
+  },
+  "eu_political_advertising": false,
+  "conversions_confirmed": true
+}
+```
+
+The budget is daily. `bidding` takes the same four values as Demand Gen with
+the same target rules. `headlines` and `descriptions` take 1-5 texts.
+`marketing_images` and `square_marketing_images` each need at least one
+existing asset and together allow at most 15; `logo_images` and
+`square_logo_images` together allow at most 5. Assets must belong to the same
+customer. Text lengths, image dimensions and eligibility are left to API
+validation.
+
+The request creates an unshared daily budget (-1), a PAUSED `DISPLAY` campaign
+(-2), an ENABLED `DISPLAY_STANDARD` ad group (-3), campaign-level location and
+language criteria, and one ENABLED responsive display ad, in one atomic
+request with `partial_failure=False` and `retry=None`. Review, apply and
+retry rules match Demand Gen above.
+
+```sh
+python scripts/gads_creation.py --customer 1234567890 --display-spec display.json --validate-only --json
+python scripts/gads_creation.py --customer 1234567890 --display-spec display.json --apply --json
+```
+
+The MCP tools `create_demand_gen_campaign`, `create_display_campaign` and
+`create_app_campaign` take the same strict specs as `spec`, check referenced
+assets, conversion actions and user lists and refuse a same-name campaign,
+then follow the dry-run and confirm flow described under MCP write tools.
+
 ## PAUSED App campaigns and target edits
 
 `gads_creation.py --app-spec app.json` accepts exactly these fields:

@@ -111,6 +111,7 @@ def test_cli_labels_draft_as_planning_only(monkeypatch, tmp_path, capsys):
 STRICT_SOURCES = [
     ("--search-spec", "create_search_campaign"),
     ("--demand-gen-spec", "create_demand_gen_campaign"),
+    ("--display-spec", "create_display_campaign"),
     ("--app-spec", "create_app_campaign"),
     ("--app-target", "update_app_target"),
 ]

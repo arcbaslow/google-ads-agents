@@ -108,6 +108,16 @@ APP_SPEC = {
     "eu_political_advertising": True, "conversions_confirmed": True,
 }
 TARGET_SPEC = {"campaign_id": "42", "target_cpa_micros": 2000000, "target_roas": None}
+DISPLAY_SPEC = {
+    "name": "Display", "budget_micros": 50000000, "bidding": "MAXIMIZE_CONVERSIONS",
+    "target_cpa_micros": None, "target_roas": None, "geo_target_ids": ["2840"],
+    "language_ids": ["1000"], "eu_political_advertising": False, "conversions_confirmed": True,
+    "ad": {"final_url": "https://example.com", "business_name": "Example",
+           "headlines": ["Headline"], "long_headline": "Long headline", "descriptions": ["Description"],
+           "marketing_images": ["customers/123/assets/10"],
+           "square_marketing_images": ["customers/123/assets/13"],
+           "logo_images": ["customers/123/assets/11"], "square_logo_images": ["customers/123/assets/14"]},
+}
 WRITERS = [(gads_creation.create_demand_gen_campaign, DG_SPEC), (gads_creation.create_app_campaign, APP_SPEC)]
 
 
@@ -651,3 +661,124 @@ def test_app_target_read_rejections(api, case):
     with pytest.raises(ValueError):
         gads_creation.update_app_target("123", TARGET_SPEC)
     api[1].mutate_campaigns.assert_not_called()
+
+
+@pytest.mark.parametrize("eu", [False, True])
+def test_display_builder_fields_and_summary(api, eu):
+    spec = copy.deepcopy(DISPLAY_SPEC)
+    spec["eu_political_advertising"] = eu
+    cid, ops, summary = gads_creation.build_display_campaign("1-23", spec, gads_client.build_client())
+    api[0].mutate.assert_not_called()
+    assert cid == "123"
+    assert [op._pb.WhichOneof("operation") for op in ops] == [
+        "campaign_budget_operation", "campaign_operation", "ad_group_operation",
+        "campaign_criterion_operation", "campaign_criterion_operation", "ad_group_ad_operation",
+    ]
+    budget, campaign, group = (getattr(ops[i], kind + "_operation").create
+                               for i, kind in enumerate(("campaign_budget", "campaign", "ad_group")))
+    assert budget.resource_name == "customers/123/campaignBudgets/-1"
+    assert budget.amount_micros == spec["budget_micros"] and budget.total_amount_micros == 0
+    assert campaign.resource_name == "customers/123/campaigns/-2"
+    assert campaign.campaign_budget == budget.resource_name
+    assert campaign.status.name == "PAUSED" and campaign.advertising_channel_type.name == "DISPLAY"
+    assert campaign.contains_eu_political_advertising.name == (
+        "CONTAINS_EU_POLITICAL_ADVERTISING" if eu else "DOES_NOT_CONTAIN_EU_POLITICAL_ADVERTISING")
+    assert group.type_.name == "DISPLAY_STANDARD" and group.campaign == campaign.resource_name
+    assert group.resource_name == "customers/123/adGroups/-3"
+    assert ops[3].campaign_criterion_operation.create.campaign == campaign.resource_name
+    assert ops[3].campaign_criterion_operation.create.location.geo_target_constant == "geoTargetConstants/2840"
+    assert ops[4].campaign_criterion_operation.create.campaign == campaign.resource_name
+    assert ops[4].campaign_criterion_operation.create.language.language_constant == "languageConstants/1000"
+    ad = ops[-1].ad_group_ad_operation.create
+    assert ad.ad_group == group.resource_name and ad.status.name == "ENABLED"
+    assert not ad.ad_group_ad_asset_automation_settings and not campaign.asset_automation_settings
+    assert list(ad.ad.final_urls) == [spec["ad"]["final_url"]]
+    info = ad.ad.responsive_display_ad
+    assert info.business_name == "Example" and info.long_headline.text == "Long headline"
+    assert [item.text for item in info.headlines] == spec["ad"]["headlines"]
+    assert [item.text for item in info.descriptions] == spec["ad"]["descriptions"]
+    for slot in ("marketing_images", "square_marketing_images", "logo_images", "square_logo_images"):
+        assert [item.asset for item in getattr(info, slot)] == spec["ad"][slot]
+    assert summary == {
+        "campaign_type": "DISPLAY", "name": "Display", "status": "PAUSED", "budget_micros": 50000000,
+        "budget_period": "DAILY", "bidding": "MAXIMIZE_CONVERSIONS", "target_cpa_micros": None,
+        "target_roas": None, "geo_count": 1, "language_count": 1, "eu_political_advertising": eu,
+        "ad": {"type": "RESPONSIVE_DISPLAY_AD", "headlines": 1, "descriptions": 1, "long_headlines": 1,
+               "final_url": spec["ad"]["final_url"], "business_name": spec["ad"]["business_name"],
+               "assets": {slot: 1 for slot in ("marketing_images", "square_marketing_images",
+                                               "logo_images", "square_logo_images")}},
+    }
+
+
+@pytest.mark.parametrize("bidding,field,target,value", [
+    ("MAXIMIZE_CLICKS", "target_spend", None, None),
+    ("MAXIMIZE_CONVERSIONS", "maximize_conversions", None, None),
+    ("TARGET_CPA", "maximize_conversions", "target_cpa_micros", 3000000),
+    ("TARGET_ROAS", "maximize_conversion_value", "target_roas", 2.5),
+])
+def test_display_bidding(api, bidding, field, target, value):
+    spec = copy.deepcopy(DISPLAY_SPEC)
+    spec["bidding"] = bidding
+    if target:
+        spec[target] = value
+    _, ops, summary = gads_creation.build_display_campaign("123", spec, gads_client.build_client())
+    campaign = ops[1].campaign_operation.create
+    assert campaign._pb.WhichOneof("campaign_bidding_strategy") == field
+    assert gads_client._msg_to_dict(getattr(campaign, field)._pb) == (
+        {target: str(value) if target == "target_cpa_micros" else value} if target else {})
+    assert summary["bidding"] == bidding
+    if target:
+        assert summary[target] == value
+
+
+@pytest.mark.parametrize("field,value", [
+    ("final_url", "relative"), ("final_url", "ftp://example.com"), ("final_url", "https://ex ample.com"),
+    ("final_url", "https://[bad"), ("headlines", []), ("headlines", ["x"] * 6),
+    ("descriptions", []), ("descriptions", ["x"] * 6), ("long_headline", ""), ("business_name", ""),
+    ("marketing_images", []), ("square_marketing_images", []), ("marketing_images", None),
+    ("marketing_images", ["customers/456/assets/10"]), ("marketing_images", ["customers/123/assets/10"] * 15),
+    ("square_marketing_images", ["customers/123/assets/10"] * 15),
+    ("logo_images", ["customers/123/assets/10"] * 5), ("square_logo_images", ["customers/123/assets/10"] * 5),
+    ("logo_images", None), ("square_logo_images", "customers/123/assets/10"),
+])
+def test_display_invalid_ad_before_credentials(monkeypatch, field, value):
+    spec = copy.deepcopy(DISPLAY_SPEC)
+    spec["ad"][field] = value
+    reject_before_client(monkeypatch, gads_creation.create_display_campaign, spec)
+
+
+@pytest.mark.parametrize("field,value", [
+    ("bidding", "MANUAL_CPC"), ("target_cpa_micros", 100), ("target_roas", 2),
+    ("budget_micros", 0), ("conversions_confirmed", False), ("eu_political_advertising", None),
+    ("language_ids", ["1000"] * 51), ("geo_target_ids", []),
+])
+def test_display_invalid_spec_before_credentials(monkeypatch, field, value):
+    spec = copy.deepcopy(DISPLAY_SPEC)
+    spec[field] = value
+    reject_before_client(monkeypatch, gads_creation.create_display_campaign, spec)
+
+
+def test_display_exact_keys_before_credentials(monkeypatch):
+    for nested in (False, True):
+        keys = DISPLAY_SPEC["ad"] if nested else DISPLAY_SPEC
+        for key in [*keys, "extra"]:
+            spec = copy.deepcopy(DISPLAY_SPEC)
+            target = spec["ad"] if nested else spec
+            if key == "extra":
+                target[key] = None
+            else:
+                del target[key]
+            reject_before_client(monkeypatch, gads_creation.create_display_campaign, spec)
+
+
+@pytest.mark.parametrize("dry", [True, False])
+def test_display_cli_writer(api, dry):
+    spec = copy.deepcopy(DISPLAY_SPEC)
+    spec["language_ids"] = []
+    spec["ad"].update(logo_images=[], square_logo_images=[])
+    result = gads_creation.create_display_campaign("123", spec, dry)
+    assert result["status"] == ("validated" if dry else "applied")
+    calls = api[0].mutate.call_args_list
+    assert [call.kwargs["request"]["validate_only"] for call in calls] == ([True] if dry else [True, False])
+    assert all(call.kwargs["request"]["partial_failure"] is False for call in calls)
+    assert len(calls[0].kwargs["request"]["mutate_operations"]) == 5

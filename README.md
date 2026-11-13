@@ -25,7 +25,7 @@ A Python toolkit for investigating Google Ads accounts and preparing changes for
 | Delivery | Budget pacing, anomalies, placement classification, demographic and geographic breakdowns |
 | Assets | RSA strength, PMax linked asset inventory, creative briefs and asset workflows |
 | Account operations | Per-MCC auth profiles, saved audit history and multi-account audits |
-| Reviewed changes | PAUSED Search, Demand Gen and App campaigns, App targets, negatives, placements, Display targeting, image and YouTube video assets, and Video/Display ad edits with JSON review, confirmation and validation |
+| Reviewed changes | PAUSED Search, Demand Gen, Display and App campaigns, App targets, negatives, placements, Display targeting, image and YouTube video assets, and Video/Display ad edits with JSON review, confirmation and validation |
 
 ## How an audit runs
 
@@ -146,7 +146,7 @@ python scripts/gads_upload_video.py --customer 1234567890 --file video.mp4 --tit
 
 Video uploads default to `UNLISTED`; `--privacy PUBLIC` needs `--channel-id` for a brand channel, since Google-managed channels accept only `UNLISTED`. Uploads have no validate-only mode: the CLI previews the resolved file path, size and metadata, requires terminal `y/N`, and opens the upload session once with a 30-minute deadline. Within that session the SDK may resend chunks after a network error, which cannot create a second upload. It returns the upload resource, upload ID and a processing-state query for MCP `run_gaql`. Any failure after confirmation reports `outcome_unknown`.
 
-Campaign context produces a planning draft and does not verify measurement health. Separate strict `--search-spec`, `--demand-gen-spec` and `--app-spec` files create PAUSED campaigns atomically after review and validation; Video campaigns cannot be created through the API. See [bounded writes](docs/WRITES.md) for the required fields and limits.
+Campaign context produces a planning draft and does not verify measurement health. Separate strict `--search-spec`, `--demand-gen-spec`, `--display-spec` and `--app-spec` JSON files create PAUSED campaigns atomically after terminal review, with `--validate-only` or `--apply`. Display creates one standard ad group and one responsive Display ad from existing image assets, with a daily budget and campaign-level geo and language criteria. Video campaigns cannot be created through the API; use Demand Gen with a `VIDEO_RESPONSIVE` ad to reach YouTube inventory. See [bounded writes](docs/WRITES.md) for the Search, Demand Gen, Display and App fields and limits.
 
 ### Optional hooks and sign-in service
 
@@ -189,6 +189,11 @@ Every tool registered by `register` is annotated read-only. These tools call onl
 | `manage_labels` | Create, update supplied fields or remove one label. Names up to 80 characters, descriptions up to 200 and `#RRGGBB` colors. Annotated destructive. | `LabelService` |
 | `manage_label_associations` | Attach or remove a label on up to 200 campaigns, ad groups or ad group criteria. Customer-level labels are not supported yet. Checks existing links and refuses Video campaign targets. Annotated destructive. | Campaign, ad group and criterion label services |
 | `create_asset` | Create an unlinked text, image, YouTube video, sitelink, callout or structured snippet asset. Images are base64 PNG/JPEG/GIF up to 5120 KB; previews contain only MIME, byte count and SHA-256. Use `update_asset_group_assets` to link to PMax. | `AssetService` |
+| `create_demand_gen_campaign` | PAUSED Demand Gen campaign, one ad group and one ad from existing assets. Same strict spec as `--demand-gen-spec`, including channel controls and `VIDEO_RESPONSIVE` for YouTube inventory. | `GoogleAdsService` (atomic) |
+| `create_display_campaign` | PAUSED Display campaign, one standard ad group and one responsive Display ad from existing images. Same strict spec as `--display-spec`. | `GoogleAdsService` (atomic) |
+| `create_app_campaign` | PAUSED App install or engagement campaign, one ad group and one ad from existing assets. Same strict spec as `--app-spec`, with conversion-action and user-list checks. | `GoogleAdsService` (atomic) |
+
+Campaign creation checks referenced asset types and rejects an existing non-REMOVED campaign with the same name. References and matching campaigns are re-read on confirmation; changed state returns `conflict`. Each campaign request uses `partial_failure=False`.
 
 A call without `confirm` changes nothing: it reads the targets, sends the operations with `validate_only`, and returns current and new values with a single-use `confirm` token valid for 10 minutes. The identical call with that token calls the host's `gate()`, then sends the same operations once, with a 60-second deadline and no automatic retry. Different arguments or a used token return `invalid_argument`; targets that changed since the dry run return `conflict`; in both cases nothing is sent. A gate refusal is returned unchanged and keeps the token. A Google Ads rejection returns `errors` with only the API's error codes and field paths. A timeout or server error on a confirmed write says the change may have been applied; read before trying again. Video campaigns return `not_supported`, since the API rejects every change to them. Each confirmed write logs one line: `gads write <tool> <resource> outcome=<ok|category>`. The OAuth scope is the same `adwords` scope the read tools use; the Google Ads user needs Standard or Admin access to the account.
 
