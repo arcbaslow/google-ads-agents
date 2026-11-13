@@ -68,6 +68,13 @@ def test_request_preview_and_single_send(upload, monkeypatch, capsys, privacy, c
     assert "you_tube_video_upload.state" in result["query"] and "you_tube_video_upload.video_id" in result["query"]
 
 
+def test_public_without_brand_channel_sends_nothing(upload):
+    send, path = upload
+    with pytest.raises(ValueError, match="requires --channel-id"):
+        run(path, privacy="PUBLIC")
+    send.assert_not_called()
+
+
 @pytest.mark.parametrize("case", ["extension", "missing", "directory", "empty"])
 def test_invalid_file_sends_nothing(upload, tmp_path, case):
     send, path = upload

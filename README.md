@@ -144,7 +144,7 @@ python scripts/gads_apply.py --customer 1234567890 negatives --input negatives.j
 python scripts/gads_upload_video.py --customer 1234567890 --file video.mp4 --title "Product demo" --description "Product walkthrough" --json
 ```
 
-Video uploads default to `UNLISTED`; `--privacy PUBLIC` and `--channel-id` are optional. Uploads have no validate-only mode: the CLI previews the resolved file path, size and metadata, requires terminal `y/N`, and opens the upload session once with a 30-minute deadline. Within that session the SDK may resend chunks after a network error, which cannot create a second upload. It returns the upload resource, upload ID and a processing-state query for MCP `run_gaql`. Any failure after confirmation reports `outcome_unknown`.
+Video uploads default to `UNLISTED`; `--privacy PUBLIC` needs `--channel-id` for a brand channel, since Google-managed channels accept only `UNLISTED`. Uploads have no validate-only mode: the CLI previews the resolved file path, size and metadata, requires terminal `y/N`, and opens the upload session once with a 30-minute deadline. Within that session the SDK may resend chunks after a network error, which cannot create a second upload. It returns the upload resource, upload ID and a processing-state query for MCP `run_gaql`. Any failure after confirmation reports `outcome_unknown`.
 
 Campaign context produces a planning draft and does not verify measurement health. Separate strict `--search-spec`, `--demand-gen-spec` and `--app-spec` files create PAUSED campaigns atomically after review and validation; Video campaigns cannot be created through the API. See [bounded writes](docs/WRITES.md) for the required fields and limits.
 

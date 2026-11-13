@@ -51,6 +51,8 @@ def upload_video(customer_id: str, file: str, title: str, description: str,
         raise ValueError("Video file must be non-empty")
     if privacy not in ("UNLISTED", "PUBLIC"):
         raise ValueError("privacy must be UNLISTED or PUBLIC")
+    if privacy == "PUBLIC" and channel_id is None:
+        raise ValueError("PUBLIC privacy requires --channel-id; Google-managed channels require UNLISTED")
     if not isinstance(title, str) or not title.strip() or len(title) > 100:
         raise ValueError("title must contain 1-100 characters")
     if not isinstance(description, str) or len(description) > 5000:
