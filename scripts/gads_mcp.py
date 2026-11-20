@@ -978,9 +978,9 @@ def _review(tool: str, arguments: dict, confirm: str | None, gate: Callable[[], 
     try:
         response = send(False)
     except Exception as exc:
-        log.info("gads write %s %s outcome=%s", tool, target, _classify(exc)[0])
+        log.info("ads write %s %s outcome=%s", tool, target, _classify(exc)[0])
         raise
-    log.info("gads write %s %s outcome=ok", tool, target)
+    log.info("ads write %s %s outcome=ok", tool, target)
     return {"dry_run": False, **head, "applied": len(response.results),
             "resource_names": [result.resource_name for result in response.results]}
 

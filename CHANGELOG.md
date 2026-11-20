@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- Log confirmed MCP writes as `ads write <tool> <resource> outcome=...` instead of `gads write`, so a host that reads write lines by set name files them under the same `ads` prefix as its other Google Ads writes.
 - Add a strict Display CLI creator and shared Demand Gen, Display and App builders. Expose three atomic MCP campaign creation tools through the existing confirm-token flow, with reference checks, same-name campaign conflicts and created resource names.
 - Add MCP label management, label associations (campaigns, ad groups and ad group criteria; customer-level labels are not included) and unlinked asset creation through the existing single-use, 10-minute confirm-token flow with state re-read and conflict checks. Add the historical-metrics status-filter hint to `run_gaql`.
 - Add `gads_upload_video.py`: reviewed local video upload with UNLISTED privacy, or PUBLIC on a brand channel, a 30-minute deadline, one upload session (the SDK may resend chunks within it) and unknown-outcome reporting. Returns the upload ID and a processing-state query without creating an asset. The module is listed in the package.

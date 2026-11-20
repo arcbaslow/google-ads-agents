@@ -288,7 +288,7 @@ def test_dry_run_validates_and_confirm_sends_once(account, caplog, name, args, s
     assert sent[1][2]["timeout"] == gads_mcp._WRITE_TIMEOUT_SECONDS
     assert sent[1][2]["request"].operations == request.operations
     lines = [r.getMessage() for r in caplog.records if " write " in r.getMessage()]
-    assert lines == [f"gads write {name} {lines[0].split()[3]} outcome=ok"]
+    assert lines == [f"ads write {name} {lines[0].split()[3]} outcome=ok"]
 
     again = call(server, name, **args, confirm=dry["confirm"])
     assert again["error"] == "invalid_argument"
@@ -518,7 +518,8 @@ def test_hung_write_hits_the_deadline_and_reports_unknown_outcome(account, caplo
     out = call(server, "set_ad_status", **WRITES[1][1], confirm=dry["confirm"])
     assert out["error"] == "upstream_error" and "may have been applied" in out["hint"]
     assert mutates(account)[1][2]["timeout"] == gads_mcp._WRITE_TIMEOUT_SECONDS
-    assert "gads write set_ad_status" in caplog.text and "outcome=upstream_error" in caplog.text
+    lines = [r.getMessage() for r in caplog.records if " write " in r.getMessage()]
+    assert lines == [f"ads write set_ad_status {lines[0].split()[3]} outcome=upstream_error"]
 
 
 def test_rejected_write_gets_write_hints(account):
