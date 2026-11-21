@@ -680,6 +680,115 @@ def asset_group_assets(
             "complete": complete}
 
 
+_BLOCKLIST_TYPES = ("NEGATIVE_KEYWORDS", "NEGATIVE_PLACEMENTS")
+_MATCH_TYPES = ("EXACT", "PHRASE", "BROAD")
+_PLACEMENT_FIELDS = {
+    "placement": "url",
+    "youtube_channel": "channel_id",
+    "youtube_video": "video_id",
+    "mobile_application": "app_id",
+}
+
+
+def _shared_criterion_row(row: dict[str, Any]) -> dict[str, Any]:
+    criterion = row.get("shared_criterion", {})
+    out: dict[str, Any] = {
+        "criterion_id": criterion.get("criterion_id"),
+        "type": criterion.get("type"),
+    }
+    if "keyword" in criterion:
+        out["text"] = criterion["keyword"].get("text")
+        out["match_type"] = criterion["keyword"].get("match_type")
+    for kind, field in _PLACEMENT_FIELDS.items():
+        if kind in criterion:
+            out[field] = criterion[kind].get(field)
+    return out
+
+
+def shared_blocklists(
+    customer_id: str,
+    list_type: str | None = None,
+    shared_set_id: str | None = None,
+    limit: int = 200,
+    profile: str | None = None,
+) -> dict[str, Any]:
+    """List reusable NEGATIVE_KEYWORDS and NEGATIVE_PLACEMENTS shared sets (not REMOVED) with
+    member count and linked campaign count. Filter by `list_type` or pass `shared_set_id` to also
+    return that list's criteria (with criterion IDs for REMOVE_ITEMS) and linked ENABLED campaigns.
+    `limit` defaults to 200, maximum 500.
+    """
+    cid = _customer_id(customer_id)
+    limit = _bounded("limit", limit, 1, 500)
+    where = ["shared_set.status != 'REMOVED'"]
+    if list_type is None:
+        where.append("shared_set.type IN ('NEGATIVE_KEYWORDS', 'NEGATIVE_PLACEMENTS')")
+    else:
+        where.append(f"shared_set.type = '{_status(list_type, _BLOCKLIST_TYPES, 'list_type')}'")
+    set_id = None if shared_set_id is None else _id(shared_set_id, "shared_set_id")
+    if set_id is not None:
+        where.append(f"shared_set.id = {set_id}")
+    rows, complete = _select(
+        cid,
+        "shared_set.id, shared_set.name, shared_set.type, shared_set.status, "
+        "shared_set.member_count, shared_set.reference_count",
+        "shared_set",
+        where,
+        "shared_set.id",
+        limit,
+    )
+    items = []
+    for row in rows:
+        ss = row.get("shared_set", {})
+        items.append({
+            "shared_set_id": ss.get("id"),
+            "name": ss.get("name"),
+            "type": ss.get("type"),
+            "status": ss.get("status"),
+            "member_count": int(ss.get("member_count", 0) or 0),
+            "reference_count": int(ss.get("reference_count", 0) or 0),
+        })
+    result: dict[str, Any] = {
+        "customer_id": cid,
+        "blocklists": items,
+        "rows_returned": len(items),
+        "complete": complete,
+    }
+    if set_id is not None:
+        if not items:
+            raise _Failure("not_found", f"No shared blocklist with ID {set_id} was found.")
+        crit_rows, crit_complete = _select(
+            cid,
+            "shared_criterion.criterion_id, shared_criterion.type, "
+            "shared_criterion.keyword.text, shared_criterion.keyword.match_type, "
+            "shared_criterion.placement.url, shared_criterion.youtube_channel.channel_id, "
+            "shared_criterion.youtube_video.video_id, shared_criterion.mobile_application.app_id",
+            "shared_criterion",
+            [f"shared_set.id = {set_id}"],
+            "shared_criterion.criterion_id",
+            limit,
+        )
+        link_rows, link_complete = _select(
+            cid,
+            "campaign.id, campaign.name, campaign_shared_set.status",
+            "campaign_shared_set",
+            [f"shared_set.id = {set_id}", "campaign_shared_set.status = 'ENABLED'"],
+            "campaign.id",
+            limit,
+        )
+        result["criteria"] = [_shared_criterion_row(r) for r in crit_rows]
+        result["criteria_complete"] = crit_complete
+        result["campaigns"] = [
+            {
+                "campaign_id": r.get("campaign", {}).get("id"),
+                "name": r.get("campaign", {}).get("name"),
+                "status": r.get("campaign_shared_set", {}).get("status"),
+            }
+            for r in link_rows
+        ]
+        result["campaigns_complete"] = link_complete
+    return result
+
+
 TOOLS: tuple[tuple[str, str, Callable[..., dict[str, Any]]], ...] = (
     ("list_accounts", "List Google Ads accounts", list_accounts),
     ("run_gaql", "Run a GAQL query", run_gaql),
@@ -691,6 +800,7 @@ TOOLS: tuple[tuple[str, str, Callable[..., dict[str, Any]]], ...] = (
     ("ads", "List ads", ads),
     ("search_terms", "Search terms report", search_terms),
     ("asset_group_assets", "List Performance Max asset group assets", asset_group_assets),
+    ("shared_blocklists", "List shared negative keyword and placement lists", shared_blocklists),
 )
 
 
@@ -1802,6 +1912,400 @@ def create_app_campaign(
                               gads_creation.build_app_campaign)
 
 
+def _blocklist_name(name: Any) -> str:
+    if not isinstance(name, str) or any(c in name for c in ("\x00", "\r", "\n")):
+        raise _Failure("invalid_argument", "name must be a single-line string.")
+    cleaned = name.strip()
+    if not 1 <= len(cleaned.encode("utf-8")) <= 255:
+        raise _Failure("invalid_argument", "name must be 1 to 255 UTF-8 bytes after stripping.")
+    return cleaned
+
+
+def _blocklist_keywords(keywords: Any) -> list[dict[str, str]]:
+    if keywords is None:
+        return []
+    if not isinstance(keywords, list):
+        raise _Failure("invalid_argument", "keywords must be a list of objects.")
+    items, seen = [], set()
+    for entry in keywords:
+        if not isinstance(entry, dict) or not set(entry) <= {"text", "match_type"}:
+            raise _Failure("invalid_argument", "Each keyword must have text and optional match_type.")
+        raw_text = entry.get("text")
+        if not isinstance(raw_text, str) or any(c in raw_text for c in ("\x00", "\r", "\n")):
+            raise _Failure("invalid_argument", "Keyword text must be a non-empty single-line string.")
+        text = raw_text.strip()
+        if not text:
+            raise _Failure("invalid_argument", "Keyword text must be a non-empty single-line string.")
+        match_type = _status(entry.get("match_type", "PHRASE"), _MATCH_TYPES, "match_type")
+        key = (text.casefold(), match_type)
+        if key in seen:
+            raise _Failure("invalid_argument", "keywords contains duplicates.")
+        seen.add(key)
+        items.append({"type": "keyword", "text": text, "match_type": match_type})
+    return items
+
+
+def _blocklist_items(
+    list_type: str,
+    keywords: list[dict[str, str]] | None,
+    placements: list[str] | None,
+    youtube_channel_ids: list[str] | None,
+    youtube_video_ids: list[str] | None,
+    mobile_app_ids: list[str] | None,
+) -> list[dict[str, str]]:
+    placement_args = (placements, youtube_channel_ids, youtube_video_ids, mobile_app_ids)
+    if list_type == "NEGATIVE_KEYWORDS":
+        if any(arg is not None for arg in placement_args):
+            raise _Failure(
+                "invalid_argument",
+                "NEGATIVE_KEYWORDS blocklists accept keywords only, not placement lists.",
+            )
+        return _blocklist_keywords(keywords)
+    if keywords is not None:
+        raise _Failure(
+            "invalid_argument",
+            "NEGATIVE_PLACEMENTS blocklists accept placement lists only, not keywords.",
+        )
+    return [
+        {"type": kind, "value": value}
+        for kind, values in (
+            ("placement", _strings(placements, "placements")),
+            ("youtube_channel", _strings(youtube_channel_ids, "youtube_channel_ids")),
+            ("youtube_video", _strings(youtube_video_ids, "youtube_video_ids")),
+            ("mobile_application", _strings(mobile_app_ids, "mobile_app_ids")),
+        )
+        for value in values
+    ]
+
+
+def _populate_shared_criterion(client, criterion, shared_set_path: str, item: dict[str, str]) -> None:
+    criterion.shared_set = shared_set_path
+    if item["type"] == "keyword":
+        criterion.keyword.text = item["text"]
+        criterion.keyword.match_type = getattr(client.enums.KeywordMatchTypeEnum, item["match_type"])
+    else:
+        setattr(getattr(criterion, item["type"]), _PLACEMENT_FIELDS[item["type"]], item["value"])
+
+
+def _load_blocklist(cid: str, set_id: str) -> list[dict[str, Any]]:
+    import gads_client
+
+    rows = gads_client.search_stream(cid, f"""
+        SELECT shared_set.id, shared_set.name, shared_set.type, shared_set.status,
+          shared_set.member_count, shared_set.reference_count
+        FROM shared_set WHERE shared_set.id = {set_id}""")
+    if not rows or rows[0]["shared_set"].get("status") != "ENABLED":
+        raise _Failure("not_found", f"No ENABLED shared blocklist with ID {set_id} was found.")
+    if rows[0]["shared_set"].get("type") not in _BLOCKLIST_TYPES:
+        raise _Failure(
+            "invalid_argument",
+            f"Shared set {set_id} is not a NEGATIVE_KEYWORDS or NEGATIVE_PLACEMENTS blocklist.",
+        )
+    return rows
+
+
+def manage_shared_blocklist(
+    customer_id: str,
+    operation: str,
+    list_type: str | None = None,
+    name: str | None = None,
+    shared_set_id: str | None = None,
+    keywords: list[dict[str, str]] | None = None,
+    placements: list[str] | None = None,
+    youtube_channel_ids: list[str] | None = None,
+    youtube_video_ids: list[str] | None = None,
+    mobile_app_ids: list[str] | None = None,
+    criterion_ids: list[str] | None = None,
+    confirm: str | None = None,
+    profile: str | None = None,
+    *,
+    gate: Callable[[], Any],
+) -> dict[str, Any]:
+    """Create, populate, trim or remove a reusable NEGATIVE_KEYWORDS or NEGATIVE_PLACEMENTS
+    shared set. CREATE takes list_type and name (1-255 UTF-8 bytes) and optionally seeds up to
+    200 items atomically in one mutate. ADD_ITEMS adds 1-200 keywords ({text, match_type} with
+    default PHRASE) or placements (placements, youtube_channel_ids, youtube_video_ids,
+    mobile_app_ids) to an ENABLED blocklist. REMOVE_ITEMS removes 1-200 criterion_ids read from
+    shared_blocklists. REMOVE removes an ENABLED blocklist. Without confirm, validate_only
+    returns a preview and a single-use confirm token valid for 10 minutes; repeat identical
+    arguments with the token to apply once after the host gate.
+    """
+    arguments = _arguments(locals())
+    import gads_client
+
+    cid = _customer_id(customer_id)
+    operation = _status(operation, ("CREATE", "ADD_ITEMS", "REMOVE_ITEMS", "REMOVE"), "operation")
+    _check_confirm(confirm)
+    has_items_arg = any(
+        arg is not None
+        for arg in (keywords, placements, youtube_channel_ids, youtube_video_ids, mobile_app_ids)
+    )
+
+    if operation == "CREATE":
+        if list_type is None or name is None or shared_set_id is not None or criterion_ids is not None:
+            raise _Failure(
+                "invalid_argument",
+                "CREATE requires list_type and name and does not accept shared_set_id or criterion_ids.",
+            )
+        set_type = _status(list_type, _BLOCKLIST_TYPES, "list_type")
+        cleaned_name = _blocklist_name(name)
+        items = _blocklist_items(
+            set_type, keywords, placements, youtube_channel_ids, youtube_video_ids, mobile_app_ids
+        )
+        if len(items) > _MAX_WRITE_ITEMS:
+            raise _Failure("invalid_argument", f"Pass at most {_MAX_WRITE_ITEMS} items in one call.")
+        escaped = cleaned_name.replace("\\", "\\\\").replace("'", "\\'")
+        state = gads_client.search_stream(cid, f"""
+            SELECT shared_set.id, shared_set.name, shared_set.type, shared_set.status
+            FROM shared_set
+            WHERE shared_set.name = '{escaped}' AND shared_set.type = '{set_type}'
+            ORDER BY shared_set.id""")
+        duplicates = [
+            str(r["shared_set"]["id"]) for r in state if r["shared_set"].get("status") == "ENABLED"
+        ]
+        if duplicates and confirm is None:
+            raise _Failure(
+                "invalid_argument",
+                f"An ENABLED {set_type} blocklist with this name exists: {', '.join(duplicates)}.",
+            )
+        client = gads_client.build_client()
+        head = {
+            "customer_id": cid,
+            "operation": operation,
+            "list_type": set_type,
+            "name": cleaned_name,
+            "items": items,
+        }
+        if not items:
+            op = client.get_type("SharedSetOperation")
+            op.create.name = cleaned_name
+            op.create.type_ = getattr(client.enums.SharedSetTypeEnum, set_type)
+
+            def _send(validate_only: bool):
+                return _mutate(
+                    client, "SharedSetService", "mutate_shared_sets",
+                    "MutateSharedSetsRequest", cid, [op], validate_only,
+                )
+        else:
+            temp_path = f"customers/{cid}/sharedSets/-1"
+            ops = []
+            set_op = client.get_type("MutateOperation")
+            set_op.shared_set_operation.create.resource_name = temp_path
+            set_op.shared_set_operation.create.name = cleaned_name
+            set_op.shared_set_operation.create.type_ = getattr(
+                client.enums.SharedSetTypeEnum, set_type
+            )
+            ops.append(set_op)
+            for item in items:
+                crit_op = client.get_type("MutateOperation")
+                _populate_shared_criterion(
+                    client, crit_op.shared_criterion_operation.create, temp_path, item
+                )
+                ops.append(crit_op)
+
+            def _send(validate_only: bool):
+                return _mutate_atomic(client, cid, ops, validate_only)
+        return _review(
+            "manage_shared_blocklist", arguments, confirm, gate, f"customers/{cid}", state, head,
+            _send,
+        )
+
+    if list_type is not None or name is not None:
+        raise _Failure(
+            "invalid_argument", f"{operation} does not accept list_type or name."
+        )
+    set_id = _id(shared_set_id, "shared_set_id")
+    set_path = f"customers/{cid}/sharedSets/{set_id}"
+
+    if operation == "ADD_ITEMS":
+        if criterion_ids is not None:
+            raise _Failure("invalid_argument", "ADD_ITEMS does not accept criterion_ids.")
+        rows = _load_blocklist(cid, set_id)
+        current = rows[0]["shared_set"]
+        items = _blocklist_items(
+            current["type"], keywords, placements, youtube_channel_ids,
+            youtube_video_ids, mobile_app_ids,
+        )
+        if not 1 <= len(items) <= _MAX_WRITE_ITEMS:
+            raise _Failure("invalid_argument", f"Pass 1 to {_MAX_WRITE_ITEMS} items in total.")
+        client = gads_client.build_client()
+        operations = []
+        for item in items:
+            op = client.get_type("SharedCriterionOperation")
+            _populate_shared_criterion(client, op.create, set_path, item)
+            operations.append(op)
+        head = {
+            "customer_id": cid,
+            "operation": operation,
+            "shared_set_id": set_id,
+            "name": current.get("name"),
+            "list_type": current.get("type"),
+            "items": items,
+        }
+        return _review(
+            "manage_shared_blocklist", arguments, confirm, gate, set_path, rows, head,
+            lambda validate_only: _mutate(
+                client, "SharedCriterionService", "mutate_shared_criteria",
+                "MutateSharedCriteriaRequest", cid, operations, validate_only,
+            ),
+        )
+
+    if has_items_arg:
+        raise _Failure("invalid_argument", f"{operation} does not accept keyword or placement items.")
+
+    if operation == "REMOVE_ITEMS":
+        ids = _ids(criterion_ids, "criterion_ids")
+        rows = _load_blocklist(cid, set_id)
+        current = rows[0]["shared_set"]
+        crit_rows = gads_client.search_stream(cid, f"""
+            SELECT shared_criterion.criterion_id, shared_criterion.type,
+              shared_criterion.keyword.text, shared_criterion.keyword.match_type,
+              shared_criterion.placement.url, shared_criterion.youtube_channel.channel_id,
+              shared_criterion.youtube_video.video_id, shared_criterion.mobile_application.app_id
+            FROM shared_criterion
+            WHERE shared_set.id = {set_id}
+              AND shared_criterion.criterion_id IN ({', '.join(ids)})""")
+        found = _found(
+            ids, {r["shared_criterion"]["criterion_id"]: r for r in crit_rows}, "shared criterion"
+        )
+        client = gads_client.build_client()
+        operations = []
+        for crit_id in ids:
+            op = client.get_type("SharedCriterionOperation")
+            op.remove = f"customers/{cid}/sharedCriteria/{set_id}~{crit_id}"
+            operations.append(op)
+        head = {
+            "customer_id": cid,
+            "operation": operation,
+            "shared_set_id": set_id,
+            "name": current.get("name"),
+            "list_type": current.get("type"),
+            "removing": [_shared_criterion_row(r) for r in found],
+        }
+        return _review(
+            "manage_shared_blocklist", arguments, confirm, gate, set_path,
+            {"shared_set": rows, "criteria": found}, head,
+            lambda validate_only: _mutate(
+                client, "SharedCriterionService", "mutate_shared_criteria",
+                "MutateSharedCriteriaRequest", cid, operations, validate_only,
+            ),
+        )
+
+    # REMOVE
+    if criterion_ids is not None:
+        raise _Failure("invalid_argument", "REMOVE accepts only shared_set_id.")
+    rows = _load_blocklist(cid, set_id)
+    current = rows[0]["shared_set"]
+    client = gads_client.build_client()
+    op = client.get_type("SharedSetOperation")
+    op.remove = set_path
+    head = {
+        "customer_id": cid,
+        "operation": operation,
+        "shared_set_id": set_id,
+        "name": current.get("name"),
+        "list_type": current.get("type"),
+        "member_count": int(current.get("member_count", 0) or 0),
+        "reference_count": int(current.get("reference_count", 0) or 0),
+        "changes": [{"field": "status", "current": current.get("status"), "new": "REMOVED"}],
+    }
+    return _review(
+        "manage_shared_blocklist", arguments, confirm, gate, set_path, rows, head,
+        lambda validate_only: _mutate(
+            client, "SharedSetService", "mutate_shared_sets",
+            "MutateSharedSetsRequest", cid, [op], validate_only,
+        ),
+    )
+
+
+def manage_campaign_blocklists(
+    customer_id: str,
+    operation: str,
+    shared_set_id: str,
+    campaign_ids: list[str],
+    confirm: str | None = None,
+    profile: str | None = None,
+    *,
+    gate: Callable[[], Any],
+) -> dict[str, Any]:
+    """Attach (CREATE) or detach (REMOVE) an ENABLED NEGATIVE_KEYWORDS or NEGATIVE_PLACEMENTS
+    shared blocklist on 1-200 campaigns in one atomic mutate. CREATE rejects already-linked
+    campaigns; REMOVE requires existing links. Video campaigns return not_supported. Without
+    confirm, validate_only returns before/after links and a single-use confirm token valid for
+    10 minutes; repeat identical arguments with the token to send once after the host gate.
+    """
+    arguments = _arguments(locals())
+    import gads_client
+
+    cid = _customer_id(customer_id)
+    operation = _status(operation, ("CREATE", "REMOVE"), "operation")
+    set_id = _id(shared_set_id, "shared_set_id")
+    ids = _ids(campaign_ids, "campaign_ids")
+    _check_confirm(confirm)
+    sets = _load_blocklist(cid, set_id)
+    set_row = sets[0]["shared_set"]
+    set_path = f"customers/{cid}/sharedSets/{set_id}"
+    paths = {i: f"customers/{cid}/campaigns/{i}" for i in ids}
+    path_list = ", ".join(f"'{path}'" for path in paths.values())
+    rows = gads_client.search_stream(cid, f"""
+        SELECT campaign.id, campaign.name, campaign.status, campaign.advertising_channel_type
+        FROM campaign WHERE campaign.id IN ({', '.join(ids)})""")
+    targets = _found(
+        ids,
+        {str(r["campaign"]["id"]): r for r in rows if r["campaign"].get("status") != "REMOVED"},
+        "campaign",
+    )
+    for row in targets:
+        _writable(row)
+    links = gads_client.search_stream(cid, f"""
+        SELECT campaign_shared_set.resource_name, campaign_shared_set.campaign,
+          campaign_shared_set.shared_set, campaign_shared_set.status
+        FROM campaign_shared_set
+        WHERE campaign_shared_set.shared_set = '{set_path}'
+          AND campaign_shared_set.campaign IN ({path_list})
+          AND campaign_shared_set.status = 'ENABLED'""")
+    links.sort(key=lambda r: r["campaign_shared_set"]["resource_name"])
+    linked = {r["campaign_shared_set"]["campaign"] for r in links}
+    mismatched = [i for i in ids if (paths[i] in linked) == (operation == "CREATE")]
+    if mismatched and confirm is None:
+        category = "invalid_argument" if operation == "CREATE" else "not_found"
+        message = "already use" if operation == "CREATE" else "do not use"
+        raise _Failure(category, f"Campaigns {', '.join(mismatched)} {message} blocklist {set_id}.")
+    client = gads_client.build_client()
+    operations, changes = [], []
+    for i, row in zip(ids, targets):
+        op = client.get_type("CampaignSharedSetOperation")
+        if operation == "CREATE":
+            op.create.campaign = paths[i]
+            op.create.shared_set = set_path
+        else:
+            op.remove = f"customers/{cid}/campaignSharedSets/{i}~{set_id}"
+        operations.append(op)
+        changes.append({
+            "campaign_id": i,
+            "name": row["campaign"].get("name"),
+            "advertising_channel_type": row["campaign"].get("advertising_channel_type"),
+            "attached": paths[i] in linked,
+            "new_attached": operation == "CREATE",
+        })
+    state = {"shared_set": sets, "campaigns": targets, "associations": links}
+    head = {
+        "customer_id": cid,
+        "operation": operation,
+        "shared_set_id": set_id,
+        "name": set_row.get("name"),
+        "list_type": set_row.get("type"),
+        "changes": changes,
+    }
+    return _review(
+        "manage_campaign_blocklists", arguments, confirm, gate, set_path, state, head,
+        lambda validate_only: _mutate(
+            client, "CampaignSharedSetService", "mutate_campaign_shared_sets",
+            "MutateCampaignSharedSetsRequest", cid, operations, validate_only,
+        ),
+    )
+
+
 WRITE_TOOLS: tuple[tuple[str, str, Callable[..., dict[str, Any]], bool], ...] = (
     ("set_keyword_status", "Enable or pause keywords", set_keyword_status, False),
     ("set_ad_status", "Enable or pause ads", set_ad_status, False),
@@ -1819,6 +2323,10 @@ WRITE_TOOLS: tuple[tuple[str, str, Callable[..., dict[str, Any]], bool], ...] = 
     ("create_demand_gen_campaign", "Create a paused Demand Gen campaign", create_demand_gen_campaign, False),
     ("create_display_campaign", "Create a paused Display campaign", create_display_campaign, False),
     ("create_app_campaign", "Create a paused App campaign", create_app_campaign, False),
+    ("manage_shared_blocklist", "Create, edit or remove a shared negative list",
+     manage_shared_blocklist, True),
+    ("manage_campaign_blocklists", "Attach or detach a shared negative list on campaigns",
+     manage_campaign_blocklists, True),
 )
 
 

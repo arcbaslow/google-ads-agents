@@ -173,6 +173,7 @@ gads-mcp
 | `ads` | Ads with ad ID, ad group ID, campaign ID, type, status, policy approval status and final URLs. Same filters as `keywords`. | 200 / 500 |
 | `search_terms` | Search terms between two dates, highest cost first: term status, campaign and ad group IDs, matched keyword text, match type and criterion ID, cost, clicks, impressions, conversions. The matched keyword's own status is not in this report; look it up with `keywords`. | 200 / 500 |
 | `asset_group_assets` | Performance Max asset group links: field type, asset ID, type, name or text, link status and primary status. API v25 has no asset performance label. | 200 / 500 |
+| `shared_blocklists` | Reusable `NEGATIVE_KEYWORDS` and `NEGATIVE_PLACEMENTS` shared sets with member and linked campaign counts. Pass `shared_set_id` to also list criteria IDs and linked campaigns. | 200 / 500 |
 
 Every tool registered by `register` is annotated read-only. These tools call only `GoogleAdsService` search, `CustomerService.ListAccessibleCustomers` and `GoogleAdsFieldService` search. They do not write to an account, save audit snapshots, send notifications or change local credential files. Bounded results include `rows_returned` and `complete`; `complete: false` means rows were cut by `limit`, or an audit agent failed. Failures return `{"error": "<category>", "hint": "..."}`, where the category is `auth_required`, `permission_denied`, `quota_exceeded`, `invalid_argument`, `not_found` or `upstream_error`. Provider error messages are not passed through.
 
@@ -192,6 +193,8 @@ Every tool registered by `register` is annotated read-only. These tools call onl
 | `create_demand_gen_campaign` | PAUSED Demand Gen campaign, one ad group and one ad from existing assets. Same strict spec as `--demand-gen-spec`, including channel controls and `VIDEO_RESPONSIVE` for YouTube inventory. | `GoogleAdsService` (atomic) |
 | `create_display_campaign` | PAUSED Display campaign, one standard ad group and one responsive Display ad from existing images. Same strict spec as `--display-spec`. | `GoogleAdsService` (atomic) |
 | `create_app_campaign` | PAUSED App install or engagement campaign, one ad group and one ad from existing assets. Same strict spec as `--app-spec`, with conversion-action and user-list checks. | `GoogleAdsService` (atomic) |
+| `manage_shared_blocklist` | Create (`CREATE`, optionally seeding up to 200 items atomically), populate (`ADD_ITEMS`), trim (`REMOVE_ITEMS`) or remove (`REMOVE`) a `NEGATIVE_KEYWORDS` or `NEGATIVE_PLACEMENTS` shared set. Annotated destructive. | `SharedSetService`, `SharedCriterionService`, or `GoogleAdsService` (atomic) |
+| `manage_campaign_blocklists` | Attach (`CREATE`) or detach (`REMOVE`) an `ENABLED` shared negative list on up to 200 campaigns. Checks existing links and refuses Video campaigns. Annotated destructive. | `CampaignSharedSetService` |
 
 Campaign creation checks referenced asset types and rejects an existing non-REMOVED campaign with the same name. References and matching campaigns are re-read on confirmation; changed state returns `conflict`. Each campaign request uses `partial_failure=False`.
 

@@ -241,18 +241,20 @@ def test_read_filters_are_validated(account, name, args):
 @pytest.mark.parametrize("prefix", ["", "ads_"])
 def test_write_inventory(prefix):
     server = FastMCP("test")
-    assert gads_mcp.register_writes(server, Gate(), prefix=prefix) == len(WRITES) + 6
+    assert gads_mcp.register_writes(server, Gate(), prefix=prefix) == len(WRITES) + 8
     tools = {tool.name: tool for tool in asyncio.run(server.list_tools())}
     assert set(tools) == {prefix + name for name in WRITE_NAMES + [
         "manage_labels", "manage_label_associations", "create_asset",
-        "create_demand_gen_campaign", "create_display_campaign", "create_app_campaign"]}
+        "create_demand_gen_campaign", "create_display_campaign", "create_app_campaign",
+        "manage_shared_blocklist", "manage_campaign_blocklists"]}
     for name, tool in tools.items():
         assert tool.title and tool.description
         assert tool.annotations.readOnlyHint is False
         assert tool.annotations.idempotentHint is False
         assert tool.annotations.openWorldHint is True
         assert tool.annotations.destructiveHint is (name in {prefix + n for n in (
-            "update_asset_group_assets", "manage_labels", "manage_label_associations")})
+            "update_asset_group_assets", "manage_labels", "manage_label_associations",
+            "manage_shared_blocklist", "manage_campaign_blocklists")})
         assert {"profile", "confirm"} <= set(tool.inputSchema["properties"])
         assert "gate" not in tool.inputSchema["properties"]
 

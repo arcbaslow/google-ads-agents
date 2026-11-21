@@ -33,7 +33,7 @@ FIELD = type(TYPES.get_type("GoogleAdsField"))
 
 NAMES = {"list_accounts", "run_gaql", "resource_metadata", "account_audit",
          "anomalies_and_pacing", "change_history", "keywords", "ads", "search_terms",
-         "asset_group_assets"}
+         "asset_group_assets", "shared_blocklists"}
 ALLOWED = {
     ("GoogleAdsService", "search_stream"),
     ("GoogleAdsService", "search"),
@@ -61,6 +61,7 @@ CALLS = [
     ("search_terms", {"customer_id": CUSTOMER, "date_from": "2026-10-01",
                       "date_to": "2026-10-07"}),
     ("asset_group_assets", {"customer_id": CUSTOMER}),
+    ("shared_blocklists", {"customer_id": CUSTOMER}),
 ]
 
 
