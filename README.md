@@ -154,7 +154,7 @@ The [hooks guide](docs/HOOKS.md) covers the session-expiry guard and opt-in Tele
 
 ## MCP
 
-[`scripts/gads_mcp.py`](scripts/gads_mcp.py) exposes ten read-only tools to an MCP client, plus nine gated write tools for a host. Run it as a standalone stdio server (read tools only), or import it in a host FastMCP server and call `register(server, prefix="", provider_factory=None)` and `register_writes(server, gate, prefix="", provider_factory=None)`, which return the number of tools added.
+[`scripts/gads_mcp.py`](scripts/gads_mcp.py) exposes eleven read-only tools to an MCP client, plus fourteen gated write tools for a host. Run it as a standalone stdio server (read tools only), or import it in a host FastMCP server and call `register(server, prefix="", provider_factory=None)` and `register_writes(server, gate, prefix="", provider_factory=None)`, which return the number of tools added.
 
 ```bash
 python -m pip install -e ".[mcp]"
@@ -177,6 +177,8 @@ gads-mcp
 
 Every tool registered by `register` is annotated read-only. These tools call only `GoogleAdsService` search, `CustomerService.ListAccessibleCustomers` and `GoogleAdsFieldService` search. They do not write to an account, save audit snapshots, send notifications or change local credential files. Bounded results include `rows_returned` and `complete`; `complete: false` means rows were cut by `limit`, or an audit agent failed. Failures return `{"error": "<category>", "hint": "..."}`, where the category is `auth_required`, `permission_denied`, `quota_exceeded`, `invalid_argument`, `not_found` or `upstream_error`. Provider error messages are not passed through.
 
+With `shared_set_id`, `shared_blocklists` caps criteria and campaigns independently at `limit`. `criteria_complete` and `campaigns_complete` report whether each detail list is complete. Top-level `complete` is false if blocklists, criteria or campaigns were cut; `rows_returned` counts only the returned blocklists.
+
 **Write tools.** `register_writes` adds these tools. Each takes `confirm` and `profile`.
 
 | Tool | Changes | Mutate |
@@ -195,6 +197,8 @@ Every tool registered by `register` is annotated read-only. These tools call onl
 | `create_app_campaign` | PAUSED App install or engagement campaign, one ad group and one ad from existing assets. Same strict spec as `--app-spec`, with conversion-action and user-list checks. | `GoogleAdsService` (atomic) |
 | `manage_shared_blocklist` | Create (`CREATE`, optionally seeding up to 200 items atomically), populate (`ADD_ITEMS`), trim (`REMOVE_ITEMS`) or remove (`REMOVE`) a `NEGATIVE_KEYWORDS` or `NEGATIVE_PLACEMENTS` shared set. Annotated destructive. | `SharedSetService`, `SharedCriterionService`, or `GoogleAdsService` (atomic) |
 | `manage_campaign_blocklists` | Attach (`CREATE`) or detach (`REMOVE`) an `ENABLED` shared negative list on up to 200 campaigns. Checks existing links and refuses Video campaigns. Annotated destructive. | `CampaignSharedSetService` |
+
+For `manage_shared_blocklist` operations `ADD_ITEMS`, `REMOVE_ITEMS` and `REMOVE`, the preview includes `reference_count`, `member_count`, and `campaigns` with customer ID, campaign ID, name, status and advertising channel type for ENABLED links to campaigns that are not removed. The preview lists at most 200 campaigns; `campaigns_complete: false` means it was cut. `account_level` reports whether the list is linked through `customer_negative_criterion` in the same account. When true, item edits include a `scope_note` stating that the change applies to the whole account; a `scope_note` also appears when `reference_count` is higher than the links listed, since the count may include removed campaigns or links from other accounts. `REMOVE` refuses an account-level list before the host gate and before sending any mutate, including validation, on both the dry run and the confirmed call; detach the customer-level link before requesting a new dry run. `manage_campaign_blocklists` previews include the list's `member_count` and `list_type` for both attach and detach. Counts, types and scope are re-read on confirmation; changes, including campaign links beyond the preview cap, return `conflict`.
 
 Campaign creation checks referenced asset types and rejects an existing non-REMOVED campaign with the same name. References and matching campaigns are re-read on confirmation; changed state returns `conflict`. Each campaign request uses `partial_failure=False`.
 

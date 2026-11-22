@@ -786,6 +786,7 @@ def shared_blocklists(
             for r in link_rows
         ]
         result["campaigns_complete"] = link_complete
+        result["complete"] = complete and crit_complete and link_complete
     return result
 
 
@@ -2004,6 +2005,48 @@ def _load_blocklist(cid: str, set_id: str) -> list[dict[str, Any]]:
     return rows
 
 
+def _blocklist_scope(cid: str, set_id: str, current: dict) -> tuple[dict, dict]:
+    import gads_client
+
+    campaigns = gads_client.search_stream(cid, f"""
+        SELECT campaign.id, campaign.name, campaign.status, campaign.advertising_channel_type,
+          campaign_shared_set.status
+        FROM campaign_shared_set
+        WHERE shared_set.id = {set_id} AND campaign_shared_set.status = 'ENABLED'
+          AND campaign.status != 'REMOVED'
+        ORDER BY campaign.id""")
+    field = ("negative_keyword_list" if current["type"] == "NEGATIVE_KEYWORDS"
+             else "placement_list")
+    account_links = gads_client.search_stream(cid, f"""
+        SELECT customer_negative_criterion.id,
+          customer_negative_criterion.{field}.shared_set
+        FROM customer_negative_criterion
+        WHERE customer_negative_criterion.{field}.shared_set = 'customers/{cid}/sharedSets/{set_id}'
+        ORDER BY customer_negative_criterion.id""")
+    head = {
+        "member_count": int(current.get("member_count", 0) or 0),
+        "reference_count": int(current.get("reference_count", 0) or 0),
+        "campaigns": [
+            {"customer_id": cid, "campaign_id": row["campaign"].get("id"),
+             "name": row["campaign"].get("name"), "status": row["campaign"].get("status"),
+             "advertising_channel_type": row["campaign"].get("advertising_channel_type")}
+            for row in campaigns[:_MAX_WRITE_ITEMS]
+        ],
+        "campaigns_complete": len(campaigns) <= _MAX_WRITE_ITEMS,
+        "account_level": bool(account_links),
+    }
+    notes = []
+    if account_links:
+        notes.append("This change applies to the whole account.")
+    if head["reference_count"] > len(campaigns) + len(account_links):
+        notes.append("reference_count is higher than the links listed here: it may count removed "
+                     "campaigns, or the list may be applied from other accounts.")
+    if notes:
+        head["scope_note"] = " ".join(notes)
+    # Keep links beyond the preview cap in the confirmation digest.
+    return head, {"campaigns": campaigns, "account_links": account_links}
+
+
 def manage_shared_blocklist(
     customer_id: str,
     operation: str,
@@ -2026,7 +2069,8 @@ def manage_shared_blocklist(
     200 items atomically in one mutate. ADD_ITEMS adds 1-200 keywords ({text, match_type} with
     default PHRASE) or placements (placements, youtube_channel_ids, youtube_video_ids,
     mobile_app_ids) to an ENABLED blocklist. REMOVE_ITEMS removes 1-200 criterion_ids read from
-    shared_blocklists. REMOVE removes an ENABLED blocklist. Without confirm, validate_only
+    shared_blocklists. Previews include counts, up to 200 ENABLED campaign links and account-level
+    scope. REMOVE refuses account-level lists. Without confirm, validate_only
     returns a preview and a single-use confirm token valid for 10 minutes; repeat identical
     arguments with the token to apply once after the host gate.
     """
@@ -2128,6 +2172,7 @@ def manage_shared_blocklist(
         )
         if not 1 <= len(items) <= _MAX_WRITE_ITEMS:
             raise _Failure("invalid_argument", f"Pass 1 to {_MAX_WRITE_ITEMS} items in total.")
+        scope, scope_state = _blocklist_scope(cid, set_id, current)
         client = gads_client.build_client()
         operations = []
         for item in items:
@@ -2141,9 +2186,11 @@ def manage_shared_blocklist(
             "name": current.get("name"),
             "list_type": current.get("type"),
             "items": items,
+            **scope,
         }
         return _review(
-            "manage_shared_blocklist", arguments, confirm, gate, set_path, rows, head,
+            "manage_shared_blocklist", arguments, confirm, gate, set_path,
+            {"shared_set": rows, "scope": scope_state}, head,
             lambda validate_only: _mutate(
                 client, "SharedCriterionService", "mutate_shared_criteria",
                 "MutateSharedCriteriaRequest", cid, operations, validate_only,
@@ -2168,6 +2215,7 @@ def manage_shared_blocklist(
         found = _found(
             ids, {r["shared_criterion"]["criterion_id"]: r for r in crit_rows}, "shared criterion"
         )
+        scope, scope_state = _blocklist_scope(cid, set_id, current)
         client = gads_client.build_client()
         operations = []
         for crit_id in ids:
@@ -2181,21 +2229,28 @@ def manage_shared_blocklist(
             "name": current.get("name"),
             "list_type": current.get("type"),
             "removing": [_shared_criterion_row(r) for r in found],
+            **scope,
         }
         return _review(
             "manage_shared_blocklist", arguments, confirm, gate, set_path,
-            {"shared_set": rows, "criteria": found}, head,
+            {"shared_set": rows, "criteria": found, "scope": scope_state}, head,
             lambda validate_only: _mutate(
                 client, "SharedCriterionService", "mutate_shared_criteria",
                 "MutateSharedCriteriaRequest", cid, operations, validate_only,
             ),
         )
 
-    # REMOVE
     if criterion_ids is not None:
         raise _Failure("invalid_argument", "REMOVE accepts only shared_set_id.")
     rows = _load_blocklist(cid, set_id)
     current = rows[0]["shared_set"]
+    scope, scope_state = _blocklist_scope(cid, set_id, current)
+    if scope["account_level"]:
+        raise _Failure(
+            "invalid_argument",
+            "Cannot REMOVE a blocklist linked at account level. Detach its "
+            "customer_negative_criterion link before requesting a new dry run.",
+        )
     client = gads_client.build_client()
     op = client.get_type("SharedSetOperation")
     op.remove = set_path
@@ -2205,12 +2260,12 @@ def manage_shared_blocklist(
         "shared_set_id": set_id,
         "name": current.get("name"),
         "list_type": current.get("type"),
-        "member_count": int(current.get("member_count", 0) or 0),
-        "reference_count": int(current.get("reference_count", 0) or 0),
+        **scope,
         "changes": [{"field": "status", "current": current.get("status"), "new": "REMOVED"}],
     }
     return _review(
-        "manage_shared_blocklist", arguments, confirm, gate, set_path, rows, head,
+        "manage_shared_blocklist", arguments, confirm, gate, set_path,
+        {"shared_set": rows, "scope": scope_state}, head,
         lambda validate_only: _mutate(
             client, "SharedSetService", "mutate_shared_sets",
             "MutateSharedSetsRequest", cid, [op], validate_only,
@@ -2295,6 +2350,7 @@ def manage_campaign_blocklists(
         "shared_set_id": set_id,
         "name": set_row.get("name"),
         "list_type": set_row.get("type"),
+        "member_count": int(set_row.get("member_count", 0) or 0),
         "changes": changes,
     }
     return _review(

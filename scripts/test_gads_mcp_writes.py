@@ -32,6 +32,8 @@ RESPONSES = {
     "mutate_conversion_actions": "MutateConversionActionsResponse",
     "mutate_campaign_criteria": "MutateCampaignCriteriaResponse",
     "mutate_asset_group_assets": "MutateAssetGroupAssetsResponse",
+    "mutate_shared_criteria": "MutateSharedCriteriaResponse",
+    "mutate_campaign_shared_sets": "MutateCampaignSharedSetsResponse",
 }
 
 WRITES = [
@@ -58,8 +60,26 @@ WRITES = [
       "add": [{"asset_id": "52", "field_type": "HEADLINE"}],
       "remove": [{"asset_id": "51", "field_type": "HEADLINE"}]},
      "AssetGroupAssetService", "mutate_asset_group_assets", 2),
+    ("manage_shared_blocklist",
+     {"customer_id": CUSTOMER, "operation": "ADD_ITEMS", "shared_set_id": "701",
+      "keywords": [{"text": "free"}]},
+     "SharedCriterionService", "mutate_shared_criteria", 1),
+    ("manage_campaign_blocklists",
+     {"customer_id": CUSTOMER, "operation": "CREATE", "shared_set_id": "701",
+      "campaign_ids": [CAMPAIGN]},
+     "CampaignSharedSetService", "mutate_campaign_shared_sets", 1),
 ]
 WRITE_NAMES = [name for name, *_ in WRITES]
+WRITE_TARGETS = {
+    "set_keyword_status": f"adGroups/{AD_GROUP}",
+    "set_ad_status": f"adGroups/{AD_GROUP}",
+    "update_campaign_schedule": f"campaigns/{CAMPAIGN}",
+    "set_conversion_action_goal": "conversionActions/31",
+    "add_placement_exclusions": f"campaigns/{CAMPAIGN}",
+    "update_asset_group_assets": "assetGroups/41",
+    "manage_shared_blocklist": "sharedSets/701",
+    "manage_campaign_blocklists": "sharedSets/701",
+}
 
 
 class Account:
@@ -94,6 +114,10 @@ class Account:
             return [{"conversion_action": {"id": 31, "name": "Example purchase",
                                            "status": "ENABLED", "category": "PURCHASE",
                                            "primary_for_goal": True}}]
+        if resource == "shared_set":
+            return [{"shared_set": {"id": 701, "name": "Example blocklist",
+                                    "type_": "NEGATIVE_KEYWORDS", "status": "ENABLED",
+                                    "member_count": 2, "reference_count": 0}}]
         if resource == "asset_group":
             return [{"campaign": {**campaign, "advertising_channel_type": "PERFORMANCE_MAX"},
                      "asset_group": {"id": 41, "status": "ENABLED"}}]
@@ -241,12 +265,11 @@ def test_read_filters_are_validated(account, name, args):
 @pytest.mark.parametrize("prefix", ["", "ads_"])
 def test_write_inventory(prefix):
     server = FastMCP("test")
-    assert gads_mcp.register_writes(server, Gate(), prefix=prefix) == len(WRITES) + 8
+    assert gads_mcp.register_writes(server, Gate(), prefix=prefix) == len(WRITES) + 6
     tools = {tool.name: tool for tool in asyncio.run(server.list_tools())}
     assert set(tools) == {prefix + name for name in WRITE_NAMES + [
         "manage_labels", "manage_label_associations", "create_asset",
-        "create_demand_gen_campaign", "create_display_campaign", "create_app_campaign",
-        "manage_shared_blocklist", "manage_campaign_blocklists"]}
+        "create_demand_gen_campaign", "create_display_campaign", "create_app_campaign"]}
     for name, tool in tools.items():
         assert tool.title and tool.description
         assert tool.annotations.readOnlyHint is False
@@ -279,7 +302,7 @@ def test_dry_run_validates_and_confirm_sends_once(account, caplog, name, args, s
     request = sent[0][2]["request"]
     assert request.validate_only is True and len(request.operations) == count
     assert sent[0][2]["retry"] is None
-    assert sent[0][2]["timeout"] == gads_mcp._WRITE_TIMEOUT_SECONDS
+    assert sent[0][2]["timeout"] == 60
 
     done = call(server, name, **args, confirm=dry["confirm"])
     assert done["dry_run"] is False and done["applied"] == count
@@ -287,10 +310,11 @@ def test_dry_run_validates_and_confirm_sends_once(account, caplog, name, args, s
     sent = mutates(account)
     assert len(sent) == 2 and sent[1][2]["request"].validate_only is False
     assert sent[1][2]["retry"] is None
-    assert sent[1][2]["timeout"] == gads_mcp._WRITE_TIMEOUT_SECONDS
+    assert sent[1][2]["timeout"] == 60
     assert sent[1][2]["request"].operations == request.operations
     lines = [r.getMessage() for r in caplog.records if " write " in r.getMessage()]
-    assert lines == [f"ads write {name} {lines[0].split()[3]} outcome=ok"]
+    target = f"customers/{CUSTOMER}/{WRITE_TARGETS[name]}"
+    assert lines == [f"ads write {name} {target} outcome=ok"]
 
     again = call(server, name, **args, confirm=dry["confirm"])
     assert again["error"] == "invalid_argument"
@@ -378,11 +402,31 @@ def test_gate_refusal_is_returned_and_keeps_the_token(account):
     assert done["applied"] == 1
 
 
-def test_changed_state_is_a_conflict(account):
+@pytest.mark.parametrize("name,args,service,method,count", WRITES, ids=WRITE_NAMES)
+def test_changed_state_is_a_conflict(account, monkeypatch, name, args, service, method, count):
     server = build_writes(Gate())
-    dry = call(server, "set_keyword_status", **WRITES[0][1])
-    account.keyword_status = "PAUSED"
-    out = call(server, "set_keyword_status", **WRITES[0][1], confirm=dry["confirm"])
+    dry = call(server, name, **args)
+    resource, field, value = {
+        "set_keyword_status": ("ad_group_criterion", "status", "PAUSED"),
+        "set_ad_status": ("ad_group_ad", "status", "PAUSED"),
+        "update_campaign_schedule": ("campaign", "end_date_time", "2027-02-01 23:59:59"),
+        "set_conversion_action_goal": ("conversion_action", "primary_for_goal", False),
+        "add_placement_exclusions": ("campaign", "advertising_channel_type", "DISPLAY"),
+        "update_asset_group_assets": ("asset_group_asset", "status", "PAUSED"),
+        "manage_shared_blocklist": ("shared_set", "member_count", 3),
+        "manage_campaign_blocklists": ("shared_set", "member_count", 3),
+    }[name]
+    original_rows = account.rows
+
+    def changed_rows(query):
+        rows = original_rows(query)
+        if re.search(r"FROM (\w+)", query).group(1) == resource:
+            for row in rows:
+                row[resource][field] = value
+        return rows
+
+    monkeypatch.setattr(account, "rows", changed_rows)
+    out = call(server, name, **args, confirm=dry["confirm"])
     assert out["error"] == "conflict"
     assert len(mutates(account)) == 1
 
@@ -428,15 +472,21 @@ def test_api_video_refusal_maps_to_not_supported(account):
 @pytest.mark.parametrize("exc", [api_errors.DeadlineExceeded("x"),
                                  api_errors.ServiceUnavailable("x"),
                                  ads_error("internal_error", "INTERNAL_ERROR")])
-def test_failed_confirmed_write_is_not_retried(account, caplog, exc):
+@pytest.mark.parametrize("name,args,service,method,count", WRITES, ids=WRITE_NAMES)
+def test_failed_confirmed_write_is_not_retried(account, caplog, exc, name, args, service,
+                                             method, count):
     caplog.set_level(logging.INFO)
     server = build_writes(Gate())
-    dry = call(server, "set_keyword_status", **WRITES[0][1])
+    dry = call(server, name, **args)
     account.mutate_error = exc
-    out = call(server, "set_keyword_status", **WRITES[0][1], confirm=dry["confirm"])
+    out = call(server, name, **args, confirm=dry["confirm"])
     assert out["error"] == "upstream_error" and "may have been applied" in out["hint"]
     assert len(mutates(account)) == 2
-    assert "outcome=upstream_error" in caplog.text
+    lines = [r.getMessage() for r in caplog.records if " write " in r.getMessage()]
+    target = f"customers/{CUSTOMER}/{WRITE_TARGETS[name]}"
+    assert lines == [f"ads write {name} {target} outcome=upstream_error"]
+    assert call(server, name, **args, confirm=dry["confirm"])["error"] == "invalid_argument"
+    assert len(mutates(account)) == 2
 
 
 @pytest.mark.parametrize("name,args", [

@@ -58,6 +58,7 @@ class BlocklistAccount(Account):
                     "advertising_channel_type": "VIDEO"},
         }
         self.links: set[tuple[str, str]] = {("111", KW_SET)}
+        self.account_links: set[str] = set()
 
     def rows(self, query: str):
         resource = re.search(r"FROM (\w+)", query).group(1)
@@ -105,6 +106,16 @@ class BlocklistAccount(Account):
                             "status": "ENABLED",
                         },
                     })
+            return out
+        if resource == "customer_negative_criterion":
+            out = []
+            for set_id in sorted(self.account_links):
+                field = ("negative_keyword_list" if set_id == KW_SET else "placement_list")
+                path = f"customers/{CUSTOMER}/sharedSets/{set_id}"
+                if f"customer_negative_criterion.{field}.shared_set = '{path}'" in query:
+                    out.append({"customer_negative_criterion": {
+                        "id": int(set_id), field: {"shared_set": path},
+                    }})
             return out
         if resource == "campaign":
             m_in = re.search(r"campaign\.id IN \(([^)]+)\)", query)
@@ -196,6 +207,150 @@ def test_shared_blocklists_lists_and_expands_details(account):
     assert invoke(server, "shared_blocklists", list_type="BRANDS")["error"] == "invalid_argument"
 
 
+@pytest.mark.parametrize("criteria_count,campaign_count", [(1, 1), (2, 1), (1, 2), (2, 2)])
+def test_shared_blocklist_detail_truncation(account, criteria_count, campaign_count):
+    account.criteria[KW_SET] = account.criteria[KW_SET][:criteria_count]
+    if campaign_count == 2:
+        account.links.add(("222", KW_SET))
+    out = invoke(build_reads(), "shared_blocklists", shared_set_id=KW_SET, limit=1)
+    assert len(out["criteria"]) == len(out["campaigns"]) == 1
+    assert out["criteria_complete"] is (criteria_count == 1)
+    assert out["campaigns_complete"] is (campaign_count == 1)
+    assert out["complete"] is (criteria_count == campaign_count == 1)
+
+
+def test_shared_blocklists_list_truncation(account):
+    out = invoke(build_reads(), "shared_blocklists", limit=1)
+    assert out["rows_returned"] == 1 and out["complete"] is False
+
+
+@pytest.mark.parametrize("operation,items", [
+    ("ADD_ITEMS", {"keywords": [{"text": "jobs"}]}),
+    ("REMOVE_ITEMS", {"criterion_ids": ["9001"]}),
+    ("REMOVE", {}),
+])
+def test_shared_blocklist_preview_scope(account, operation, items):
+    dry = invoke(build_writes(Gate()), "manage_shared_blocklist", operation=operation,
+                 shared_set_id=KW_SET, **items)
+    assert dry["member_count"] == 2 and dry["reference_count"] == 1
+    assert dry["account_level"] is False
+    assert dry["campaigns_complete"] is True
+    assert dry["campaigns"] == [{
+        "customer_id": CUSTOMER, "campaign_id": "111", "name": "Search Core",
+        "status": "ENABLED", "advertising_channel_type": "SEARCH",
+    }]
+    assert "scope_note" not in dry
+    query = next(kwargs["query"] for _, _, kwargs in account.recorder.requests
+                 if "FROM campaign_shared_set" in kwargs.get("query", ""))
+    assert "campaign_shared_set.status = 'ENABLED'" in query
+    assert "campaign.status != 'REMOVED'" in query
+    assert f"shared_set.id = {KW_SET}" in query
+    assert "campaign.advertising_channel_type" in query
+
+
+@pytest.mark.parametrize("campaign_count", [200, 201])
+def test_shared_blocklist_campaign_preview_cap_and_hidden_change(account, campaign_count):
+    account.campaigns = {
+        str(i): {"id": i, "name": f"Search {i}", "status": "ENABLED",
+                 "advertising_channel_type": "SEARCH"}
+        for i in range(1000, 1000 + campaign_count)
+    }
+    account.links = {(i, KW_SET) for i in account.campaigns}
+    account.sets[KW_SET]["reference_count"] = campaign_count
+    server = build_writes(Gate())
+    args = {"operation": "ADD_ITEMS", "shared_set_id": KW_SET,
+            "keywords": [{"text": "jobs"}]}
+    dry = invoke(server, "manage_shared_blocklist", **args)
+    assert len(dry["campaigns"]) == 200
+    assert dry["reference_count"] == campaign_count
+    assert dry["campaigns_complete"] is (campaign_count == 200)
+    account.campaigns[str(999 + campaign_count)]["name"] = "Renamed campaign"
+    out = invoke(server, "manage_shared_blocklist", **args, confirm=dry["confirm"])
+    assert out["error"] == "conflict"
+    assert len(mutates(account)) == 1
+
+
+@pytest.mark.parametrize("set_id,field,add_items,criterion_id", [
+    (KW_SET, "negative_keyword_list", {"keywords": [{"text": "jobs"}]}, "9001"),
+    (PL_SET, "placement_list", {"placements": ["spam.example"]}, "9101"),
+])
+@pytest.mark.parametrize("operation", ["ADD_ITEMS", "REMOVE_ITEMS", "REMOVE"])
+def test_account_level_blocklist_scope_and_remove_refusal(account, set_id, field, add_items,
+                                                        criterion_id, operation):
+    account.account_links.add(set_id)
+    gate = Gate()
+    items = (add_items if operation == "ADD_ITEMS" else
+             {"criterion_ids": [criterion_id]} if operation == "REMOVE_ITEMS" else {})
+    out = invoke(build_writes(gate), "manage_shared_blocklist", operation=operation,
+                 shared_set_id=set_id, **items)
+    query = next(kwargs["query"] for _, _, kwargs in account.recorder.requests
+                 if "FROM customer_negative_criterion" in kwargs.get("query", ""))
+    assert (f"customer_negative_criterion.{field}.shared_set = "
+            f"'customers/{CUSTOMER}/sharedSets/{set_id}'") in query
+    assert gate.calls == 0
+    if operation == "REMOVE":
+        assert out["error"] == "invalid_argument"
+        assert "account level" in out["hint"] and "Detach" in out["hint"]
+        assert "confirm" not in out
+        assert mutates(account) == []
+    else:
+        assert out["account_level"] is True
+        assert "whole account" in out["scope_note"]
+        assert out["member_count"] == 2
+        assert mutates(account)[0][2]["request"].validate_only is True
+
+
+@pytest.mark.parametrize("operation,items", [
+    ("ADD_ITEMS", {"keywords": [{"text": "jobs"}]}),
+    ("REMOVE_ITEMS", {"criterion_ids": ["9001"]}),
+    ("REMOVE", {}),
+])
+@pytest.mark.parametrize("change", ["member_count", "reference_count", "campaign", "account"])
+def test_shared_blocklist_scope_changes_conflict(account, operation, items, change):
+    gate = Gate()
+    server = build_writes(gate)
+    args = {"operation": operation, "shared_set_id": KW_SET, **items}
+    dry = invoke(server, "manage_shared_blocklist", **args)
+    if change in ("member_count", "reference_count"):
+        account.sets[KW_SET][change] += 1
+    elif change == "campaign":
+        account.links.add(("222", KW_SET))
+    else:
+        account.account_links.add(KW_SET)
+    out = invoke(server, "manage_shared_blocklist", **args, confirm=dry["confirm"])
+    if operation == "REMOVE" and change == "account":
+        # The account-level refusal fires before the host gate, not as a conflict after it.
+        assert out["error"] == "invalid_argument" and "account level" in out["hint"]
+        assert gate.calls == 0
+    else:
+        assert out["error"] == "conflict"
+    assert len(mutates(account)) == 1
+
+
+def test_shared_blocklist_scope_note_for_unlisted_references(account):
+    account.sets[KW_SET]["reference_count"] = 3
+    dry = invoke(build_writes(Gate()), "manage_shared_blocklist", operation="ADD_ITEMS",
+                 shared_set_id=KW_SET, keywords=[{"text": "jobs"}])
+    assert dry["account_level"] is False
+    assert "other accounts" in dry["scope_note"]
+
+
+@pytest.mark.parametrize("operation,set_id", [("CREATE", PL_SET), ("REMOVE", KW_SET)])
+@pytest.mark.parametrize("field,value", [("member_count", 3), ("type_", "NEGATIVE_PLACEMENTS")])
+def test_campaign_blocklist_preview_and_state(account, operation, set_id, field, value):
+    server = build_writes(Gate())
+    args = {"operation": operation, "shared_set_id": set_id, "campaign_ids": ["111"]}
+    dry = invoke(server, "manage_campaign_blocklists", **args)
+    assert dry["member_count"] == 2
+    assert dry["list_type"] == account.sets[set_id]["type_"]
+    if field == "type_" and dry["list_type"] == value:
+        value = "NEGATIVE_KEYWORDS"
+    account.sets[set_id][field] = value
+    out = invoke(server, "manage_campaign_blocklists", **args, confirm=dry["confirm"])
+    assert out["error"] == "conflict"
+    assert len(mutates(account)) == 1
+
+
 def test_create_empty_and_atomic_seeded_blocklists(account, caplog):
     caplog.set_level(logging.INFO)
     gate = Gate()
@@ -248,7 +403,7 @@ def test_create_empty_and_atomic_seeded_blocklists(account, caplog):
     assert applied["dry_run"] is False and applied["applied"] == 3
     assert applied["resource_names"][0] == f"customers/{CUSTOMER}/sharedSets/799"
     lines = [r.getMessage() for r in caplog.records if "ads write manage_shared_blocklist" in r.getMessage()]
-    assert len(lines) == 2 and all(line.endswith("outcome=ok") for line in lines)
+    assert lines == [f"ads write manage_shared_blocklist customers/{CUSTOMER} outcome=ok"] * 2
 
 
 def test_add_remove_items_and_remove_blocklist(account):
@@ -346,11 +501,9 @@ def test_manage_campaign_blocklists_attach_detach_and_guards(account, caplog):
     done = invoke(server, "manage_campaign_blocklists", operation="CREATE",
                   shared_set_id=PL_SET, campaign_ids=["111", "222"], confirm=dry["confirm"])
     assert done["applied"] == 2
-    assert any(
-        f"ads write manage_campaign_blocklists customers/{CUSTOMER}/sharedSets/{PL_SET} outcome=ok"
-        in r.getMessage()
-        for r in caplog.records
-    )
+    lines = [r.getMessage() for r in caplog.records if " write " in r.getMessage()]
+    target = f"customers/{CUSTOMER}/sharedSets/{PL_SET}"
+    assert lines == [f"ads write manage_campaign_blocklists {target} outcome=ok"]
 
     # REMOVE detaches KW_SET from campaign 111 and detects conflict if link vanishes.
     dry_rm = invoke(server, "manage_campaign_blocklists", operation="REMOVE",

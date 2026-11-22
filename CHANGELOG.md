@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- Add the `shared_blocklists` read tool and gated `manage_shared_blocklist` and `manage_campaign_blocklists` write tools. List-edit previews show member and reference counts, up to 200 ENABLED campaign links with a truncation flag, and account-level scope; attach/detach previews show list type and member count. Account-level item edits state that they affect the whole account; removing an account-level list is refused before mutation. Scope changes invalidate confirmation, and read results report incomplete criteria or campaigns in both detail flags and top-level `complete`.
 - Log confirmed MCP writes as `ads write <tool> <resource> outcome=...` instead of `gads write`, so a host that reads write lines by set name files them under the same `ads` prefix as its other Google Ads writes.
 - Add a strict Display CLI creator and shared Demand Gen, Display and App builders. Expose three atomic MCP campaign creation tools through the existing confirm-token flow, with reference checks, same-name campaign conflicts and created resource names.
 - Add MCP label management, label associations (campaigns, ad groups and ad group criteria; customer-level labels are not included) and unlinked asset creation through the existing single-use, 10-minute confirm-token flow with state re-read and conflict checks. Add the historical-metrics status-filter hint to `run_gaql`.
