@@ -6,6 +6,50 @@ import gads_creation
 import pytest
 
 
+@pytest.mark.parametrize("identifier", ["-1", "-10", "-200"])
+def test_asset_resource_list_accepts_only_generated_temporary_ids(identifier):
+    names = [f"customers/123/assets/{identifier}"]
+    with pytest.raises(ValueError, match="must contain existing assets resource names"):
+        gads_creation._resource_list(names, "123", "assets", "images")
+    token = gads_creation._temporary_assets.set(frozenset(names))
+    try:
+        assert gads_creation._resource_list(names, "123", "assets", "images") == names
+    finally:
+        gads_creation._temporary_assets.reset(token)
+    assert gads_creation._resource_list(["customers/123/assets/1"], "123", "assets", "images")
+
+
+@pytest.mark.parametrize("resource,identifier", [("assets", "-0"), ("assets", "-01"),
+                                                ("assets", "--1"), ("conversionActions", "-1")])
+def test_temporary_ids_are_only_valid_for_assets(resource, identifier):
+    with pytest.raises(ValueError):
+        gads_creation._resource_list([f"customers/123/{resource}/{identifier}"], "123", resource, "references")
+
+
+def test_change_set_positions_and_temporary_names():
+    from test_gads_mcp import TYPES
+
+    operations = [
+        {"op": "set_status", "resource": "ad", "ids": ["2~3", "2~4"], "status": "PAUSED"},
+        {"op": "create_asset", "id": "first", "type": "YOUTUBE_VIDEO", "name": "First",
+         "youtube_video_id": "abcdefghijk"},
+        {"op": "create_asset", "id": "second", "type": "YOUTUBE_VIDEO", "name": "Second",
+         "youtube_video_id": "bcdefghijkl"},
+    ]
+    built, positions, names = gads_creation.build_change_set(TYPES, "123", operations, None, None)
+    assert positions == [[2, 3], [0], [1]]
+    assert names == {"first": "customers/123/assets/-10", "second": "customers/123/assets/-11"}
+    assert built[2].ad_group_ad_operation.update.resource_name == "customers/123/adGroupAds/2~3"
+    assert built[3].ad_group_ad_operation.update.status.name == "PAUSED"
+    assert list(built[3].ad_group_ad_operation.update_mask.paths) == ["status"]
+
+
+@pytest.mark.parametrize("operations", [[], [{}] * 201, None])
+def test_change_set_operation_bounds(operations):
+    with pytest.raises(ValueError, match="1 to 200"):
+        gads_creation.build_change_set(None, "123", operations, None, None)
+
+
 def _valid_ctx(**overrides):
     base = {
         "business": "Acme Widgets",

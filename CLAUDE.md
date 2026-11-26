@@ -67,8 +67,10 @@ Skill bodies wire this in; don't bypass.
 
 The MCP write tools in `scripts/gads_mcp.py` confirm without a terminal: a
 call without `confirm` is a `validate_only` dry run that returns a single-use
-token, and only the identical call with that token, after the host's gate,
-sends the change once. Show the dry run to the user before confirming.
+token, and only the identical call with that token, after the host's
+`gate(profile)`, sends the change once. `plan_changes` returns the token and
+`apply_changes` takes only the token and profile. Show the dry run to the user
+before confirming.
 
 ## Placement rules
 

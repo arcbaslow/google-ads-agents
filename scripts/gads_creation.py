@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import argparse
+import contextvars
+import copy
 import json
 import re
 import sys
@@ -10,6 +12,8 @@ from datetime import date
 from urllib.parse import urlsplit
 
 import gads_utils
+
+_temporary_assets: contextvars.ContextVar[frozenset] = contextvars.ContextVar("_temporary_assets", default=frozenset())
 
 
 def _exact_keys(value, keys, label):
@@ -148,9 +152,11 @@ def _targets(spec, target):
 def _resource_list(value, cid, resource, label, required=False):
     if value is None and not required:
         return []
+    temporary = _temporary_assets.get() if resource == "assets" else frozenset()
     if (not isinstance(value, list) or (required and not value)
             or any(not isinstance(v, str)
-                   or re.fullmatch(rf"customers/{cid}/{resource}/[0-9]+", v) is None for v in value)):
+                   or (re.fullmatch(rf"customers/{cid}/{resource}/[0-9]+", v) is None and v not in temporary)
+                   for v in value)):
         raise ValueError(f"{label} must contain existing {resource} resource names for customer {cid}")
     return value
 
@@ -444,6 +450,172 @@ def build_app_campaign(customer_id, spec, client):
 def build_display_campaign(customer_id, spec, client):
     cid, *fields = _display_fields(customer_id, spec)
     return cid, _with_ad_operations(client, cid, spec, *fields), _campaign_summary("DISPLAY", spec)
+
+
+def build_change_set(client, cid, operations, uploads, profile):
+    """Build assets, one campaign and edits; return operations, input positions and names."""
+    cid = _customer_id(cid)
+    if not isinstance(operations, list) or not 1 <= len(operations) <= 200:
+        raise ValueError("operations must contain 1 to 200 operations")
+    required = {
+        "create_asset": {"id", "type", "name"},
+        "create_campaign": {"id", "kind", "spec"},
+        "update_budget": {"campaign_id", "amount_micros"},
+        "set_status": {"resource", "ids", "status"},
+        "add_negative_keywords": {"campaign_id", "keywords"},
+    }
+    optional = {"create_asset": {"upload", "youtube_video_id"},
+                "create_campaign": {"exempt_policies"},
+                "update_budget": {"owner_approved_brand_scale"}}
+    names, kinds = {}, {}
+    asset_id, campaign_count = -10, 0
+    for i, operation in enumerate(operations):
+        try:
+            if not isinstance(operation, dict) or not isinstance(operation.get("op"), str):
+                raise ValueError("op is required")
+            kind = operation["op"]
+            if kind not in required:
+                raise ValueError("unknown op")
+            fields = set(operation) - {"op"}
+            if not required[kind] <= fields or fields - required[kind] - optional.get(kind, set()):
+                raise ValueError("unknown or missing field")
+            if "id" in operation:
+                identifier = operation["id"]
+                if (not isinstance(identifier, str) or not re.fullmatch(r"[a-z][a-z0-9_]{0,30}", identifier)
+                        or identifier in names):
+                    raise ValueError("id must be unique and match [a-z][a-z0-9_]{0,30}")
+                if kind == "create_asset":
+                    names[identifier] = f"customers/{cid}/assets/{asset_id}"
+                    kinds[identifier] = operation["type"]
+                    asset_id -= 1
+                else:
+                    campaign_count += 1
+                    if campaign_count > 1:
+                        raise ValueError("at most one create_campaign is allowed")
+                    names[identifier] = f"customers/{cid}/campaigns/-2"
+                    kinds[identifier] = "campaign"
+        except (ValueError, TypeError) as exc:
+            raise ValueError(f"Operation {i}: {exc}") from None
+
+    built, positions = [], [[] for _ in operations]
+
+    def reference(value, expected):
+        if isinstance(value, str) and value.startswith("$"):
+            key = value[1:]
+            if key not in names or kinds[key] != expected:
+                raise ValueError("unknown reference or wrong reference type")
+            return names[key]
+        if isinstance(value, str) and "/assets/-" in value:
+            raise ValueError("temporary asset names must be $id references")
+        return value
+
+    order = sorted(range(len(operations)), key=lambda i: (
+        0 if operations[i]["op"] == "create_asset" else 1 if operations[i]["op"] == "create_campaign" else 2))
+    for i in order:
+        operation = operations[i]
+        kind = operation["op"]
+        start = len(built)
+        try:
+            if kind == "create_asset":
+                _choice(operation["type"], ("IMAGE", "YOUTUBE_VIDEO"), "type")
+                _text(operation["name"], "name")
+                image = operation["type"] == "IMAGE"
+                _exact_keys(operation, {"op", "id", "type", "name", "upload" if image else "youtube_video_id"},
+                            "create_asset")
+                asset = {"resource_name": names[operation["id"]], "name": operation["name"]}
+                if image:
+                    _text(operation["upload"], "upload")
+                    upload = uploads.read(operation["upload"], profile, cid)
+                    _choice(upload["mime_type"], ("IMAGE_PNG", "IMAGE_JPEG", "IMAGE_GIF"), "upload mime_type")
+                    asset["image_asset"] = {"data": upload["data"], "mime_type": upload["mime_type"]}
+                else:
+                    video = operation["youtube_video_id"]
+                    if not isinstance(video, str) or not re.fullmatch(r"[A-Za-z0-9_-]{11}", video):
+                        raise ValueError("youtube_video_id must be an 11-character video ID")
+                    asset["youtube_video_asset"] = {"youtube_video_id": video}
+                op = client.get_type("MutateOperation")
+                op.asset_operation.create = asset
+            elif kind == "create_campaign":
+                builders = {"DISPLAY": build_display_campaign, "APP": build_app_campaign,
+                            "DEMAND_GEN": build_demand_gen_campaign}
+                if operation["kind"] == "VIDEO":
+                    raise NotImplementedError("Video campaigns cannot be written through the API")
+                _choice(operation["kind"], builders, "kind")
+                spec = copy.deepcopy(operation["spec"])
+                if not isinstance(spec, dict) or not isinstance(spec.get("ad"), dict):
+                    raise ValueError("spec must contain an ad object")
+                for field in ("marketing_images", "square_marketing_images", "logo_images", "square_logo_images",
+                              "images", "videos", "youtube_videos"):
+                    if isinstance(spec["ad"].get(field), list):
+                        expected = "YOUTUBE_VIDEO" if field in ("videos", "youtube_videos") else "IMAGE"
+                        spec["ad"][field] = [reference(value, expected) for value in spec["ad"][field]]
+                policies = operation.get("exempt_policies", [])
+                if not isinstance(policies, list):
+                    raise ValueError("exempt_policies must be a list")
+                for topic in policies:
+                    _text(topic, "policy topic")
+                token = _temporary_assets.set(frozenset(
+                    names[key] for key in names if kinds[key] in ("IMAGE", "YOUTUBE_VIDEO")))
+                try:
+                    _, campaign_ops, _ = builders[operation["kind"]](cid, spec, client)
+                finally:
+                    _temporary_assets.reset(token)
+                campaign_ops[-1].ad_group_ad_operation.policy_validation_parameter.ignorable_policy_topics.extend(policies)
+                built.extend(campaign_ops)
+                positions[i] = list(range(start, len(built)))
+                continue
+            elif kind == "update_budget":
+                _numeric_ids([operation["campaign_id"]], "campaign IDs", 1, 1)
+                _positive_micros(operation["amount_micros"], "amount_micros")
+                if type(operation.get("owner_approved_brand_scale", False)) is not bool:
+                    raise ValueError("owner_approved_brand_scale must be a boolean")
+                op = client.get_type("MutateOperation")
+                op.campaign_budget_operation.update = {"amount_micros": operation["amount_micros"]}
+                op.campaign_budget_operation.update_mask.paths.append("amount_micros")
+            elif kind == "set_status":
+                resources = {"campaign": ("campaign", "campaigns"), "ad_group": ("ad_group", "adGroups"),
+                             "keyword": ("ad_group_criterion", "adGroupCriteria"), "ad": ("ad_group_ad", "adGroupAds")}
+                _choice(operation["resource"], resources, "resource")
+                _choice(operation["status"], ("ENABLED", "PAUSED"), "status")
+                ids = operation["ids"]
+                pattern = r"[0-9]+~[0-9]+" if operation["resource"] in ("keyword", "ad") else r"[0-9]+"
+                if (not isinstance(ids, list) or not 1 <= len(ids) <= 200
+                        or any(not isinstance(value, str) or not re.fullmatch(pattern, value) for value in ids)):
+                    raise ValueError("ids must contain 1 to 200 resource IDs in the documented format")
+                api_kind, resource = resources[operation["resource"]]
+                for value in ids:
+                    item = client.get_type("MutateOperation")
+                    target = getattr(item, api_kind + "_operation")
+                    target.update = {"resource_name": f"customers/{cid}/{resource}/{value}", "status": operation["status"]}
+                    target.update_mask.paths.append("status")
+                    built.append(item)
+                positions[i] = list(range(start, len(built)))
+                continue
+            else:
+                campaign = reference(operation["campaign_id"], "campaign")
+                if not isinstance(operation["campaign_id"], str) or not operation["campaign_id"].startswith("$"):
+                    _numeric_ids([campaign], "campaign IDs", 1, 1)
+                    campaign = f"customers/{cid}/campaigns/{campaign}"
+                keywords = operation["keywords"]
+                if not isinstance(keywords, list) or not 1 <= len(keywords) <= 200:
+                    raise ValueError("keywords must contain 1 to 200 entries")
+                for keyword in keywords:
+                    _exact_keys(keyword, {"text", "match_type"}, "keyword")
+                    _text(keyword["text"], "keyword text")
+                    _choice(keyword["match_type"], ("EXACT", "PHRASE", "BROAD"), "match_type")
+                    item = client.get_type("MutateOperation")
+                    item.campaign_criterion_operation.create = {"campaign": campaign, "negative": True,
+                                                                "keyword": keyword}
+                    built.append(item)
+                positions[i] = list(range(start, len(built)))
+                continue
+            built.append(op)
+            positions[i] = list(range(start, len(built)))
+        except (ValueError, TypeError) as exc:
+            raise ValueError(f"Operation {i}: {exc}") from None
+    if len(built) > 200:
+        raise ValueError("the change set builds more than 200 mutate operations")
+    return built, positions, names
 
 
 def create_demand_gen_campaign(customer_id: str, spec: dict, validate_only: bool = True) -> dict:

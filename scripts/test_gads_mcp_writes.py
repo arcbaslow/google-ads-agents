@@ -163,14 +163,15 @@ class Gate:
         self.calls = 0
         self.refusal = refusal
 
-    def __call__(self):
+    def __call__(self, profile):
+        self.profile = profile
         self.calls += 1
         return self.refusal
 
 
-def build_writes(gate, provider_factory=lambda profile: FakeProvider(), prefix=""):
+def build_writes(gate, provider_factory=lambda profile: FakeProvider(), prefix="", uploads=None):
     server = FastMCP("test")
-    gads_mcp.register_writes(server, gate, prefix=prefix, provider_factory=provider_factory)
+    gads_mcp.register_writes(server, gate, prefix=prefix, provider_factory=provider_factory, uploads=uploads)
     return server
 
 
@@ -265,11 +266,12 @@ def test_read_filters_are_validated(account, name, args):
 @pytest.mark.parametrize("prefix", ["", "ads_"])
 def test_write_inventory(prefix):
     server = FastMCP("test")
-    assert gads_mcp.register_writes(server, Gate(), prefix=prefix) == len(WRITES) + 6
+    assert gads_mcp.register_writes(server, Gate(), prefix=prefix) == len(WRITES) + 8
     tools = {tool.name: tool for tool in asyncio.run(server.list_tools())}
     assert set(tools) == {prefix + name for name in WRITE_NAMES + [
         "manage_labels", "manage_label_associations", "create_asset",
-        "create_demand_gen_campaign", "create_display_campaign", "create_app_campaign"]}
+        "create_demand_gen_campaign", "create_display_campaign", "create_app_campaign",
+        "plan_changes", "apply_changes"]}
     for name, tool in tools.items():
         assert tool.title and tool.description
         assert tool.annotations.readOnlyHint is False
@@ -277,9 +279,17 @@ def test_write_inventory(prefix):
         assert tool.annotations.openWorldHint is True
         assert tool.annotations.destructiveHint is (name in {prefix + n for n in (
             "update_asset_group_assets", "manage_labels", "manage_label_associations",
-            "manage_shared_blocklist", "manage_campaign_blocklists")})
-        assert {"profile", "confirm"} <= set(tool.inputSchema["properties"])
+            "manage_shared_blocklist", "manage_campaign_blocklists", "plan_changes",
+            "apply_changes")})
+        assert "profile" in tool.inputSchema["properties"]
+        assert ("confirm" in tool.inputSchema["properties"]) is (name != prefix + "plan_changes")
+        assert "uploads" not in tool.inputSchema["properties"]
         assert "gate" not in tool.inputSchema["properties"]
+
+
+def test_register_writes_refuses_a_gate_without_profile():
+    with pytest.raises(TypeError, match="gate must accept the profile"):
+        gads_mcp.register_writes(FastMCP("test"), lambda: None)
 
 
 def test_register_writes_needs_a_callable_gate():
@@ -458,7 +468,7 @@ def test_validation_failure_returns_codes_and_paths_only(account):
     out = call(build_writes(Gate()), "update_campaign_schedule", **WRITES[2][1])
     assert out["error"] == "invalid_argument"
     assert out["errors"] == [{"code": "campaign_error.CANNOT_SET_DATE_TO_PAST",
-                              "field_path": "operations[0].update.end_date_time"}]
+                              "field_path": "operations[0].update.end_date_time", "op_index": 0}]
     assert "private detail" not in json.dumps(out) and "confirm" not in out
 
 

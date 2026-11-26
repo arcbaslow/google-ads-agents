@@ -15,24 +15,58 @@ runs, because a slower request times out while Google Ads may still apply it.
 ## MCP write tools
 
 The write tools in `scripts/gads_mcp.py` are registered by a host with
-`register_writes(server, gate, prefix, provider_factory)` and never prompt. A
-call without `confirm` reads the targets, sends the operations with
+`register_writes(server, gate, prefix, provider_factory, uploads)` and never
+prompt. A call without `confirm` reads the targets, sends the operations with
 `validate_only=True`, which changes nothing, and returns current and new
 values with a single-use `confirm` token. The token lasts 10 minutes and is
 bound to the tool, every argument and the state read in the dry run. The
-identical call with the token calls the host's `gate()` and then sends the same
-operations once, with a 60-second deadline and no automatic retry. Changed
-arguments or a used token return `invalid_argument`, changed state returns
-`conflict`, and a gate refusal is returned as is; none of these sends anything.
-A timeout or server error after sending says the change may have been applied.
-Each tool takes up to 200 items in one atomic mutate. Video campaigns return
+identical call with the token calls the host's `gate(profile)` and then sends
+the same operations once, with a 60-second deadline and no automatic retry.
+`plan_changes` is the exception: `apply_changes` takes only that token and the
+profile, replays the stored plan, re-reads uploads and state, and runs the same
+gate. Changed arguments or a used token return `invalid_argument`, changed
+state returns `conflict`, and a gate refusal is returned as is; none of these
+sends anything. `register_writes` raises `TypeError` for a gate that cannot
+take the profile argument. A timeout or
+server error after sending says the change may have been applied. Each tool
+takes up to 200 items in one atomic mutate; `plan_changes` takes up to 200
+operations that build at most 200 mutate operations. Video campaigns return
 `not_supported`. The README lists the tools.
+
+`uploads` is the host's store for `plan_changes` IMAGE assets.
+`read(handle, profile, customer_id)` returns `{"data": bytes, "mime_type":
+"IMAGE_PNG" | "IMAGE_JPEG" | "IMAGE_GIF", "sha256": str, "size_bytes": int}`
+or raises `KeyError` when the handle is unknown or not available to that
+profile and customer. The token binds the SHA-256 and MIME type, so a
+changed file invalidates it. After a successful apply the tool calls `discard(handles)`;
+a failure there is logged and does not change the result. Without a store,
+IMAGE uploads return `invalid_argument`.
+
+`plan_changes` takes 1-200 operations, each with `op` and exactly these
+fields (`[]` optional). The built request holds at most 200 mutate operations:
+each status id, negative keyword and asset is one, and a new campaign adds
+several.
+
+| op | Fields |
+|---|---|
+| `create_asset` | `id`, `name`, `type` `IMAGE` + `upload`, or `YOUTUBE_VIDEO` + `youtube_video_id` |
+| `create_campaign` | `id`, `kind` `DISPLAY` / `APP` / `DEMAND_GEN`, `spec` (strict creation spec), [`exempt_policies`]; at most one, created PAUSED |
+| `update_budget` | `campaign_id` (string), `amount_micros`, [`owner_approved_brand_scale`] |
+| `set_status` | `resource` `campaign` / `ad_group` / `keyword` / `ad`, `ids` (1-200 strings), `status` `ENABLED` / `PAUSED` |
+| `add_negative_keywords` | `campaign_id`, `keywords` (1-200 `{text, match_type}`) |
+
+`id` matches `[a-z][a-z0-9_]{0,30}`. `$<id>` refers to an asset or the
+campaign from the same plan, in the spec's ad asset lists and in
+`add_negative_keywords.campaign_id`. Keyword and ad ids are
+`<ad_group_id>~<criterion_id>` and `<ad_group_id>~<ad_id>`.
 
 ## Brand campaigns
 
-No writer in this toolkit edits an existing Search budget or target, so
-there is nothing for a budget hook to gate. The brand guard lives in the
-reads that lead to such a change: `gads_pacing.py` tags brand campaigns and
+`plan_changes` refuses an `update_budget` increase without
+`owner_approved_brand_scale: true` when the campaign, or any non-removed
+campaign on its budget, is a brand campaign by name or by search-term share. No other writer edits an existing budget or
+target. Elsewhere the brand guard lives in the reads that lead to such a
+change: `gads_pacing.py` tags brand campaigns and
 reports their underpacing as `brand_underpacing`; `gads_recommendations.py`
 lists spend-expanding recommendations on brand campaigns under `brand_hold`.
 

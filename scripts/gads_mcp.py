@@ -14,6 +14,7 @@ from __future__ import annotations
 import base64
 import binascii
 import concurrent.futures
+import copy
 import functools
 import hashlib
 import inspect
@@ -968,12 +969,12 @@ _WRITE_HINTS = {
         "Admin access, and the profile's manager account must manage the customer."
     ),
     "invalid_argument": (
-        "Google Ads rejected the change; errors lists the codes and field paths. Nothing was "
-        "changed."
+        "Google Ads rejected the change; errors lists the codes, field paths and operation "
+        "indices, plus policy topics and exemptibility for policy errors. Nothing was changed."
     ),
     "not_found": "The resource to change was not found or is not accessible with this profile.",
 }
-_pending: dict[str, tuple[str, str, float]] = {}
+_pending: dict[str, tuple[str, str, float, dict]] = {}
 _pending_lock = threading.Lock()
 
 
@@ -985,13 +986,13 @@ def _digest(value: Any) -> str:
     return hashlib.sha256(json.dumps(value, sort_keys=True, default=str).encode()).hexdigest()
 
 
-def _issue(digest: str, reviewed: str) -> str:
+def _issue(digest: str, reviewed: str, arguments: dict) -> str:
     now = time.monotonic()
     token = secrets.token_hex(16)
     with _pending_lock:
-        for old in [t for t, (_, _, at) in _pending.items() if now - at > CONFIRM_TTL_SECONDS]:
+        for old in [t for t, (_, _, at, _) in _pending.items() if now - at > CONFIRM_TTL_SECONDS]:
             del _pending[old]
-        _pending[token] = (digest, reviewed, now)
+        _pending[token] = (digest, reviewed, now, copy.deepcopy(arguments))
         while len(_pending) > MAX_PENDING_CONFIRMS:
             del _pending[next(iter(_pending))]
     return token
@@ -1002,8 +1003,8 @@ def _check_confirm(confirm) -> None:
         raise _Failure("invalid_argument", _STALE_CONFIRM)
 
 
-def _refusal(gate: Callable[[], Any]) -> dict[str, Any] | None:
-    refusal = gate()
+def _refusal(gate: Callable[[str | None], Any], profile: str | None) -> dict[str, Any] | None:
+    refusal = gate(profile)
     if refusal is None:
         return None
     if isinstance(refusal, dict):
@@ -1012,7 +1013,7 @@ def _refusal(gate: Callable[[], Any]) -> dict[str, Any] | None:
 
 
 def _api_errors(exc: Exception) -> list[dict] | None:
-    """Error codes and field paths only: messages and trigger values can echo the request."""
+    """Codes, paths and policy topics only; messages, triggers and evidence can echo requests."""
     from google.ads.googleads.errors import GoogleAdsException
 
     if not isinstance(exc, GoogleAdsException):
@@ -1025,8 +1026,20 @@ def _api_errors(exc: Exception) -> list[dict] | None:
             f".{element.field_name}" + (f"[{element.index}]" if element._pb.HasField("index") else "")
             for element in error.location.field_path_elements
         )
-        errors.append({"code": f"{kind}.{value}" if kind else "unknown",
-                       "field_path": path.lstrip(".") or None})
+        item = {"code": f"{kind}.{value}" if kind else "unknown",
+                "field_path": path.lstrip(".") or None,
+                "op_index": next((element.index for element in error.location.field_path_elements
+                                  if element.field_name in ("operations", "mutate_operations")
+                                  and element._pb.HasField("index")), None)}
+        if kind in ("policy_finding_error", "policy_violation_error"):
+            details = error.details
+            topics = details.policy_finding_details.policy_topic_entries
+            item["policy_topics"] = [topic.topic for topic in topics]
+            item["exemptible"] = (details.policy_violation_details.is_exemptible
+                                  if kind == "policy_violation_error" else bool(topics))
+            if kind == "policy_violation_error" and details.policy_violation_details.key.policy_name:
+                item["policy_topics"] = [details.policy_violation_details.key.policy_name]
+        errors.append(item)
     return errors
 
 
@@ -1068,16 +1081,19 @@ def _mutate_atomic(client, cid, operations, validate_only):
     return SimpleNamespace(results=results)
 
 
-def _review(tool: str, arguments: dict, confirm: str | None, gate: Callable[[], Any], target: str,
-            state: Any, head: dict[str, Any], send: Callable[[bool], Any]) -> dict[str, Any]:
+def _review(tool: str, arguments: dict, confirm: str | None, gate: Callable[[str | None], Any], target: str,
+            state: Any, head: dict[str, Any], send: Callable[[bool], Any],
+            stored_arguments: dict | None = None) -> dict[str, Any]:
     """Dry run: validate_only and a token. Confirmed: gate, redeem, then send once."""
     digest = _digest({"tool": tool, **arguments})
     reviewed = _digest(state)
     if confirm is None:
         send(True)
-        return {"dry_run": True, **head, "validated": True, "confirm": _issue(digest, reviewed),
+        stored = {} if stored_arguments is None else {"tool": tool, **stored_arguments}
+        return {"dry_run": True, **head, "validated": True,
+                "confirm": _issue(digest, reviewed, stored),
                 "confirm_expires_in": CONFIRM_TTL_SECONDS, "hint": _CONFIRM_HINT}
-    refusal = _refusal(gate)
+    refusal = _refusal(gate, arguments.get("profile"))
     if refusal is not None:
         return refusal
     with _pending_lock:
@@ -1116,7 +1132,7 @@ def set_keyword_status(
     confirm: str | None = None,
     profile: str | None = None,
     *,
-    gate: Callable[[], Any],
+    gate: Callable[[str | None], Any],
 ) -> dict[str, Any]:
     """Set up to 200 keywords of one ad group to ENABLED or PAUSED in one mutate. Take the IDs
     from keywords. A call without confirm changes nothing: it reads the keywords, validates the
@@ -1176,7 +1192,7 @@ def set_ad_status(
     confirm: str | None = None,
     profile: str | None = None,
     *,
-    gate: Callable[[], Any],
+    gate: Callable[[str | None], Any],
 ) -> dict[str, Any]:
     """Set up to 200 ads of one ad group to ENABLED or PAUSED in one mutate. Take the IDs from
     ads. A call without confirm changes nothing: it reads the ads, validates the update with
@@ -1228,7 +1244,7 @@ def update_campaign_schedule(
     confirm: str | None = None,
     profile: str | None = None,
     *,
-    gate: Callable[[], Any],
+    gate: Callable[[str | None], Any],
 ) -> dict[str, Any]:
     """Change a campaign's end date and, while the campaign has not started yet, its start date
     (YYYY-MM-DD, customer time zone). The end is sent as end_date_time "YYYY-MM-DD 23:59:59" and
@@ -1287,7 +1303,7 @@ def set_conversion_action_goal(
     confirm: str | None = None,
     profile: str | None = None,
     *,
-    gate: Callable[[], Any],
+    gate: Callable[[str | None], Any],
 ) -> dict[str, Any]:
     """Set primary_for_goal on a conversion action. Primary means the action counts in
     Conversions and is used for bidding in campaigns that optimize toward its standard goal;
@@ -1352,7 +1368,7 @@ def add_placement_exclusions(
     confirm: str | None = None,
     profile: str | None = None,
     *,
-    gate: Callable[[], Any],
+    gate: Callable[[str | None], Any],
 ) -> dict[str, Any]:
     """Exclude up to 200 placements from one campaign in one atomic mutate, as campaign-level
     negative criteria: website `placements` (URL or domain), `youtube_channel_ids` (UC...),
@@ -1433,7 +1449,7 @@ def update_asset_group_assets(
     confirm: str | None = None,
     profile: str | None = None,
     *,
-    gate: Callable[[], Any],
+    gate: Callable[[str | None], Any],
 ) -> dict[str, Any]:
     """Link existing assets to a Performance Max asset group and unlink others in one atomic
     mutate, unlinks first. Items in `add` and `remove` are {"asset_id": "...", "field_type":
@@ -1500,7 +1516,7 @@ def manage_labels(
     customer_id: str, operation: str, name: str | None = None,
     background_color: str | None = None, description: str | None = None,
     label_id: str | None = None, confirm: str | None = None, profile: str | None = None,
-    *, gate: Callable[[], Any],
+    *, gate: Callable[[str | None], Any],
 ) -> dict[str, Any]:
     """Create, update or remove one label. Names contain 1-80 characters, descriptions at
     most 200, and colors are #RRGGBB. UPDATE sends only supplied fields; REMOVE takes only
@@ -1577,7 +1593,7 @@ def manage_labels(
 def manage_label_associations(
     customer_id: str, operation: str, association_type: str, label_id: str,
     resource_ids: list[str] | None = None, confirm: str | None = None,
-    profile: str | None = None, *, gate: Callable[[], Any],
+    profile: str | None = None, *, gate: Callable[[str | None], Any],
 ) -> dict[str, Any]:
     """Attach or remove an ENABLED label on 1-200 campaigns, ad groups or ad group criteria.
     Criteria use ad_group_id~criterion_id. CREATE rejects existing links; REMOVE requires
@@ -1672,7 +1688,7 @@ def create_asset(
     sitelink_description1: str | None = None, sitelink_description2: str | None = None,
     callout_text: str | None = None, structured_snippet_header: str | None = None,
     structured_snippet_values: list[str] | None = None, confirm: str | None = None,
-    profile: str | None = None, *, gate: Callable[[], Any],
+    profile: str | None = None, *, gate: Callable[[str | None], Any],
 ) -> dict[str, Any]:
     """Create one unlinked TEXT, IMAGE, YOUTUBE_VIDEO, SITELINK, CALLOUT or STRUCTURED_SNIPPET
     asset. Use update_asset_group_assets for Performance Max linking. URLs are HTTP(S), up to
@@ -1785,21 +1801,14 @@ def create_asset(
                                       "MutateAssetsRequest", cid, [op], validate_only))
 
 
-def _campaign_creation(tool, arguments, confirm, gate, validate, builder):
+def _campaign_creation_state(cid, spec, confirm):
     import gads_client
 
-    spec = arguments["spec"]
-    try:
-        validate(arguments["customer_id"], spec)
-    except ValueError as exc:
-        raise _Failure("invalid_argument", str(exc)) from None
-    client = gads_client.build_client()
-    cid, operations, summary = builder(arguments["customer_id"], spec, client)
     state = []
     slots = {field: spec["ad"][field] or [] for field in (
         "marketing_images", "square_marketing_images", "logo_images", "square_logo_images",
         "images", "videos", "youtube_videos") if field in spec["ad"]}
-    references = [("asset", sorted({asset for assets in slots.values() for asset in assets}), ", asset.type")]
+    references = [("asset", sorted({asset for assets in slots.values() for asset in assets if "/assets/-" not in asset}), ", asset.type")]
     if "selective_optimization_conversion_actions" in spec:
         references.extend([
             ("conversion_action", sorted(set(spec["selective_optimization_conversion_actions"])),
@@ -1823,6 +1832,7 @@ def _campaign_creation(tool, arguments, confirm, gate, validate, builder):
                 raise _Failure("not_found", f"No {resource} found: {', '.join(missing)}.")
             if resource == "asset":
                 for slot, assets in slots.items():
+                    assets = [asset for asset in assets if "/assets/-" not in asset]
                     expected = "YOUTUBE_VIDEO" if slot in ("videos", "youtube_videos") else "IMAGE"
                     wrong = [name for name in assets if found[name].get("type") != expected]
                     if wrong:
@@ -1835,6 +1845,20 @@ def _campaign_creation(tool, arguments, confirm, gate, validate, builder):
     if campaigns and confirm is None:
         ids = ", ".join(str(row["campaign"]["id"]) for row in campaigns)
         raise _Failure("invalid_argument", f"A non-REMOVED campaign with this name exists: {ids}.")
+    return state
+
+
+def _campaign_creation(tool, arguments, confirm, gate, validate, builder):
+    import gads_client
+
+    spec = arguments["spec"]
+    try:
+        validate(arguments["customer_id"], spec)
+    except ValueError as exc:
+        raise _Failure("invalid_argument", str(exc)) from None
+    client = gads_client.build_client()
+    cid, operations, summary = builder(arguments["customer_id"], spec, client)
+    state = _campaign_creation_state(cid, spec, confirm)
     head = {"customer_id": cid, "changes": [summary]}
     return _review(tool, arguments, confirm, gate, f"customers/{cid}", state, head,
                    lambda validate_only: _mutate_atomic(client, cid, operations, validate_only))
@@ -1842,7 +1866,7 @@ def _campaign_creation(tool, arguments, confirm, gate, validate, builder):
 
 def create_demand_gen_campaign(
     customer_id: str, spec: dict[str, Any], confirm: str | None = None,
-    profile: str | None = None, *, gate: Callable[[], Any],
+    profile: str | None = None, *, gate: Callable[[str | None], Any],
 ) -> dict[str, Any]:
     """Create a PAUSED Demand Gen campaign, one ad group and one ad, using existing assets.
     Uses the CLI's strict JSON spec: name, budget_micros, budget_period, start_date, end_date,
@@ -1868,7 +1892,7 @@ def create_demand_gen_campaign(
 
 def create_display_campaign(
     customer_id: str, spec: dict[str, Any], confirm: str | None = None,
-    profile: str | None = None, *, gate: Callable[[], Any],
+    profile: str | None = None, *, gate: Callable[[str | None], Any],
 ) -> dict[str, Any]:
     """Create a PAUSED Display campaign, one ad group and one ad, using existing assets.
     Uses the CLI's strict JSON spec: name, budget_micros, bidding, target_cpa_micros,
@@ -1892,7 +1916,7 @@ def create_display_campaign(
 
 def create_app_campaign(
     customer_id: str, spec: dict[str, Any], confirm: str | None = None,
-    profile: str | None = None, *, gate: Callable[[], Any],
+    profile: str | None = None, *, gate: Callable[[str | None], Any],
 ) -> dict[str, Any]:
     """Create a PAUSED App campaign, one ad group and one ad, using existing assets.
     Uses the CLI's strict JSON spec: name, sub_type, app_id, app_store, goal_type,
@@ -2062,7 +2086,7 @@ def manage_shared_blocklist(
     confirm: str | None = None,
     profile: str | None = None,
     *,
-    gate: Callable[[], Any],
+    gate: Callable[[str | None], Any],
 ) -> dict[str, Any]:
     """Create, populate, trim or remove a reusable NEGATIVE_KEYWORDS or NEGATIVE_PLACEMENTS
     shared set. CREATE takes list_type and name (1-255 UTF-8 bytes) and optionally seeds up to
@@ -2281,7 +2305,7 @@ def manage_campaign_blocklists(
     confirm: str | None = None,
     profile: str | None = None,
     *,
-    gate: Callable[[], Any],
+    gate: Callable[[str | None], Any],
 ) -> dict[str, Any]:
     """Attach (CREATE) or detach (REMOVE) an ENABLED NEGATIVE_KEYWORDS or NEGATIVE_PLACEMENTS
     shared blocklist on 1-200 campaigns in one atomic mutate. CREATE rejects already-linked
@@ -2362,7 +2386,242 @@ def manage_campaign_blocklists(
     )
 
 
+def _change_set_state(cid, operations, built, positions, names, upload_data, confirm):
+    import gads_brandguard
+    import gads_client
+    import gads_creation
+
+    customer = gads_client.search_stream(cid, "SELECT customer.id, customer.currency_code FROM customer")
+    if not customer:
+        raise _Failure("conflict" if confirm else "not_found",
+                       _CONFLICT_HINT if confirm else "Customer was not found.")
+    currency = customer[0]["customer"]["currency_code"]
+    state, diff = [customer], []
+    rules = shares = None
+    for i, operation in enumerate(operations):
+        kind = operation["op"]
+        entry = {"op_index": i, "op": kind}
+        diff.append(entry)
+        if kind == "create_asset":
+            entry.update(id=operation["id"], type=operation["type"], name=operation["name"])
+            if "upload" in operation:
+                entry.update({key: upload_data[operation["upload"]][key]
+                              for key in ("mime_type", "size_bytes", "sha256")})
+            else:
+                entry["youtube_video_id"] = operation["youtube_video_id"]
+            continue
+        if kind == "create_campaign":
+            spec = copy.deepcopy(operation["spec"])
+            for field in ("marketing_images", "square_marketing_images", "logo_images", "square_logo_images",
+                          "images", "videos", "youtube_videos"):
+                if isinstance(spec["ad"].get(field), list):
+                    spec["ad"][field] = [names[value[1:]] if value.startswith("$") else value
+                                         for value in spec["ad"][field]]
+            try:
+                state.append(_campaign_creation_state(cid, spec, confirm))
+            except _Failure as exc:
+                raise _Failure(exc.category, f"Operation {i}: campaign references are missing, invalid or the campaign name is already in use.") from None
+            entry.update(id=operation["id"], **gads_creation._campaign_summary(operation["kind"], spec))
+            if "exempt_policies" in operation:
+                entry["exempt_policies"] = operation["exempt_policies"]
+            continue
+        if kind == "add_negative_keywords":
+            entry["keywords"] = operation["keywords"]
+            if operation["campaign_id"].startswith("$"):
+                entry["campaign"] = names[operation["campaign_id"][1:]]
+                continue
+        if kind in ("update_budget", "add_negative_keywords"):
+            resource, ids = "campaign", [operation["campaign_id"]]
+        else:
+            resource, ids = operation["resource"], operation["ids"]
+        table, path, fields = {
+            "campaign": ("campaign", "campaigns", "campaign.id, campaign.name, campaign.status"),
+            "ad_group": ("ad_group", "adGroups", "ad_group.id, ad_group.name, ad_group.status"),
+            "keyword": ("ad_group_criterion", "adGroupCriteria",
+                        "ad_group_criterion.criterion_id, ad_group_criterion.status, "
+                        "ad_group_criterion.keyword.text, ad_group_criterion.keyword.match_type"),
+            "ad": ("ad_group_ad", "adGroupAds", "ad_group_ad.ad.id, ad_group_ad.ad.name, ad_group_ad.status"),
+        }[resource]
+        requested = [f"customers/{cid}/{path}/{value}" for value in ids]
+        quoted = ", ".join(f"'{value}'" for value in requested)
+        if kind == "update_budget":
+            fields += (", campaign.campaign_budget, campaign_budget.resource_name, "
+                       "campaign_budget.amount_micros, campaign_budget.reference_count")
+        rows = gads_client.search_stream(cid, f"""
+            SELECT {table}.resource_name, {fields}, campaign.advertising_channel_type
+            FROM {table} WHERE {table}.resource_name IN ({quoted}) AND {table}.status != 'REMOVED'
+            {"AND ad_group_criterion.type = 'KEYWORD' AND ad_group_criterion.negative = FALSE" if resource == "keyword" else ""}
+        """)
+        rows.sort(key=lambda row: row[table]["resource_name"])
+        state.append(rows)
+        found = {row[table]["resource_name"]: row for row in rows}
+        if any(name not in found for name in requested):
+            if confirm:
+                continue
+            raise _Failure("not_found", f"Operation {i}: resource was not found.")
+        for row in rows:
+            if confirm is None:
+                _writable(row)
+        if kind == "update_budget":
+            row = found[requested[0]]
+            budget = row["campaign_budget"]
+            if "amount_micros" not in budget:
+                raise _Failure("not_supported", f"Operation {i}: this budget has no daily amount.")
+            if rules is None:
+                rules = gads_brandguard.load_rules()
+                shares = gads_brandguard.brand_shares(cid, rules)
+            # Always read the sharers: it is unverified whether reference_count includes paused campaigns.
+            sharing = gads_client.search_stream(cid, f"""
+                SELECT campaign.id, campaign.name FROM campaign
+                WHERE campaign.campaign_budget = '{budget["resource_name"]}' AND campaign.status != 'REMOVED'""")
+            sharers = sorted(((str(other["campaign"]["id"]), other["campaign"].get("name") or "")
+                              for other in sharing if str(other["campaign"]["id"]) != ids[0]),
+                             key=lambda item: item[1])
+            shared_with = [name for _, name in sharers]
+            brand = any(gads_brandguard.classify(name, campaign_id, shares, rules)["brand"]
+                        for campaign_id, name in [(ids[0], row["campaign"].get("name")), *sharers])
+            state.append({"brand": brand, "sharers": sharers})
+            if (confirm is None and brand and operation["amount_micros"] > int(budget["amount_micros"])
+                    and not operation.get("owner_approved_brand_scale", False)):
+                raise _Failure("permission_denied", f"Operation {i}: raising a brand campaign budget requires "
+                               "owner_approved_brand_scale: true.")
+            built[positions[i][0]].campaign_budget_operation.update.resource_name = budget["resource_name"]
+            entry.update(campaign_id=ids[0], name=row["campaign"].get("name"), brand=brand,
+                         from_micros=int(budget["amount_micros"]), to_micros=operation["amount_micros"],
+                         currency=currency, reference_count=int(budget["reference_count"]),
+                         shared_with=shared_with)
+        elif kind == "set_status":
+            entry.update(resource=resource, changes=[])
+            for name in requested:
+                current = found[name][table]
+                details = current.get("keyword", {}) if resource == "keyword" else {
+                    "name": current.get("ad", current).get("name")}
+                entry["changes"].append({"resource_name": name, **details,
+                                         "from": current["status"], "to": operation["status"]})
+        else:
+            entry["campaign"] = requested[0]
+    return state, diff, currency
+
+
+def _change_set(arguments, confirm, gate, uploads):
+    import gads_client
+    import gads_creation
+
+    cid = _customer_id(arguments["customer_id"])
+    arguments = copy.deepcopy({**arguments, "customer_id": cid})
+    operations, profile = arguments["operations"], arguments["profile"]
+    upload_data = {}
+
+    def read(handle, bound_profile, customer_id):
+        index = next(i for i, operation in enumerate(operations) if operation.get("upload") == handle)
+        if uploads is None:
+            raise _Failure("invalid_argument", f"Operation {index}: this host has no upload store")
+        if handle not in upload_data:
+            try:
+                value = uploads.read(handle, bound_profile, customer_id)
+            except KeyError:
+                raise _Failure("not_found", f"Operation {index}: upload was not found or is unavailable.") from None
+            if (not isinstance(value.get("data"), bytes)
+                    or value.get("sha256") != hashlib.sha256(value["data"]).hexdigest()
+                    or value.get("size_bytes") != len(value["data"])):
+                raise _Failure("invalid_argument", f"Operation {index}: upload metadata does not match its data.")
+            upload_data[handle] = value
+        return upload_data[handle]
+
+    client = gads_client.build_client()
+    try:
+        built, positions, names = gads_creation.build_change_set(
+            client, cid, operations, SimpleNamespace(read=read), profile)
+    except ValueError as exc:
+        raise _Failure("invalid_argument", str(exc)) from None
+    except NotImplementedError:
+        raise _Failure("not_supported", _HINTS["not_supported"]) from None
+    state, diff, currency = _change_set_state(cid, operations, built, positions, names, upload_data, confirm)
+    bound = copy.deepcopy(arguments)
+    for operation in bound["operations"]:
+        if "upload" in operation:
+            upload = upload_data[operation["upload"]]
+            operation["upload"] = {"sha256": upload["sha256"], "mime_type": upload["mime_type"]}
+
+    def send(validate_only):
+        try:
+            return _mutate_atomic(client, cid, built, validate_only)
+        except _Failure as exc:
+            if exc.errors:
+                reverse = {position: i for i, indices in enumerate(positions) for position in indices}
+                for error in exc.errors:
+                    error["op_index"] = reverse.get(error.get("op_index"))
+            raise
+
+    result = _review("apply_changes", bound, confirm, gate, f"customers/{cid}", state,
+                     {"customer_id": cid, "currency": currency, "diff": diff}, send,
+                     stored_arguments=arguments)
+    if result.get("dry_run") is True:
+        result["hint"] = "Review the diff, then call apply_changes with confirm and the same profile within 10 minutes."
+    elif result.get("dry_run") is False:
+        created = {}
+        for i, operation in enumerate(operations):
+            if "id" in operation:
+                offset = 1 if operation["op"] == "create_campaign" else 0
+                created[operation["id"]] = result["resource_names"][positions[i][offset]]
+        result = {key: result[key] for key in ("dry_run", "customer_id", "applied", "resource_names")}
+        result["created"] = created
+        if upload_data:
+            try:
+                uploads.discard(list(upload_data))
+            except Exception as exc:
+                log.warning("upload discard failed after apply_changes: %s", type(exc).__name__)
+    return result
+
+
+def plan_changes(customer_id: str, operations: list[dict], profile: str | None = None, *,
+                 gate: Callable[[str | None], Any], uploads=None) -> dict[str, Any]:
+    """Validate 1-200 operations as one atomic mutate and return a diff and confirm token.
+    The built request may hold at most 200 mutate operations: each status id, negative
+    keyword and asset is one, and a new campaign adds several.
+    Each operation is an object with "op" and exactly these fields ([] = optional):
+    - create_asset: id, type IMAGE + upload (host upload handle), or type YOUTUBE_VIDEO +
+      youtube_video_id (11 characters); name.
+    - create_campaign (at most one): id, kind DISPLAY | APP | DEMAND_GEN, spec (the strict
+      spec of create_<kind>_campaign), [exempt_policies: policy topic names to exempt on the ad].
+      The campaign is created PAUSED.
+    - update_budget: campaign_id, amount_micros (daily), [owner_approved_brand_scale: true,
+      required to raise a budget that a brand campaign uses].
+    - set_status: resource campaign | ad_group | keyword | ad, ids (1-200 strings), status ENABLED |
+      PAUSED. Keyword and ad ids are <ad_group_id>~<criterion_id or ad_id>.
+    - add_negative_keywords: campaign_id, keywords (1-200 of {text, match_type EXACT |
+      PHRASE | BROAD}).
+    id is unique and matches [a-z][a-z0-9_]{0,30}. "$<id>" refers to an asset or the campaign
+    created in the same plan: in the spec's ad asset lists and in campaign_id of
+    add_negative_keywords. Unknown fields are refused. Call apply_changes with the token and
+    the same profile.
+    """
+    return _change_set({"customer_id": customer_id, "operations": operations, "profile": profile},
+                       None, gate, uploads)
+
+
+def apply_changes(confirm: str, profile: str | None = None, *,
+                  gate: Callable[[str | None], Any], uploads=None) -> dict[str, Any]:
+    """Apply a reviewed plan_changes token once, after the profile's host gate.
+    Re-read uploads and account state; changed files invalidate the token and changed state
+    returns conflict. Successful atomic application returns created resource names and
+    discards the consumed upload handles. Tokens expire after 10 minutes.
+    """
+    _check_confirm(confirm)
+    with _pending_lock:
+        entry = _pending.get(confirm)
+        if (entry is None or time.monotonic() - entry[2] > CONFIRM_TTL_SECONDS
+                or entry[3].get("tool") != "apply_changes"):
+            raise _Failure("invalid_argument", _STALE_CONFIRM)
+        arguments = copy.deepcopy(entry[3])
+    arguments.pop("tool")
+    arguments["profile"] = profile
+    return _change_set(arguments, confirm, gate, uploads)
+
+
 WRITE_TOOLS: tuple[tuple[str, str, Callable[..., dict[str, Any]], bool], ...] = (
+    ("plan_changes", "Plan an atomic campaign change set", plan_changes, True),
+    ("apply_changes", "Apply a reviewed campaign change set", apply_changes, True),
     ("set_keyword_status", "Enable or pause keywords", set_keyword_status, False),
     ("set_ad_status", "Enable or pause ads", set_ad_status, False),
     ("update_campaign_schedule", "Change campaign start or end date", update_campaign_schedule,
@@ -2386,14 +2645,14 @@ WRITE_TOOLS: tuple[tuple[str, str, Callable[..., dict[str, Any]], bool], ...] = 
 )
 
 
-def _bind_gate(fn: Callable[..., Any], gate: Callable[[], Any]) -> Callable[..., Any]:
+def _bind_gate(fn: Callable[..., Any], gate: Callable[[str | None], Any], uploads=None) -> Callable[..., Any]:
     def tool(*args, **kwargs):
-        return fn(*args, **kwargs, gate=gate)
+        return fn(*args, **kwargs, gate=gate, **({"uploads": uploads} if "uploads" in signature.parameters else {}))
 
     # FastMCP builds the input schema from __signature__; the gate is not an argument.
     signature = inspect.signature(fn, eval_str=True)
     tool.__signature__ = signature.replace(
-        parameters=[p for p in signature.parameters.values() if p.name != "gate"])
+        parameters=[p for p in signature.parameters.values() if p.name not in ("gate", "uploads")])
     tool.__name__ = fn.__name__
     tool.__doc__ = fn.__doc__
     return tool
@@ -2424,10 +2683,10 @@ def register(server, prefix: str = "", provider_factory=None) -> int:
     return len(TOOLS)
 
 
-def register_writes(server, gate, prefix: str = "", provider_factory=None) -> int:
+def register_writes(server, gate, prefix: str = "", provider_factory=None, uploads=None) -> int:
     """Add every tool in WRITE_TOOLS to a host FastMCP and return how many were added.
 
-    gate() is called before every confirmed write, never for a dry run. It returns None to
+    gate(profile) is called before every confirmed write, never for a dry run. It returns None to
     allow the write, or an error dict that the tool returns unchanged without sending anything.
     provider_factory works as in register().
     """
@@ -2435,9 +2694,13 @@ def register_writes(server, gate, prefix: str = "", provider_factory=None) -> in
 
     if not callable(gate):
         raise TypeError("gate must be a callable that returns None or an error dict")
+    try:
+        inspect.signature(gate).bind(None)
+    except TypeError:
+        raise TypeError("gate must accept the profile") from None
     for name, title, fn, destructive in WRITE_TOOLS:
         server.add_tool(
-            _guarded(_bind_gate(fn, gate), provider_factory),
+            _guarded(_bind_gate(fn, gate, uploads), provider_factory),
             name=prefix + name,
             title=title,
             description=inspect.cleandoc(fn.__doc__),

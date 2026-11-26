@@ -76,9 +76,10 @@ terminal, so they confirm differently. A call without `confirm` reads
 the targets, sends the operations with `validate_only=True` and returns
 what would change plus a single-use token, valid 10 minutes and bound to
 the tool, every argument and the state that was read. The identical call
-with that token runs the host's `gate()`, then sends the same operations
-once with no automatic retry. Changed arguments, a reused token or
-changed state send nothing. A PR that adds a write path without one of
+with that token runs the host's `gate(profile)`, then sends the same
+operations once with no automatic retry; `apply_changes` takes only the
+`plan_changes` token and the profile instead of the identical call. Changed
+arguments, a reused token, changed state or a changed upload send nothing. A PR that adds a write path without one of
 these two patterns will not be merged.
 
 ## Disclosure timeline
