@@ -10,6 +10,7 @@ Paid media audits, tracking checks and reviewed changes.
 [![Release](https://img.shields.io/github/v/release/arcbaslow/google-ads-agents?color=2563eb&label=release)](https://github.com/arcbaslow/google-ads-agents/releases)
 [![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-2563eb?logo=python&logoColor=white)](#installation)
 [![MIT license](https://img.shields.io/badge/license-MIT-475569)](LICENSE)
+[![arcbaslow/google-ads-agents MCP server](https://glama.ai/mcp/servers/arcbaslow/google-ads-agents/badges/score.svg)](https://glama.ai/mcp/servers/arcbaslow/google-ads-agents)
 
 [Quick start](#quick-start) | [How an audit runs](#how-an-audit-runs) | [Example output](#example-output) | [MCP](#mcp) | [Tests](#tests) | [Contributing](CONTRIBUTING.md)
 
