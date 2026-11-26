@@ -1,7 +1,7 @@
 fastapi>=0.110
 uvicorn[standard]>=0.29
 sqlalchemy>=2.0
-alembic>=1.13
+alembic>=1.19.1
 psycopg2-binary>=2.9
 cryptography>=42.0
 pydantic-settings>=2.2
